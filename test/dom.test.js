@@ -32,7 +32,8 @@ const PAYLOAD = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Boot the real app in a DOM. `state` carries localStorage between "reloads".
-async function boot(state = {}) {
+// `opts.fetch` overrides the stub fetch, so tests can simulate server failures.
+async function boot(state = {}, opts = {}) {
   const dom = new JSDOM(HTML, { url: 'https://example.test/', runScripts: 'outside-only', pretendToBeVisual: true });
   const { window } = dom;
   Object.defineProperty(window, 'localStorage', {
@@ -44,11 +45,11 @@ async function boot(state = {}) {
       clear: () => { for (const k of Object.keys(state)) delete state[k]; }
     }
   });
-  window.fetch = async (url, opts = {}) => {
+  window.fetch = opts.fetch || (async (url, opts2 = {}) => {
     if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
-    const body = JSON.parse(opts.body || '{}');
+    const body = JSON.parse(opts2.body || '{}');
     return { ok: true, status: 200, json: async () => ({ reply: 'echo: ' + body.messages.at(-1).content, application: body.application || {} }) };
-  };
+  });
   window.confirm = () => true;
   window.scrollTo = () => {};
   window.eval(APP_JS);
@@ -181,4 +182,83 @@ test('a failing canvas does not take the page down', async () => {
   // is the page being left broken afterwards.
   assert.ok(win.document.querySelector('.page.active'), 'page intact (threw=' + threw + ')');
   assert.ok(win.document.querySelectorAll('nav.tabs button').length > 5, 'navigation intact');
+});
+
+// The reported bug: in the AI chats a sent message vanished. Root cause was
+// that an unconfigured AI (503) made the app delete the user's message, so the
+// conversation looked like nothing had been sent.
+test('a sent message stays visible when the AI is not configured', async () => {
+  const state = {};
+  const win = await boot(state, {
+    fetch: async (url) => {
+      if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
+      return { ok: false, status: 503, json: async () => ({ error: 'not_configured' }) };
+    }
+  });
+
+  for (const who of ['guide', 'interview', 'staff']) {
+    const input = win.document.getElementById(`${who}Input`);
+    input.value = 'привет';
+    win.document.getElementById(`${who}Form`).dispatchEvent(new win.Event('submit', { cancelable: true, bubbles: true }));
+    await sleep(40);
+  }
+
+  for (const who of ['guide', 'interview', 'staff']) {
+    const log = win.document.getElementById(`${who}Log`);
+    assert.match(log.textContent, /привет/, `${who}: the sent message must remain visible`);
+    assert.match(log.textContent, /ИИ ещё не подключён|not connected/i, `${who}: the reason must be explained`);
+  }
+
+  // And it must survive a reload, not just the current render.
+  const reloaded = await boot(state, {
+    fetch: async (url) => {
+      if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
+      return { ok: false, status: 503, json: async () => ({ error: 'not_configured' }) };
+    }
+  });
+  for (const who of ['guide', 'interview', 'staff']) {
+    assert.match(reloaded.document.getElementById(`${who}Log`).textContent, /привет/, `${who}: message persisted`);
+  }
+});
+
+test('a server error keeps the message and reports the failure', async () => {
+  const state = {};
+  const win = await boot(state, {
+    fetch: async (url) => {
+      if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
+      return { ok: false, status: 502, json: async () => ({ error: 'upstream exploded' }) };
+    }
+  });
+
+  const input = win.document.getElementById('guideInput');
+  input.value = 'важный вопрос';
+  win.document.getElementById('guideForm').dispatchEvent(new win.Event('submit', { cancelable: true, bubbles: true }));
+  await sleep(40);
+
+  const log = win.document.getElementById('guideLog');
+  assert.match(log.textContent, /важный вопрос/, 'message must not be deleted on error');
+  assert.match(log.textContent, /upstream exploded/, 'the server error must be shown');
+});
+
+// A visitor could not tell that the AI simply had no key, so the page now says so up front.
+test('the AI notice appears only when the AI is not configured', async () => {
+  const unconfigured = await boot({}, {
+    fetch: async (url) => {
+      if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
+      if (String(url).includes('/api/status')) return { ok: true, status: 200, json: async () => ({ configured: false }) };
+      return { ok: false, status: 503, json: async () => ({ error: 'not_configured' }) };
+    }
+  });
+  const box = unconfigured.document.getElementById('aiNotice');
+  assert.equal(box.hidden, false, 'notice must be visible when unconfigured');
+  assert.match(box.textContent, /ИИ ещё не подключён/, 'notice must explain the reason');
+
+  const configured = await boot({}, {
+    fetch: async (url) => {
+      if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
+      if (String(url).includes('/api/status')) return { ok: true, status: 200, json: async () => ({ configured: true }) };
+      return { ok: true, status: 200, json: async () => ({ reply: 'ok' }) };
+    }
+  });
+  assert.equal(configured.document.getElementById('aiNotice').hidden, true, 'notice hidden when configured');
 });

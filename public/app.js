@@ -211,7 +211,21 @@ async function boot() {
   wireNav();
   wireChats();
   wireLang();
+  showAiStatus();
   openFromHash();
+}
+
+// The AI chats cannot answer without a key, and nothing used to say so: a
+// visitor typed, got no reply, and concluded the site was broken.
+async function showAiStatus() {
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    if (data && data.configured) return;
+    const box = el('aiNotice');
+    box.textContent = t('chat.notConfigured');
+    box.hidden = false;
+  } catch { /* status is optional; the per-chat message still covers it */ }
 }
 
 function renderStatic() {
@@ -669,13 +683,6 @@ function addMessage(type, role, content) {
   log.scrollTop = log.scrollHeight;
 }
 
-function removeLastMessage(type) {
-  const convo = activeConvo(type);
-  convo.messages.pop();
-  saveStore();
-  renderChat(type);
-}
-
 function wireChats() {
   renderAllChats();
   el('guideForm').addEventListener('submit', (e) => { e.preventDefault(); sendGuide(el('guideInput').value); });
@@ -703,8 +710,9 @@ async function sendGuide(text) {
     const data = await res.json();
     pending.remove();
     if (res.status === 503 || data.error === 'not_configured') {
+      // Keep the typed message: deleting it made the chat look like nothing was
+      // sent, which is how the "messages disappear" bug was reported.
       pushMsg('guideLog', 'system', t('chat.notConfigured'));
-      removeLastMessage('guide');
       return;
     }
     const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
@@ -732,7 +740,6 @@ async function sendInterview(text) {
     pending.remove();
     if (res.status === 503 || data.error === 'not_configured') {
       pushMsg('interviewLog', 'system', t('chat.notConfigured'));
-      removeLastMessage('interview');
       return;
     }
     const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
@@ -773,7 +780,6 @@ async function sendStaff(text) {
     pending.remove();
     if (res.status === 503 || data.error === 'not_configured') {
       pushMsg('staffLog', 'system', t('chat.notConfigured'));
-      removeLastMessage('staff');
       return;
     }
     const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
