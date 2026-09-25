@@ -59,13 +59,13 @@ function scaffold() {
   git(repo, 'remote', 'add', 'origin', bare);
 
   const src = process.cwd();
-  for (const f of ['public/index.html', 'public/styles.css', 'public/app.js', 'public/scene.js', 'public/favicon.svg']) {
-    fs.copyFileSync(path.join(src, f), path.join(repo, f));
-  }
+  // Copy whole folders, not a hand-written file list: the list used to miss files
+  // and the build then failed on a source it could not find.
+  fs.cpSync(path.join(src, 'public'), path.join(repo, 'public'), { recursive: true });
   for (const f of ['knowledge-view.js', 'github-publish.js', 'article-store.js', 'articles.js', 'blog-sync.js', 'publish.js', 'server.js']) {
     fs.copyFileSync(path.join(src, f), path.join(repo, f));
   }
-  fs.copyFileSync(path.join(src, 'scripts/build-pages.js'), path.join(repo, 'scripts/build-pages.js'));
+  fs.cpSync(path.join(src, 'scripts'), path.join(repo, 'scripts'), { recursive: true });
   fs.copyFileSync(path.join(src, 'data/knowledge.json'), path.join(repo, 'data/knowledge.json'));
   fs.writeFileSync(path.join(repo, 'data/articles.json'), JSON.stringify({ source: '', imported_at: null, articles: [] }));
 

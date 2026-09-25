@@ -18,6 +18,7 @@ const files = [
   ['public/app.js', 'app.js'],
   ['public/scene.js', 'scene.js'],
   ['public/favicon.svg', 'favicon.svg'],
+  ['public/404.html', '404.html'],
   ['data/articles.json', 'data/articles.json']
 ];
 

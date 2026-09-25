@@ -636,11 +636,23 @@ app.post('/api/staff', async (req, res) => {
   }
 });
 
+// Unknown API routes must answer in JSON. Express would otherwise return an HTML
+// error page, and the frontend would fail while parsing it as JSON.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'not_found', path: req.path });
+});
+
 // The frontend routes by hash (#staff), but links may arrive without the hash.
 // Serve the app shell for unknown paths so deep links do not 404.
 app.get(/^(?!\/api\/).*/, (req, res, next) => {
   if (path.extname(req.path)) return next();
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// A missing file (an old image or article link) falls back to the themed page
+// instead of Express's plain "Cannot GET" text.
+app.use((req, res) => {
+  res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
 });
 
 if (process.env.NODE_ENV !== 'test') {

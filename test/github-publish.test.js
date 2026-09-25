@@ -27,10 +27,9 @@ function scaffold() {
   git(repo, 'config', 'user.email', 'test@test');
   git(repo, 'remote', 'add', 'origin', bare);
 
-  // Only the files the publisher touches are needed.
-  for (const f of ['public/index.html', 'public/styles.css', 'public/app.js', 'public/scene.js', 'public/favicon.svg']) {
-    fs.copyFileSync(path.join(process.cwd(), f), path.join(repo, f));
-  }
+  // Only the files the publisher touches are needed. The whole public/ folder is
+  // copied because build-pages.js publishes every file in it.
+  fs.cpSync(path.join(process.cwd(), 'public'), path.join(repo, 'public'), { recursive: true });
   fs.copyFileSync(path.join(process.cwd(), 'scripts/build-pages.js'), path.join(repo, 'scripts/build-pages.js'));
   fs.copyFileSync(path.join(process.cwd(), 'knowledge-view.js'), path.join(repo, 'knowledge-view.js'));
   // build-pages.js imports the view from the parent of scripts/.

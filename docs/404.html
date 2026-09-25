@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deeprealm — страница не найдена</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Vollkorn:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0a0e;
+      --panel: #14101c;
+      --ink: #e8e0d2;
+      --ink-dim: #c2b5a4;
+      --gold: #c9a24b;
+      --gold-bright: #e6c877;
+      --blood: #8a1f2b;
+      --line: #342c42;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: radial-gradient(ellipse at 50% -10%, #1b1526 0%, var(--bg) 60%);
+      color: var(--ink);
+      font-family: 'Vollkorn', Georgia, serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .panel {
+      max-width: 560px;
+      width: 100%;
+      background: linear-gradient(180deg, rgba(20,16,28,.92), rgba(11,10,14,.92));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 40px 28px;
+      box-shadow: 0 0 60px rgba(138,31,43,.18);
+    }
+    .sigil {
+      font-size: 40px;
+      color: var(--gold);
+      text-shadow: 0 0 22px rgba(201,162,75,.55);
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 30px;
+      letter-spacing: .04em;
+      color: var(--gold-bright);
+      margin: 0 0 6px;
+    }
+    .sub {
+      color: var(--ink-dim);
+      font-style: italic;
+      margin: 0 0 22px;
+    }
+    p { line-height: 1.6; margin: 0 0 22px; }
+    a.button {
+      display: inline-block;
+      background: linear-gradient(180deg, var(--blood-bright), var(--blood));
+      color: #fff;
+      text-decoration: none;
+      font-family: 'Cinzel', serif;
+      letter-spacing: .05em;
+      padding: 12px 26px;
+      border-radius: 8px;
+      border: 1px solid rgba(230,200,119,.35);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    a.button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 26px rgba(138,31,43,.45);
+    }
+    .links { margin-top: 20px; font-size: 15px; }
+    .links a { color: var(--gold); text-decoration: none; margin: 0 8px; }
+    .links a:hover { color: var(--gold-bright); }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="sigil" aria-hidden="true">✦</div>
+    <h1>Страница не найдена</h1>
+    <p class="sub">Этой тропы нет на карте мира</p>
+    <p>
+      Вы свернули не туда: такой страницы в Deeprealm нет, либо её унесло Грохотом.
+      Вернитесь на главную — там весь лор, расы, классы и статьи.
+    </p>
+    <a class="button" href="/deeprealm-site/">На главную</a>
+    <div class="links">
+      <a href="/deeprealm-site/#articles">Статьи</a>
+      <a href="/deeprealm-site/#races">Расы</a>
+      <a href="/deeprealm-site/#classes">Классы</a>
+      <a href="https://t.me/Deeprealm5">Telegram</a>
+    </div>
+  </main>
+  <script>
+    // A deep link may be missing only the hash, so try to recover the section
+    // before leaving the visitor on the error page.
+    (function () {
+      var seg = location.pathname.split('/').filter(Boolean).pop() || '';
+      var known = ['home', 'lore', 'rules', 'races', 'classes', 'articles', 'pass', 'staff', 'interview', 'guide'];
+      if (known.indexOf(seg) !== -1) {
+        location.replace('/deeprealm-site/#' + seg);
+      }
+    })();
+  </script>
+</body>
+</html>
