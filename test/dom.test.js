@@ -7,6 +7,7 @@ import { JSDOM } from 'jsdom';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { knowledgeView } from '../knowledge-view.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const HTML = fs.readFileSync(path.join(ROOT, '..', 'public', 'index.html'), 'utf8');
@@ -52,6 +53,9 @@ async function boot(state = {}, opts = {}) {
   });
   window.confirm = () => true;
   window.scrollTo = () => {};
+  // jsdom does not implement scrolling; real browsers do, so it is stubbed here
+  // rather than guarded in the app.
+  window.Element.prototype.scrollIntoView = () => {};
   window.eval(APP_JS);
   await sleep(30);
   return window;
@@ -262,3 +266,58 @@ test('the AI notice appears only when the AI is not configured', async () => {
   });
   assert.equal(configured.document.getElementById('aiNotice').hidden, true, 'notice hidden when configured');
 });
+
+// GitHub Pages cannot run a server, so /api answers nothing at all. The site is
+// published with its data beside the page and must load from there, otherwise
+// the permanent link would show an empty site.
+const ARTICLES = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'data', 'articles.json'), 'utf8'));
+
+function staticFetch() {
+  // The build reshapes the knowledge file before publishing it, so the test
+  // serves the same shaped payload the real docs/data/knowledge.json holds.
+  const shaped = knowledgeView(KNOWLEDGE);
+  return async (url) => {
+    const u = String(url);
+    if (u.includes('/api/')) throw new TypeError('Failed to fetch');
+    if (u.includes('data/articles.json')) return { ok: true, status: 200, json: async () => ARTICLES };
+    if (u.includes('data/knowledge.json')) return { ok: true, status: 200, json: async () => shaped };
+    // A static host answers a missing file with the site's own 404 page.
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+}
+
+test('on static hosting the site loads from the bundled JSON, not from /api', async () => {
+  const win = await boot({}, { fetch: staticFetch() });
+  await sleep(60);
+
+  const rows = win.document.querySelectorAll('#articleList .article-row');
+  assert.equal(rows.length, ARTICLES.articles.length, 'every article must be listed');
+  assert.ok(win.document.querySelector('.page.active'), 'a page is shown');
+  assert.equal(win.document.getElementById('aiNotice').hidden, false, 'the AI notice explains why chats are off');
+});
+
+test('an article opens on static hosting using the bundled text', async () => {
+  const win = await boot({}, { fetch: staticFetch() });
+  await sleep(60);
+
+  const first = win.document.querySelector('#articleList .article-row');
+  const slug = first.dataset.slug;
+  first.click();
+  await sleep(40);
+
+  const view = win.document.getElementById('articleView');
+  const expected = ARTICLES.articles.find((a) => a.slug === slug);
+  assert.equal(view.hidden, false, 'the article view must open');
+  assert.match(view.querySelector('h3').textContent, new RegExp(expected.title.slice(0, 12)));
+  assert.ok(view.querySelectorAll('.article-body p').length > 0, 'the body must be rendered from the file');
+});
+
+test('a chat on static hosting explains itself instead of showing a JS error', async () => {
+  const win = await boot({}, { fetch: staticFetch() });
+  await send(win, 'guide');
+
+  const log = win.document.getElementById('guideLog');
+  assert.ok(!/Failed to fetch/.test(log.textContent), 'a network error must not leak into the chat');
+  assert.match(log.textContent, /ИИ|сервер|подключ/i, 'the visitor is told why there is no answer');
+});
+

@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { syncPlayerContent, defaultSources } from './blog-sync.js';
 import { createArticleStore } from './article-store.js';
 import { detectSheetKind, buildArticle } from './publish.js';
+import { knowledgeView } from './knowledge-view.js';
+import { createGithubPublisher } from './github-publish.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KNOWLEDGE_PATH = path.join(__dirname, 'data', 'knowledge.json');
@@ -29,6 +31,24 @@ const articleStore = createArticleStore(ARTICLES_PATH, {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// Approved sheets are written to disk immediately, but the permanent site is
+// served from the repository, so the same article is also committed and pushed.
+// Without this step an approved race or class would only exist on the server
+// that happened to handle the request.
+const sitePublisher = createGithubPublisher({
+  // The checkout that is committed and pushed. Overridable so a test can point
+  // at a throwaway repository instead of the real project.
+  root: process.env.SITE_REPO_ROOT || __dirname,
+  token: process.env.GITHUB_TOKEN || '',
+  branch: process.env.SITE_BRANCH || 'main',
+  // Off in tests: the suite must never commit to a real repository. A test that
+  // needs publishing on sets SITE_AUTOPUBLISH=on explicitly.
+  enabled: process.env.SITE_AUTOPUBLISH
+    ? process.env.SITE_AUTOPUBLISH !== 'off'
+    : process.env.NODE_ENV !== 'test',
+  log: (m) => console.log(`[site] ${m}`)
+});
 const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || '';
 const LLM_BASE_URL = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -42,31 +62,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/knowledge', (req, res) => {
-  res.json({
-    chat: knowledge.chat,
-    rules: knowledge.rules,
-    lore: knowledge.lore,
-    races: {
-      list: knowledge.races.list,
-      links: knowledge.races.links || {},
-      relations: knowledge.races.relations,
-      rules: knowledge.races.race_template_rules,
-      fields: knowledge.races.race_template_fields,
-      templateLink: knowledge.races.template_link || '',
-      blogLink: knowledge.races.blog_link || '',
-      playerBlogLink: knowledge.races.player_blog_link || '',
-      playerRaces: knowledge.races.player_races || []
-    },
-    classes: {
-      ...knowledge.classes,
-      playerBlogLink: knowledge.classes.player_blog_link || '',
-      playerClasses: knowledge.classes.player_classes || []
-    },
-    characterTemplate: knowledge.character_template,
-    storyTemplate: knowledge.story_template || '',
-    entryProcess: knowledge.entry_process,
-    administration: knowledge.administration
-  });
+  res.json(knowledgeView(knowledge));
 });
 
 // Article list for the site: metadata only, so the index page stays light.
@@ -92,7 +88,16 @@ async function publishFromSheet({ messages, lang, application }) {
   const article = await buildArticle({ kind, messages, lang, knowledge, callLLM });
   if (!article) return null;
   const entry = articleStore.publish({ title: article.title, kind, text: article.text });
-  return { slug: entry.slug, title: entry.title, kind: entry.kind };
+  // The permanent site reads from the repository, so the new article is also
+  // committed and pushed. A failure here is reported but never blocks the
+  // player's reply: the sheet itself was already approved.
+  const synced = await sitePublisher.sync({
+    message: `Publish ${kind} "${entry.title}" from an approved sheet`
+  });
+  if (!synced.ok && synced.reason !== 'already_published') {
+    console.warn(`[site] article "${entry.title}" not pushed: ${synced.reason}${synced.detail ? ` (${synced.detail})` : ''}`);
+  }
+  return { slug: entry.slug, title: entry.title, kind: entry.kind, synced: synced.ok };
 }
 
 // Compact, structured context injected into every model prompt.

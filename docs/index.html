@@ -1,1 +1,160 @@
-placeholder
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deeprealm — мир после Единого Королевства</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Vollkorn:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="scene-veil" aria-hidden="true"></div>
+  <div class="ember-field" aria-hidden="true"></div>
+  <header class="site">
+    <div class="wrap">
+      <div class="brand">
+        <div class="sigil">✦</div>
+        <div>
+          <h1 data-i18n="brand">Deeprealm</h1>
+          <span data-i18n="tagline">Тёмное фэнтези-РП · мир после Единого Королевства</span>
+        </div>
+        <div class="lang">
+          <select id="langSelect" aria-label="Language">
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+        </div>
+      </div>
+      <nav class="tabs" id="tabs"></nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="aiNotice" class="ai-notice" role="status" hidden></div>
+    <!-- HOME -->
+    <section class="page active" data-page="home">
+      <div class="hero">
+        <h2 data-i18n="home.title">Добро пожаловать в Deeprealm</h2>
+        <p class="lead" data-i18n="home.lead">Мир, переживший гибель Спасителя, раскол Единого Королевства и Грохот. Здесь игроки создают персонажей, расы и классы, а ГМ ведёт их через мрак и свет.</p>
+        <button class="btn primary" data-goto="application" data-i18n="home.create">Создать персонажа</button>
+        <button class="btn" data-goto="guide" data-i18n="home.ask">Спросить Проводника</button>
+      </div>
+      <div class="card">
+        <h3 data-i18n="home.howTitle">Как вступить</h3>
+        <ol id="entrySteps"></ol>
+        <p class="hint" data-i18n="home.chatHint">Постоянная ссылка на чат — по ней можно перейти в любой момент:</p>
+        <p><a id="chatLinkHero" target="_blank" rel="noopener"></a></p>
+        <p class="hint" id="ownerContact"></p>
+        <p class="hint"><a id="adminLink" href="#" target="_blank" rel="noopener"></a></p>
+      </div>
+      <div class="grid" id="homeGrid"></div>
+    </section>
+
+    <!-- LORE -->
+    <section class="page" data-page="lore">
+      <h2 data-i18n="lore.title">Лор мира</h2>
+      <div id="loreContent"></div>
+    </section>
+
+    <!-- RULES -->
+    <section class="page" data-page="rules">
+      <h2 data-i18n="rules.title">Правила чата</h2>
+      <p class="hint" data-i18n="rules.hint">Нажмите на раздел, чтобы раскрыть пункты.</p>
+      <div id="rulesContent"></div>
+    </section>
+
+    <!-- RACES -->
+    <section class="page" data-page="races">
+      <h2 data-i18n="races.title">Расы</h2>
+      <div id="racesContent"></div>
+    </section>
+
+    <!-- CLASSES -->
+    <section class="page" data-page="classes">
+      <h2 data-i18n="classes.title">Классы</h2>
+      <div id="classesContent"></div>
+    </section>
+
+    <!-- LEVEL PASS -->
+    <section class="page" data-page="levelpass">
+      <h2 data-i18n="lp.title">Пасс уровней</h2>
+      <p class="hint" data-i18n="lp.hint">Награда выдаётся сразу при переходе на новый уровень — за прошлые уровни её получить нельзя.</p>
+      <div id="levelPassContent"></div>
+    </section>
+
+    <!-- ARTICLES (every blog article, plus player-made races and classes) -->
+    <section class="page" data-page="articles">
+      <h2 data-i18n="articles.title">Статьи</h2>
+      <p class="hint" data-i18n="articles.hint">Все статьи мира: расы, классы, лор и правила. Новые расы и классы, одобренные анкетологом, появляются здесь автоматически.</p>
+      <div class="article-controls">
+        <input type="search" id="articleSearch" data-i18n-ph="articles.search" placeholder="Поиск по статьям…" />
+        <div class="chips" id="articleFilters"></div>
+      </div>
+      <div id="articleList"></div>
+      <div id="articleView" class="card article-view" hidden></div>
+    </section>
+
+    <!-- ADMINISTRATION + STAFF APPLY -->
+    <section class="page" data-page="admin">
+      <h2 data-i18n="admin.title">Администрация</h2>
+      <p class="hint" data-i18n="admin.hint">Команда проекта, направления и как попасть в неё.</p>
+      <div id="adminContent"></div>
+      <h3 data-i18n="staff.title">Анкетолог по кандидатам</h3>
+      <p class="hint" data-i18n="staff.hint">Хочешь в команду? Расскажи, куда хочешь, и ответь на вопросы. Заявку посмотрит владелец.</p>
+      <div class="card chat">
+        <div class="chat-toolbar" id="staffToolbar"></div>
+        <div class="chat-log" id="staffLog"></div>
+        <form class="chat-form" id="staffForm">
+          <textarea id="staffInput" rows="1" placeholder="Куда хочешь вступить?"></textarea>
+          <button class="btn primary" type="submit" data-i18n="chat.send">Отправить</button>
+        </form>
+      </div>
+      <div class="chips" id="staffChips"></div>
+    </section>
+
+    <!-- APPLICATION (interviewer) -->
+    <section class="page" data-page="application">
+      <h2 data-i18n="app.title">ИИ-анкетолог</h2>
+      <p class="hint" data-i18n="app.hint">Опиши персонажа свободно. Скажи «добавь в анкету», чтобы сохранить детали. После проверки анкетолог выдаст ссылку на чат.</p>
+      <div id="storyTemplateBox"></div>
+      <div class="card chat">
+        <div class="chat-toolbar" id="interviewToolbar"></div>
+        <div class="chat-log" id="interviewLog"></div>
+        <form class="chat-form" id="interviewForm">
+          <textarea id="interviewInput" rows="1" placeholder="Расскажи о своём персонаже…"></textarea>
+          <button class="btn primary" type="submit" data-i18n="chat.send">Отправить</button>
+        </form>
+      </div>
+      <div class="chips" id="interviewChips"></div>
+    </section>
+
+    <!-- GUIDE (just a chat) -->
+    <section class="page" data-page="guide">
+      <h2 data-i18n="guide.title">Проводник</h2>
+      <p class="hint" data-i18n="guide.hint">Чат-справочник: вопросы о правилах, лоре, расах, классах и вступлении. Без ролевой игры.</p>
+      <div class="card chat">
+        <div class="chat-toolbar" id="guideToolbar"></div>
+        <div class="chat-log" id="guideLog"></div>
+        <form class="chat-form" id="guideForm">
+          <textarea id="guideInput" rows="1" placeholder="Задай вопрос о чате…"></textarea>
+          <button class="btn" type="submit" data-i18n="chat.send">Отправить</button>
+        </form>
+      </div>
+      <div class="chips" id="guideChips"></div>
+    </section>
+  </main>
+
+  <footer class="site">
+    <div class="wrap">
+      <p class="flourish">✦ ✦ ✦</p>
+      <p>Deeprealm · <a id="chatLinkFooter" target="_blank" rel="noopener">Telegram</a></p>
+    </div>
+  </footer>
+
+  <script src="scene.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

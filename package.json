@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "NODE_ENV=test node --test test/*.test.js",
-    "import-articles": "node scripts/import-articles.js"
+    "import-articles": "node scripts/import-articles.js",
+    "build-pages": "node scripts/build-pages.js"
   },
   "dependencies": {
     "express": "^4.19.2"
