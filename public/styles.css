@@ -1,0 +1,159 @@
+:root {
+  --bg: #0b0a0e;
+  --bg-2: #14121a;
+  --panel: #1a1622;
+  --panel-2: #221c2d;
+  --ink: #e8e0d2;
+  --ink-dim: #a99c8a;
+  --gold: #c9a24b;
+  --gold-bright: #e6c877;
+  --blood: #8a1f2b;
+  --blood-bright: #b8333f;
+  --line: #342c42;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  --font-title: "Cinzel", "Georgia", serif;
+  --font-body: "Vollkorn", "Georgia", serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+body {
+  background-image:
+    radial-gradient(1200px 500px at 50% -10%, rgba(138, 31, 43, 0.22), transparent 70%),
+    radial-gradient(900px 500px at 100% 0%, rgba(201, 162, 75, 0.08), transparent 60%),
+    linear-gradient(180deg, #0b0a0e 0%, #0e0c13 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+a { color: var(--gold-bright); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3, h4 { font-family: var(--font-title); letter-spacing: 0.04em; color: var(--gold-bright); }
+
+header.site {
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(11,10,14,0.95), rgba(11,10,14,0.6));
+  backdrop-filter: blur(6px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+.brand {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 0 6px;
+}
+.brand .sigil {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid var(--gold); display: grid; place-items: center;
+  color: var(--gold-bright); font-family: var(--font-title); font-size: 20px;
+  box-shadow: 0 0 18px rgba(201,162,75,0.35) inset;
+}
+.brand h1 { font-size: 22px; margin: 0; }
+.brand span { color: var(--ink-dim); font-size: 13px; display: block; }
+
+nav.tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 12px; }
+nav.tabs button {
+  background: transparent; border: 1px solid transparent; color: var(--ink-dim);
+  font-family: var(--font-title); font-size: 13px; letter-spacing: 0.05em;
+  padding: 7px 12px; cursor: pointer; text-transform: uppercase;
+  border-radius: 4px;
+}
+nav.tabs button:hover { color: var(--ink); }
+nav.tabs button.active {
+  color: var(--gold-bright); border-color: var(--gold); background: rgba(201,162,75,0.08);
+}
+
+.lang { margin-left: auto; }
+.lang select {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 4px; padding: 6px 8px; font-family: var(--font-body);
+}
+
+main { padding: 30px 0 80px; }
+.page { display: none; animation: fade 0.35s ease; }
+.page.active { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+.card {
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+.hero { text-align: center; padding: 46px 24px; }
+.hero h2 { font-size: 40px; margin: 0 0 10px; text-shadow: 0 0 26px rgba(201,162,75,0.25); }
+.hero p.lead { color: var(--ink-dim); font-size: 19px; max-width: 640px; margin: 0 auto 22px; }
+
+.btn {
+  display: inline-block; cursor: pointer; font-family: var(--font-title);
+  letter-spacing: 0.06em; text-transform: uppercase; font-size: 13px;
+  padding: 11px 20px; border-radius: 5px; border: 1px solid var(--gold);
+  background: linear-gradient(180deg, #2a2233, #1a1622); color: var(--gold-bright);
+  transition: 0.2s;
+}
+.btn:hover { background: linear-gradient(180deg, #3a2f47, #241d2f); box-shadow: 0 0 18px rgba(201,162,75,0.25); }
+.btn.primary { border-color: var(--blood-bright); color: #f3d9d9; background: linear-gradient(180deg, #4a1620, #2a0e14); }
+.btn.primary:hover { box-shadow: 0 0 20px rgba(184,51,63,0.35); }
+
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+
+.tag { display: inline-block; font-size: 12px; border: 1px solid var(--line); border-radius: 20px; padding: 2px 10px; color: var(--ink-dim); margin: 0 6px 6px 0; }
+
+.rule-section { margin-bottom: 10px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.rule-section > summary {
+  cursor: pointer; padding: 12px 16px; font-family: var(--font-title);
+  color: var(--gold-bright); background: rgba(201,162,75,0.05); list-style: none;
+}
+.rule-section > summary::-webkit-details-marker { display: none; }
+.rule-section ul { margin: 0; padding: 12px 18px 16px 34px; color: var(--ink); }
+.rule-section li { margin-bottom: 8px; }
+
+.chat { display: flex; flex-direction: column; height: 62vh; min-height: 420px; }
+.chat-log { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 82%; padding: 12px 15px; border-radius: 10px; white-space: pre-wrap; }
+.msg.user { align-self: flex-end; background: linear-gradient(180deg, #3a2a1a, #2a1e12); border: 1px solid #5a4526; }
+.msg.assistant { align-self: flex-start; background: linear-gradient(180deg, #241d2f, #1a1622); border: 1px solid var(--line); }
+.msg.system { align-self: center; color: var(--ink-dim); font-size: 14px; text-align: center; }
+.msg.offline { border-color: var(--blood); }
+
+.chat-form { display: flex; gap: 10px; padding: 14px; border-top: 1px solid var(--line); background: rgba(0,0,0,0.2); }
+.chat-form textarea {
+  flex: 1; resize: none; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+  font-family: var(--font-body); font-size: 16px; min-height: 46px; max-height: 130px;
+}
+.chat-form button { align-self: stretch; }
+
+.hint { color: var(--ink-dim); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chips button {
+  background: rgba(201,162,75,0.06); border: 1px solid var(--line); color: var(--ink-dim);
+  border-radius: 20px; padding: 5px 12px; cursor: pointer; font-size: 13px; font-family: var(--font-body);
+}
+.chips button:hover { color: var(--gold-bright); border-color: var(--gold); }
+
+input[type="text"] {
+  width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 5px; padding: 8px 10px; font-family: var(--font-body); font-size: 15px;
+}
+
+footer.site { border-top: 1px solid var(--line); color: var(--ink-dim); font-size: 14px; padding: 22px 0; text-align: center; }
+
+.flourish { text-align: center; color: var(--gold); opacity: 0.5; letter-spacing: 0.6em; margin: 6px 0 0; }

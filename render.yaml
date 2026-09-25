@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: deeprealm-site
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: LLM_MODEL
+        value: gemini-flash-latest
+      - key: LLM_FALLBACK_MODELS
+        value: gemini-3.5-flash,gemini-3.6-flash,gemini-3.7-flash
+      - key: BLOG_SYNC_MINUTES
+        value: "60"

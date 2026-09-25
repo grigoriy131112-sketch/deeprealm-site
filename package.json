@@ -1,0 +1,17 @@
+{
+  "name": "deeprealm-site",
+  "version": "1.0.0",
+  "description": "Deeprealm RP chat website: lore, rules, races, classes, AI guide and AI application interviewer",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "NODE_ENV=test node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
