@@ -67,3 +67,18 @@ Most requests are content, not code. Change `data/knowledge.json`, run
 - `README.md` describes the site for its owner; keep it in sync with features.
 - When a test asserts a 503 for unconfigured AI, run tests with `NODE_ENV=test`
   (as `npm test` does) so a local `.env` key does not change the outcome.
+
+## Operational notes (learned 2026-09-25)
+
+- Sandbox hostnames change when a paused sandbox is resumed. An old
+  `work-1-<old-sandbox-id>.prod-runtime.all-hands.dev` link returns **404**,
+  not 502. Re-read `exposed_urls` from the sandbox API after a resume.
+- Pausing a sandbox kills the site process; it does not come back on resume.
+  Restart with `node server.js` after waking the sandbox.
+- The agent-server shell may still export stale `LLM_*` variables from an
+  earlier session. `server.js` only reads `.env` when a variable is unset, so a
+  restart inherits the old models and keeps returning 429. Unset
+  `LLM_MODEL LLM_FALLBACK_MODELS LLM_API_KEY LLM_BASE_URL` before starting.
+- Verified working Gemini models on the free tier: `gemini-flash-lite-latest`,
+  `gemini-3.5-flash-lite`, `gemini-3-flash-preview`. `gemini-3.6-flash` and
+  `gemini-3.7-flash` do not exist.
