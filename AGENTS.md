@@ -197,3 +197,27 @@ permission is missing. Probe that way before starting any long operation.
   commit to contain only the article.
 - `server.js` reads `.env` only for variables that are still unset, and the
   running preview servers do not reload code: restart them after editing.
+
+## Hosting on a real server (added 2026-09-25)
+
+- The permanent site is GitHub Pages from `main`/`docs` for pages only; the AI
+  chats need a real host. `render.yaml` + `Dockerfile` are ready for Render.
+- The owner must do the one step an agent cannot: sign in at render.com with
+  GitHub and add the `LLM_API_KEY` and `GITHUB_TOKEN` secrets. Both are marked
+  `sync: false` in `render.yaml`, so the host prompts for them.
+- On a host, `GITHUB_REPO` selects the publishing path. The container has no git
+  binary and no `.git`, so `github-publish-api.js` writes the article through the
+  GitHub Contents API. In a checkout, `github-publish.js` still uses git.
+- The container filesystem is wiped on redeploy, so `article-hydrate.js` reads
+  `data/articles.json` back from the repository at boot. That is what keeps a
+  race or class approved after the deploy from disappearing on restart.
+- `GITHUB_TOKEN` on the host must have write access to the repository, or
+  approved articles stay invisible to visitors.
+
+## Article slug collision (fixed 2026-09-25)
+
+- Blog URLs end in a generic `blog-post.html`, so `slugFromUrl` produced the same
+  slug for two different posts (`Магистр сфер` and `Администрация`). The store
+  matched on slug and one article overwrote the other, so a reader could not
+  reach it. `upsert` now matches on title and derives a free slug when one is
+  taken. Do not go back to matching on slug first.
