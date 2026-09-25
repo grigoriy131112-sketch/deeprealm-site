@@ -1,0 +1,40 @@
+# Keeps a free host from falling asleep.
+#
+# Free hosts stop a service after 15 minutes without traffic, so the next visitor
+# waits through a cold start. This pings the service every 10 minutes instead, which
+# counts as traffic and keeps it running.
+#
+# Set the SITE_URL repository variable (Settings -> Secrets and variables -> Actions
+# -> Variables) to the deployed address, for example https://deeprealm-site.onrender.com.
+# Until it is set, the job does nothing.
+
+name: Keep the site awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the site
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          if [ -z "$SITE_URL" ]; then
+            echo "SITE_URL is not set yet; skipping."
+            exit 0
+          fi
+          # A sleeping free host may take up to a minute to answer, so retry.
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$SITE_URL/healthz" || echo 000)
+            echo "attempt $attempt: HTTP $code"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "The site did not answer after 6 attempts."
+          exit 1
