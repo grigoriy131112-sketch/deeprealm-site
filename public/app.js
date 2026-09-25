@@ -40,6 +40,8 @@ const I18N = {
     'admin.chief': 'Главный',
     'admin.general': 'Общие правила команды',
     'admin.questions': 'Что спросят',
+    'admin.pace': 'Обычная активность',
+    'admin.faq': 'Частые вопросы кандидатов',
     'staff.title': 'Анкетолог по кандидатам',
     'staff.hint': 'Хочешь в команду? Расскажи, куда хочешь, и ответь на вопросы. Заявку посмотрит владелец.',
     staffWelcome: 'Привет. Я Анкетолог по кандидатам в администрацию Deeprealm. Скажи, в какое направление хочешь: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, анкетолог или ивентолог. Если не определился — расскажу про каждое и помогу выбрать.',
@@ -61,10 +63,19 @@ const I18N = {
     'chat.thinkingApp': 'Анкетолог думает…',
     'chat.notConfigured': '⚠️ ИИ ещё не подключён. Добавьте ключ в файл .env, чтобы Проводник и Анкетолог заработали.',
     'chat.error': 'Не удалось получить ответ от ИИ.',
+    'chat.copy': 'Копировать',
+    'chat.edit': 'Изменить',
+    'chat.delete': 'Удалить',
+    'chat.save': 'Сохранить',
+    'chat.cancel': 'Отмена',
+    'chat.new': 'Новый чат',
+    'chat.deleteChat': 'Удалить чат',
+    'chat.confirmDeleteChat': 'Удалить этот чат? Действие необратимо.',
+    'chat.empty': 'Пустой чат',
     guideWelcome: 'Привет, путник. Я Проводник Deeprealm. Спрошу тебя о правилах, лоре, расах, классах — или подскажу, как вступить в чат.',
     appWelcome: 'Привет. Я Анкетолог Deeprealm. Расскажи о своём персонаже: имя, раса, класс, характер, сильные и слабые стороны. Когда захочешь добавить что-то в анкету — напиши «добавь в анкету». Когда закончим — я проверю всё и дам ссылку на чат.',
     chipsGuide: ['Как вступить в чат?', 'Какие есть расы?', 'Какие есть классы?', 'Расскажи про Воина', 'Что такое пасс уровней?', 'Кто в администрации?', 'Что такое Подземелье?', 'Правила про метагейм?'],
-    chipsApp: ['Хочу создать персонажа', 'Хочу создать свою расу', 'Хочу создать свой класс', 'Добавь в анкету', 'Покажи анкету', 'Проверь мою заявку']
+    chipsApp: ['Хочу создать персонажа', 'Хочу создать свою расу', 'Хочу создать свой класс', 'Хочу предложить сюжет', 'Добавь в анкету', 'Покажи анкету', 'Проверь мою заявку']
   },
   en: {
     brand: 'Deeprealm',
@@ -107,6 +118,8 @@ const I18N = {
     'admin.chief': 'Lead',
     'admin.general': 'General team rules',
     'admin.questions': 'What they ask',
+    'admin.pace': 'Typical activity',
+    'admin.faq': 'Questions candidates ask',
     'staff.title': 'Staff application interviewer',
     'staff.hint': 'Want to join the team? Say which branch and answer the questions. The owner reviews your application.',
     staffWelcome: 'Hi. I am the Deeprealm staff application interviewer. Tell me which branch you want: deputy owner, PR, moderator, developer, game master, application reviewer or event manager. If you are unsure I will walk you through each and help you choose.',
@@ -128,20 +141,62 @@ const I18N = {
     'chat.thinkingApp': 'The Interviewer is thinking…',
     'chat.notConfigured': '⚠️ AI is not connected yet. Add a key to the .env file to enable the Guide and the Interviewer.',
     'chat.error': 'Could not get a reply from the AI.',
+    'chat.copy': 'Copy',
+    'chat.edit': 'Edit',
+    'chat.delete': 'Delete',
+    'chat.save': 'Save',
+    'chat.cancel': 'Cancel',
+    'chat.new': 'New chat',
+    'chat.deleteChat': 'Delete chat',
+    'chat.confirmDeleteChat': 'Delete this chat? This cannot be undone.',
+    'chat.empty': 'Empty chat',
     guideWelcome: 'Greetings, traveler. I am the Deeprealm Guide. Ask me about the rules, lore, races or classes — or how to join the chat.',
     appWelcome: 'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, personality, strengths and weaknesses. Say "add to the application" to save details. When we are done I will review everything and grant the chat link.',
     chipsGuide: ['How do I join?', 'What races are there?', 'What classes are there?', 'Tell me about the Warrior', 'What is the level pass?', 'Who is in the administration?', 'What is the Dungeon?', 'Rules on metagaming?'],
-    chipsApp: ['I want to create a character', 'I want to create a race', 'I want to create a class', 'Add to the application', 'Show the application', 'Review my application']
+    chipsApp: ['I want to create a character', 'I want to create a race', 'I want to create a class', 'I want to propose a plot', 'Add to the application', 'Show the application', 'Review my application']
   }
 };
 
 const state = {
   lang: localStorage.getItem('dr_lang') || 'ru',
-  knowledge: null,
-  interview: { messages: [], application: {} },
-  guide: { messages: [] },
-  staff: { messages: [], application: {} }
+  knowledge: null
 };
+
+// ---------- chats: persistence, multiple conversations, message actions ----------
+
+const CHAT_TYPES = ['guide', 'interview', 'staff'];
+const STORE_KEY = 'dr_chats_v1';
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function newConvo() { return { id: uid(), messages: [], application: {} }; }
+
+function loadStore() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(STORE_KEY)); } catch { raw = null; }
+  const store = {};
+  for (const type of CHAT_TYPES) {
+    const entry = raw && typeof raw[type] === 'object' ? raw[type] : null;
+    let convos = Array.isArray(entry && entry.convos) ? entry.convos : [];
+    convos = convos.filter((c) => c && typeof c === 'object' && Array.isArray(c.messages));
+    convos.forEach((c) => { if (!c.application) c.application = {}; });
+    if (!convos.length) convos = [newConvo()];
+    const active = convos.some((c) => c.id === entry.active) ? entry.active : convos[0].id;
+    store[type] = { active, convos };
+  }
+  return store;
+}
+
+let chatStore = loadStore();
+
+function saveStore() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(chatStore)); } catch { /* storage full or blocked */ }
+}
+
+function bucket(type) { return chatStore[type]; }
+function activeConvo(type) {
+  const b = bucket(type);
+  return b.convos.find((c) => c.id === b.active) || b.convos[0];
+}
 
 const el = (id) => document.getElementById(id);
 const t = (key) => I18N[state.lang][key] ?? I18N.ru[key] ?? key;
@@ -224,7 +279,7 @@ function wireLang() {
     buildTabs();
     renderKnowledge();
     renderChips();
-    resetChats();
+    renderAllChats();
     showPage(location.hash.replace('#', '') || 'home');
   });
 }
@@ -349,6 +404,27 @@ function renderKnowledge() {
 
   renderAdmin();
   renderChips();
+  renderStoryTemplate();
+}
+
+// The GM plot template is long, so it stays collapsed until asked for.
+function renderStoryTemplate() {
+  const box = el('storyTemplateBox');
+  if (!box) return;
+  const text = state.knowledge && state.knowledge.storyTemplate;
+  if (!text) { box.innerHTML = ''; return; }
+  const title = state.lang === 'ru' ? 'Шаблон заявки на сюжет для ГМ' : 'GM plot submission template';
+  const hint = state.lang === 'ru'
+    ? 'Хочешь предложить сюжет? Разверни шаблон или просто напиши «Хочу предложить сюжет» — анкетолог поможет оформить.'
+    : 'Want to propose a plot? Expand the template, or just say "I want to propose a plot" and the interviewer will help.';
+  box.innerHTML = `
+    <details class="rule-section">
+      <summary>${esc(title)}</summary>
+      <div class="story-template">
+        <p class="hint">${esc(hint)}</p>
+        <pre>${esc(text)}</pre>
+      </div>
+    </details>`;
 }
 
 function renderAdmin() {
@@ -359,15 +435,19 @@ function renderAdmin() {
       <p><strong>${esc(t('admin.practice'))}:</strong> ${esc(r.practice)}</p>
       <p><strong>${esc(t('admin.main'))}:</strong> ${esc(r.main)}</p>
       <p><strong>${esc(t('admin.chief'))}:</strong> ${esc(r.chief)}</p>
+      ${r.pace ? `<p><strong>${esc(t('admin.pace'))}:</strong> ${esc(r.pace)}</p>` : ''}
       <details class="rule-section"><summary>${esc(t('admin.questions'))}</summary>
         <ul>${(r.questions || []).map((q) => `<li>${esc(q)}</li>`).join('')}</ul>
       </details>
     </div>`).join('');
+  const faq = a.activity_faq || [];
   el('adminContent').innerHTML = [
     a.intro ? `<div class="card"><p>${esc(a.intro)}</p></div>` : '',
     (a.levels_note || a.growth) ? `<div class="card"><h3>${esc(t('admin.levels'))}</h3>
       ${a.levels_note ? `<p>${esc(a.levels_note)}</p>` : ''}${a.growth ? `<p>${esc(a.growth)}</p>` : ''}</div>` : '',
     `<div class="card"><h3>${esc(t('admin.roles'))}</h3><p>${roles.map((r) => `<span class="tag">${esc(r.name)}</span>`).join('')}</p></div>`,
+    faq.length ? `<div class="card"><h3>${esc(t('admin.faq'))}</h3>
+      ${faq.map((f) => `<p><strong>${esc(f.q)}</strong><br>${esc(f.a)}</p>`).join('')}</div>` : '',
     roleCards,
     (a.general || []).length ? `<div class="card"><h3>${esc(t('admin.general'))}</h3><ul>${a.general.map((g) => `<li>${esc(g)}</li>`).join('')}</ul></div>` : '',
     a.apply_intro ? `<div class="card"><p>${esc(a.apply_intro)}</p>${a.apply_hint ? `<p class="hint">${esc(a.apply_hint)}</p>` : ''}</div>` : ''
@@ -383,6 +463,12 @@ function renderChips() {
   el('staffChips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => sendStaff(b.dataset.chip)));
 }
 
+const CHAT_UI = {
+  guide: { log: 'guideLog', form: 'guideForm', input: 'guideInput', welcome: 'guideWelcome', thinking: 'chat.thinking', toolbar: 'guideToolbar' },
+  interview: { log: 'interviewLog', form: 'interviewForm', input: 'interviewInput', welcome: 'appWelcome', thinking: 'chat.thinkingApp', toolbar: 'interviewToolbar' },
+  staff: { log: 'staffLog', form: 'staffForm', input: 'staffInput', welcome: 'staffWelcome', thinking: 'chat.thinkingApp', toolbar: 'staffToolbar' }
+};
+
 function pushMsg(logId, role, text) {
   const log = el(logId);
   const div = document.createElement('div');
@@ -393,20 +479,205 @@ function pushMsg(logId, role, text) {
   return div;
 }
 
-function resetChats() {
-  el('guideLog').innerHTML = '';
-  el('interviewLog').innerHTML = '';
-  el('staffLog').innerHTML = '';
-  state.guide.messages = [];
-  state.interview = { messages: [], application: {} };
-  state.staff = { messages: [], application: {} };
-  pushMsg('guideLog', 'assistant', t('guideWelcome'));
-  pushMsg('interviewLog', 'assistant', t('appWelcome'));
-  pushMsg('staffLog', 'assistant', t('staffWelcome'));
+function actionButton(label, title, handler) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'msg-action';
+  b.textContent = label;
+  b.title = title;
+  b.addEventListener('click', handler);
+  return b;
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+
+// A stored message, rendered with copy / edit / delete controls.
+function messageNode(type, index) {
+  const convo = activeConvo(type);
+  const msg = convo.messages[index];
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${msg.role}`;
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = msg.content;
+  wrap.appendChild(body);
+
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+
+  actions.appendChild(actionButton('⧉', t('chat.copy'), async (e) => {
+    const btn = e.currentTarget;
+    const ok = await copyText(msg.content);
+    btn.textContent = ok ? '✓' : '✕';
+    setTimeout(() => { btn.textContent = '⧉'; }, 1200);
+  }));
+
+  actions.appendChild(actionButton('✎', t('chat.edit'), () => startEdit(wrap, body, actions, msg, type)));
+  actions.appendChild(actionButton('🗑', t('chat.delete'), () => {
+    convo.messages.splice(index, 1);
+    saveStore();
+    renderChat(type);
+  }));
+
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function startEdit(wrap, body, actions, msg, type) {
+  if (wrap.querySelector('.msg-editor')) return;
+  actions.hidden = true;
+  body.hidden = true;
+
+  const editor = document.createElement('div');
+  editor.className = 'msg-editor';
+  const ta = document.createElement('textarea');
+  ta.value = msg.content;
+  ta.rows = Math.min(8, Math.max(2, msg.content.split('\n').length));
+  editor.appendChild(ta);
+
+  const bar = document.createElement('div');
+  bar.className = 'msg-editor-bar';
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'msg-action wide';
+  save.textContent = t('chat.save');
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'msg-action wide';
+  cancel.textContent = t('chat.cancel');
+  bar.appendChild(save);
+  bar.appendChild(cancel);
+  editor.appendChild(bar);
+
+  const finish = (commit) => {
+    if (commit) {
+      const next = ta.value.trim();
+      if (next) msg.content = next;
+    }
+    saveStore();
+    renderChat(type);
+  };
+  save.addEventListener('click', () => finish(true));
+  cancel.addEventListener('click', () => finish(false));
+
+  wrap.appendChild(editor);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+function renderToolbar(type) {
+  const bar = el(CHAT_UI[type].toolbar);
+  if (!bar) return;
+  const b = bucket(type);
+  bar.innerHTML = '';
+
+  const select = document.createElement('select');
+  select.className = 'convo-select';
+  b.convos.forEach((c, i) => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    const label = c.messages.length
+      ? String((c.messages.find((m) => m.role !== 'system') || c.messages[0]).content).slice(0, 40)
+      : t('chat.empty');
+    opt.textContent = `${i + 1}. ${label}`;
+    opt.selected = c.id === b.active;
+    select.appendChild(opt);
+  });
+  select.addEventListener('change', (e) => {
+    b.active = e.target.value;
+    saveStore();
+    renderChat(type);
+  });
+  bar.appendChild(select);
+
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'msg-action wide';
+  add.textContent = t('chat.new');
+  add.addEventListener('click', () => newChat(type));
+  bar.appendChild(add);
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'msg-action wide';
+  del.textContent = t('chat.deleteChat');
+  del.disabled = b.convos.length < 2;
+  del.addEventListener('click', () => deleteChat(type));
+  bar.appendChild(del);
+}
+
+function newChat(type) {
+  const b = bucket(type);
+  const convo = newConvo();
+  b.convos.push(convo);
+  b.active = convo.id;
+  saveStore();
+  renderChat(type);
+  el(CHAT_UI[type].input).focus();
+}
+
+function deleteChat(type) {
+  const b = bucket(type);
+  if (b.convos.length < 2) return;
+  if (!confirm(t('chat.confirmDeleteChat'))) return;
+  const idx = b.convos.findIndex((c) => c.id === b.active);
+  b.convos.splice(idx, 1);
+  b.active = b.convos[Math.max(0, idx - 1)].id;
+  saveStore();
+  renderChat(type);
+}
+
+function renderChat(type) {
+  const ui = CHAT_UI[type];
+  const log = el(ui.log);
+  log.innerHTML = '';
+  if (type === 'guide' || type === 'interview' || type === 'staff') {
+    pushMsg(ui.log, 'assistant', t(ui.welcome));
+  }
+  activeConvo(type).messages.forEach((_, i) => log.appendChild(messageNode(type, i)));
+  log.scrollTop = log.scrollHeight;
+  renderToolbar(type);
+}
+
+function renderAllChats() {
+  CHAT_TYPES.forEach(renderChat);
+}
+
+function addMessage(type, role, content) {
+  const convo = activeConvo(type);
+  convo.messages.push({ role, content });
+  saveStore();
+  el(CHAT_UI[type].log).appendChild(messageNode(type, convo.messages.length - 1));
+  const log = el(CHAT_UI[type].log);
+  log.scrollTop = log.scrollHeight;
+}
+
+function removeLastMessage(type) {
+  const convo = activeConvo(type);
+  convo.messages.pop();
+  saveStore();
+  renderChat(type);
 }
 
 function wireChats() {
-  resetChats();
+  renderAllChats();
   el('guideForm').addEventListener('submit', (e) => { e.preventDefault(); sendGuide(el('guideInput').value); });
   el('interviewForm').addEventListener('submit', (e) => { e.preventDefault(); sendInterview(el('interviewInput').value); });
   el('staffForm').addEventListener('submit', (e) => { e.preventDefault(); sendStaff(el('staffInput').value); });
@@ -421,24 +692,23 @@ async function sendGuide(text) {
   text = String(text || '').trim();
   if (!text) return;
   el('guideInput').value = '';
-  pushMsg('guideLog', 'user', text);
-  state.guide.messages.push({ role: 'user', content: text });
+  addMessage('guide', 'user', text);
+  const convo = activeConvo('guide');
   const pending = pushMsg('guideLog', 'system', t('chat.thinking'));
   try {
     const res = await fetch('/api/guide', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: state.guide.messages, lang: state.lang })
+      body: JSON.stringify({ messages: convo.messages, lang: state.lang })
     });
     const data = await res.json();
     pending.remove();
     if (res.status === 503 || data.error === 'not_configured') {
       pushMsg('guideLog', 'system', t('chat.notConfigured'));
-      state.guide.messages.pop();
+      removeLastMessage('guide');
       return;
     }
     const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
-    pushMsg('guideLog', 'assistant', reply);
-    state.guide.messages.push({ role: 'assistant', content: reply });
+    addMessage('guide', 'assistant', reply);
   } catch (err) {
     pending.remove();
     pushMsg('guideLog', 'system', 'Error: ' + err.message);
@@ -449,25 +719,24 @@ async function sendInterview(text) {
   text = String(text || '').trim();
   if (!text) return;
   el('interviewInput').value = '';
-  pushMsg('interviewLog', 'user', text);
-  state.interview.messages.push({ role: 'user', content: text });
+  addMessage('interview', 'user', text);
+  const convo = activeConvo('interview');
   maybeSaveApplication(text);
   const pending = pushMsg('interviewLog', 'system', t('chat.thinkingApp'));
   try {
     const res = await fetch('/api/interview', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: state.interview.messages, lang: state.lang, application: state.interview.application })
+      body: JSON.stringify({ messages: convo.messages, lang: state.lang, application: convo.application })
     });
     const data = await res.json();
     pending.remove();
     if (res.status === 503 || data.error === 'not_configured') {
       pushMsg('interviewLog', 'system', t('chat.notConfigured'));
-      state.interview.messages.pop();
+      removeLastMessage('interview');
       return;
     }
     const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
-    pushMsg('interviewLog', 'assistant', reply);
-    state.interview.messages.push({ role: 'assistant', content: reply });
+    addMessage('interview', 'assistant', reply);
   } catch (err) {
     pending.remove();
     pushMsg('interviewLog', 'system', 'Error: ' + err.message);
@@ -480,36 +749,36 @@ function maybeSaveApplication(text) {
   const trigger = low.includes('добавь в анкету') || low.includes('add to the application');
   if (!trigger) return;
   const note = text.replace(/добавь в анкету/gi, '').replace(/add to the application/gi, '').trim();
-  if (note) state.interview.application[`note_${Date.now()}`] = note;
+  if (note) { activeConvo('interview').application[`note_${Date.now()}`] = note; saveStore(); }
 }
 
 async function sendStaff(text) {
   text = String(text || '').trim();
   if (!text) return;
   el('staffInput').value = '';
-  pushMsg('staffLog', 'user', text);
-  state.staff.messages.push({ role: 'user', content: text });
+  addMessage('staff', 'user', text);
+  const convo = activeConvo('staff');
   const low = text.toLowerCase();
   if (low.includes('добавь в заявку') || low.includes('add to the application')) {
     const note = text.replace(/добавь в заявку/gi, '').replace(/add to the application/gi, '').trim();
-    if (note) state.staff.application[`note_${Date.now()}`] = note;
+    if (note) { convo.application[`note_${Date.now()}`] = note; saveStore(); }
   }
   const pending = pushMsg('staffLog', 'system', t('chat.thinkingApp'));
   try {
     const res = await fetch('/api/staff', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: state.staff.messages, lang: state.lang, application: state.staff.application })
+      body: JSON.stringify({ messages: convo.messages, lang: state.lang, application: convo.application })
     });
     const data = await res.json();
     pending.remove();
     if (res.status === 503 || data.error === 'not_configured') {
       pushMsg('staffLog', 'system', t('chat.notConfigured'));
-      state.staff.messages.pop();
+      removeLastMessage('staff');
       return;
     }
     const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
-    pushMsg('staffLog', 'assistant', reply);
-    state.staff.messages.push({ role: 'assistant', content: reply });
+    addMessage('staff', 'assistant', reply);
+    if (data && data.application) { convo.application = data.application; saveStore(); }
   } catch (err) {
     pending.remove();
     pushMsg('staffLog', 'system', 'Error: ' + err.message);

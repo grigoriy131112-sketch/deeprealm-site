@@ -88,6 +88,7 @@
       <h3 data-i18n="staff.title">Анкетолог по кандидатам</h3>
       <p class="hint" data-i18n="staff.hint">Хочешь в команду? Расскажи, куда хочешь, и ответь на вопросы. Заявку посмотрит владелец.</p>
       <div class="card chat">
+        <div class="chat-toolbar" id="staffToolbar"></div>
         <div class="chat-log" id="staffLog"></div>
         <form class="chat-form" id="staffForm">
           <textarea id="staffInput" rows="1" placeholder="Куда хочешь вступить?"></textarea>
@@ -101,7 +102,9 @@
     <section class="page" data-page="application">
       <h2 data-i18n="app.title">ИИ-анкетолог</h2>
       <p class="hint" data-i18n="app.hint">Опиши персонажа свободно. Скажи «добавь в анкету», чтобы сохранить детали. После проверки анкетолог выдаст ссылку на чат.</p>
+      <div id="storyTemplateBox"></div>
       <div class="card chat">
+        <div class="chat-toolbar" id="interviewToolbar"></div>
         <div class="chat-log" id="interviewLog"></div>
         <form class="chat-form" id="interviewForm">
           <textarea id="interviewInput" rows="1" placeholder="Расскажи о своём персонаже…"></textarea>
@@ -116,6 +119,7 @@
       <h2 data-i18n="guide.title">Проводник</h2>
       <p class="hint" data-i18n="guide.hint">Чат-справочник: вопросы о правилах, лоре, расах, классах и вступлении. Без ролевой игры.</p>
       <div class="card chat">
+        <div class="chat-toolbar" id="guideToolbar"></div>
         <div class="chat-log" id="guideLog"></div>
         <form class="chat-form" id="guideForm">
           <textarea id="guideInput" rows="1" placeholder="Задай вопрос о чате…"></textarea>

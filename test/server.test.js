@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlayerEntries } from '../blog-sync.js';
-import { buildKnowledgeContext, buildStaffContext, isLLMConfigured, app, staffTurn, stripMarkdown } from '../server.js';
+import { buildKnowledgeContext, buildStaffContext, isLLMConfigured, app, staffTurn, stripMarkdown, matchActivityFaq } from '../server.js';
 
 // Real markup fragments copied from the Deeprealm blog index pages.
 const CLASSES_HTML = `<p>Собственно вот сами классы:</p><p>1. Класс:&nbsp;<a href="https://deeprealm1.blogspot.com/2026/09/blog-post.html">Магистр сфер</a> <br />Создатель: @ghg23456</p><p>2. Класс: <a href="https://deeprealm1.blogspot.com/2026/09/blog-post_09.html">Трикстер</a><br />Создатель: @LokalError</p>`;
@@ -174,4 +174,60 @@ test('status endpoint reports configuration state', async () => {
   server.close();
   const data = await res.json();
   assert.equal(typeof data.configured, 'boolean');
+});
+
+test('knowledge context includes the GM plot template', () => {
+  const ctx = buildKnowledgeContext('ru');
+  assert.match(ctx, /ШАБЛОН ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ/);
+  assert.match(ctx, /Визитная карточка/);
+  assert.match(ctx, /Свобода игроков/);
+  assert.match(ctx, /Не пиши сценарий, пиши ситуацию/);
+});
+
+test('knowledge endpoint exposes the GM plot template', async () => {
+  const server = app.listen(0);
+  const port = server.address().port;
+  const res = await fetch(`http://127.0.0.1:${port}/api/knowledge`);
+  server.close();
+  const data = await res.json();
+  assert.match(data.storyTemplate, /Шаблон заявки на сюжет для ГМ/);
+});
+
+test('staff context carries activity norms and candidate FAQ', () => {
+  const ctx = buildStaffContext();
+  assert.match(ctx, /1–2 новых человека в две недели/);
+  assert.match(ctx, /ЧАСТЫЕ ВОПРОСЫ КАНДИДАТОВ/);
+  assert.match(ctx, /платят ли за это/);
+});
+
+test('a clarifying question does not advance the interview', () => {
+  const history = [
+    { role: 'user', content: 'Хочу в пиарщики' },
+    { role: 'assistant', content: 'Привлечь хотя бы 5–10 новых людей своими постами — сможешь?' },
+    { role: 'user', content: 'а как часто надо приводить людей?' }
+  ];
+  const turn = staffTurn(history);
+  assert.equal(turn.role.key, 'pr');
+  assert.equal(turn.asked, 0, 'the question must not count as an answer');
+  assert.equal(turn.askingQuestion, true);
+  assert.match(turn.question, /5–10/);
+});
+
+test('answering normally advances the interview', () => {
+  const history = [
+    { role: 'user', content: 'Хочу в пиарщики' },
+    { role: 'assistant', content: 'Привлечь хотя бы 5–10 новых людей своими постами — сможешь?' },
+    { role: 'user', content: 'Да, смогу' }
+  ];
+  const turn = staffTurn(history);
+  assert.equal(turn.asked, 1);
+  assert.equal(turn.askingQuestion, false);
+  assert.match(turn.question, /опыт ведения соцсетей/);
+});
+
+test('activity FAQ matches the question by keywords', () => {
+  const match = matchActivityFaq('а как часто надо приводить людей?');
+  assert.ok(match, 'the frequency question should match');
+  assert.match(match.a, /1–2/);
+  assert.equal(matchActivityFaq('совсем не по теме текст'), null);
 });

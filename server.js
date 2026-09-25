@@ -54,6 +54,7 @@ app.get('/api/knowledge', (req, res) => {
       playerClasses: knowledge.classes.player_classes || []
     },
     characterTemplate: knowledge.character_template,
+    storyTemplate: knowledge.story_template || '',
     entryProcess: knowledge.entry_process,
     administration: knowledge.administration
   });
@@ -87,6 +88,7 @@ function buildKnowledgeContext(lang) {
     knowledge.classes.player_blog_link ? 'ВСЕ КЛАССЫ ИГРОКОВ (статья): ' + knowledge.classes.player_blog_link : '',
     knowledge.races.player_blog_link ? 'ВСЕ РАСЫ ИГРОКОВ (статья): ' + knowledge.races.player_blog_link : '',
     'ШАБЛОН АНКЕТЫ ПЕРСОНАЖА: ' + JSON.stringify(knowledge.character_template),
+    knowledge.story_template ? 'ШАБЛОН ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ:\n' + knowledge.story_template : '',
     'ПРОЦЕСС ВСТУПЛЕНИЯ: ' + knowledge.entry_process,
     'АДМИНИСТРАЦИЯ (направления): ' + (knowledge.administration?.roles || []).map((r) => r.name).join(', '),
     'СТУПЕНИ РОСТА: ' + (knowledge.administration?.levels_note || '') + ' ' + (knowledge.administration?.growth || ''),
@@ -189,6 +191,11 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Анкетолог чата Deepr
 8. ЕДИНСТВЕННАЯ ссылка, которую ты можешь давать — на чат Telegram: ${knowledge.chat.telegram}. НИКОГДА не придумывай другие ссылки, кнопки, файлы, "базы данных" или адреса сайтов. Если ссылка на чат ещё не положена по проверке — не давай никаких ссылок вообще.
 9. Ты не сохраняешь ничего в базах и не запускаешь игру. Единственное финальное действие — резюме проверки, пометка "ОДОБРЕНО ✅" и ссылка на Telegram-чат.
 
+ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ:
+Если игрок хочет предложить сюжет, приключение или квест для ГМ — помоги оформить заявку по шаблону ниже. Не требуй заполнить всё сразу: задавай по 2–3 вопроса за раз и в конце собери заявку целиком. Если игрок не знает, что написать — предложи пример и объясни, почему для ГМ это важно. Напоминай правила: не пиши сценарий, пиши ситуацию; давай личный крючок под персонажей; согласуй идеи с лором мира.
+
+${knowledge.story_template ? knowledge.story_template : '(шаблон заявки на сюжет не задан)'}
+
  ИНФОРМАЦИЯ О ЧАТЕ:
 ${buildKnowledgeContext(lang)}`;
 
@@ -205,12 +212,30 @@ const STAFF_SYSTEM = (lang) => `Ты — Анкетолог по кандида�
 3. Если ответ кандидата пустой или уклончивый — мягко переспроси тот же вопрос.
 4. Если кандидат просит показать заявку — выведи то, что собрано.
 5. Единственная допустимая ссылка — ${knowledge.chat.telegram}. Контакт владельца: ${knowledge.chat.owner}. Больше никаких ссылок.
-6. Когда тебе дают команду подвести итог — дай краткое заключение: сильные стороны, сомнения, и поставь пометку «РЕКОМЕНДОВАН», если ответы были по существу. Укажи, что решение за владельцем.`;
+6. Когда тебе дают команду подвести итог — дай краткое заключение: сильные стороны, сомнения, и поставь пометку «РЕКОМЕНДОВАН», если ответы были по существу. Укажи, что решение за владельцем.
+7. ОТВЕЧАЙ НА УТОЧНЯЮЩИЕ ВОПРОСЫ. Кандидаты часто спрашивают «а как часто надо приводить людей?», «сколько времени это займёт?», «а если я пропаду?», «платят ли за это?». Это нормально — ответь по существу, опираясь на данные об активности ниже, и постарайся назвать конкретные числа (например: «для пиарщика норма — 1–2 человека в две недели»). Ответ на такой вопрос НЕ считается ответом на вопрос собеседования: после ответа задай тот же самый вопрос кандидату заново.
+8. Тон — дружелюбный и спокойный, без жёсткости и давления. Ты не отказываешь и не осуждаешь, а объясняешь. Кандидаты не обязаны знать нормы заранее — это ты им и рассказываешь.`;
 
 function branchPrompt(lang) {
   return lang === 'en'
     ? 'Hi. Which branch do you want to join: deputy owner, PR, moderator, developer, game master, application reviewer or event manager?'
     : 'Привет. В какое направление хочешь вступить: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, анкетолог или ивентолог?';
+}
+
+// Direct, sourced answers to the questions candidates actually ask, so the reply
+// does not depend on the model recalling the numbers correctly.
+function matchActivityFaq(text) {
+  const s = String(text || '').toLowerCase();
+  if (!s) return null;
+  const items = knowledge.administration?.activity_faq || [];
+  let best = null;
+  let bestScore = 0;
+  for (const item of items) {
+    const words = item.q.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const score = words.filter((w) => s.includes(w)).length;
+    if (score > bestScore) { bestScore = score; best = item; }
+  }
+  return bestScore > 0 ? best : null;
 }
 
 function findRole(key) {
@@ -227,9 +252,12 @@ function buildStaffContext() {
       `  Практикант: ${r.practice}`,
       `  Основная степень: ${r.main}`,
       `  Главный: ${r.chief}`,
+      r.pace ? `  Обычная активность: ${r.pace}` : '',
       `  Вопросы кандидату: ${(r.questions || []).join(' ')}`
-    ].join('\n')),
+    ].filter(Boolean).join('\n')),
     'ОБЩИЕ ПРАВИЛА: ' + (a.general || []).join(' '),
+    'ЧАСТЫЕ ВОПРОСЫ КАНДИДАТОВ:',
+    ...(a.activity_faq || []).map((f) => `— «${f.q}» → ${f.a}`),
     a.apply_hint ? 'ВАЖНО: ' + a.apply_hint : ''
   ].filter(Boolean).join('\n');
 }
@@ -254,20 +282,42 @@ function detectRole(messages) {
   return null;
 }
 
+// Candidates often ask a clarifying question instead of answering ("how often
+// should I bring people in?"). Treat those as questions, not answers, so the
+// scripted interview does not silently skip a step.
+const QUESTION_START = /^(а\s+)?(как|сколько|что|почему|зачем|когда|какой|какая|какие|какое|где|кто|куда|можно|нужно|надо|стоит|есть ли|обязательно|how|what|why|when|where|who|which|can i|do i|is there|are there|does|must i|should i)/i;
+
+function looksLikeQuestion(text) {
+  const s = String(text || '').trim().toLowerCase();
+  if (!s) return false;
+  return s.includes('?') || QUESTION_START.test(s);
+}
+
 // Fixed question order per branch. The model only phrases the next scripted question,
 // which keeps the interview on track instead of drifting into generic advice.
 function staffTurn(history, appState = {}, lang = 'ru') {
   const role = detectRole(history) || findRole(appState.branch || '');
-  if (!role) return { role: null, question: branchPrompt(lang), asked: 0, total: 0, done: false, prompt: branchPrompt(lang) };
+  if (!role) {
+    const last = history.filter((m) => m.role !== 'assistant').pop();
+    return {
+      role: null, question: branchPrompt(lang), asked: 0, total: 0, done: false,
+      askingQuestion: Boolean(last && looksLikeQuestion(last.content))
+    };
+  }
   const questions = role.questions || [];
-  const asked = Math.max(history.filter((m) => m.role !== 'assistant').length - 1, 0);
+  const userMessages = history.filter((m) => m.role !== 'assistant');
+  // The first user message picks the branch; only later messages can be answers.
+  const answers = userMessages.slice(1).filter((m) => !looksLikeQuestion(m.content));
+  const asked = answers.length;
+  const last = userMessages[userMessages.length - 1];
   const done = asked >= questions.length;
   return {
     role,
     asked,
     total: questions.length,
     done,
-    question: done ? '' : questions[asked]
+    question: done ? '' : questions[asked],
+    askingQuestion: Boolean(last && looksLikeQuestion(last.content))
   };
 }
 
@@ -340,19 +390,38 @@ app.post('/api/staff', async (req, res) => {
 
   const turn = staffTurn(history, appState, lang);
   if (!turn.role) {
+    if (turn.askingQuestion) {
+      const faq = matchActivityFaq(history.filter((m) => m.role !== 'assistant').pop()?.content);
+      if (faq) {
+        try {
+          const reply = await callLLM([
+            { role: 'system', content: `${STAFF_SYSTEM(lang)}\n\nКандидат задал уточняющий вопрос до выбора направления. Ответь на него коротко и дружелюбно, опираясь на факт ниже, затем задай вопрос о направлении.\nФАКТ: ${faq.a}` },
+            ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
+          ], { temperature: 0.3 });
+          return res.json({ reply: stripMarkdown(reply), application: appState, role: null, done: false });
+        } catch (err) {
+          return res.status(502).json({ error: err.message });
+        }
+      }
+    }
     return res.json({ reply: turn.question, application: appState, role: null, done: false });
   }
   const { role, asked, done } = turn;
   const questions = role.questions || [];
+  const lastUser = history.filter((m) => m.role !== 'assistant').pop();
+  const faq = turn.askingQuestion ? matchActivityFaq(lastUser?.content) : null;
 
   const focus = [
     `НАПРАВЛЕНИЕ: ${role.name}. ${role.main}`,
+    role.pace ? `ОБЫЧНАЯ АКТИВНОСТЬ: ${role.pace}` : '',
     `ВОПРОСЫ ПО ПОРЯДКУ: ${questions.map((q, i) => `${i + 1}) ${q}`).join(' ')}`,
     `Прогресс: задано ${asked} из ${questions.length}.`,
-    done
-      ? 'ЗАДАНИЕ: подведи итог собеседования по правилу 6.'
-      : `ЗАДАНИЕ: коротко отреагируй на ответ кандидата и задай РОВНО ОДИН следующий вопрос: "${turn.question}". Больше ничего не добавляй.`
-  ].join('\n');
+    faq
+      ? `КАНДИДАТ ЗАДАЛ УТОЧНЯЮЩИЙ ВОПРОС. Ответь дружелюбно и конкретно, опираясь на факт ниже, и НЕ считай это ответом на собеседование. Затем задай тот же вопрос заново: "${turn.question}"\nФАКТ ДЛЯ ОТВЕТА: ${faq.a}`
+      : done
+        ? 'ЗАДАНИЕ: подведи итог собеседования по правилу 6.'
+        : `ЗАДАНИЕ: коротко отреагируй на ответ кандидата и задай РОВНО ОДИН следующий вопрос: "${turn.question}". Больше ничего не добавляй.`
+  ].filter(Boolean).join('\n');
 
   try {
     const reply = await callLLM([
@@ -387,7 +456,7 @@ if (process.env.NODE_ENV !== 'test') {
   }
 }
 
-export { app, buildKnowledgeContext, buildStaffContext, isLLMConfigured, staffTurn, stripMarkdown };
+export { app, buildKnowledgeContext, buildStaffContext, isLLMConfigured, staffTurn, stripMarkdown, matchActivityFaq };
 function isLLMConfigured() {
   return Boolean(LLM_API_KEY);
 }
