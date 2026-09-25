@@ -7,6 +7,8 @@ import { createArticleStore } from './article-store.js';
 import { detectSheetKind, buildArticle } from './publish.js';
 import { knowledgeView } from './knowledge-view.js';
 import { createGithubPublisher } from './github-publish.js';
+import { createApiPublisher } from './github-publish-api.js';
+import { hydrateArticles } from './article-hydrate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KNOWLEDGE_PATH = path.join(__dirname, 'data', 'knowledge.json');
@@ -32,23 +34,37 @@ const articleStore = createArticleStore(ARTICLES_PATH, {
 
 const PORT = process.env.PORT || 3000;
 
-// Approved sheets are written to disk immediately, but the permanent site is
-// served from the repository, so the same article is also committed and pushed.
-// Without this step an approved race or class would only exist on the server
-// that happened to handle the request.
-const sitePublisher = createGithubPublisher({
-  // The checkout that is committed and pushed. Overridable so a test can point
-  // at a throwaway repository instead of the real project.
-  root: process.env.SITE_REPO_ROOT || __dirname,
-  token: process.env.GITHUB_TOKEN || '',
-  branch: process.env.SITE_BRANCH || 'main',
-  // Off in tests: the suite must never commit to a real repository. A test that
-  // needs publishing on sets SITE_AUTOPUBLISH=on explicitly.
-  enabled: process.env.SITE_AUTOPUBLISH
-    ? process.env.SITE_AUTOPUBLISH !== 'off'
-    : process.env.NODE_ENV !== 'test',
-  log: (m) => console.log(`[site] ${m}`)
-});
+// Approved sheets are written to disk immediately, but the published site is
+// served from the repository, so the same article is also pushed there. Without
+// this step an approved race or class would only exist on the server that
+// happened to handle the request.
+//
+// Two transports exist because the environments differ. In the deployed
+// container there is no git binary and no `.git`, so the article is sent through
+// the GitHub Contents API. In a working checkout, git is used so the change also
+// lands in the local tree.
+const sitePublisher = process.env.GITHUB_REPO
+  ? createApiPublisher({
+      root: __dirname,
+      repo: process.env.GITHUB_REPO,
+      token: process.env.GITHUB_TOKEN || '',
+      branch: process.env.SITE_BRANCH || 'main',
+      enabled: process.env.SITE_AUTOPUBLISH !== 'off',
+      log: (m) => console.log(`[site] ${m}`)
+    })
+  : createGithubPublisher({
+      // The checkout that is committed and pushed. Overridable so a test can
+      // point at a throwaway repository instead of the real project.
+      root: process.env.SITE_REPO_ROOT || __dirname,
+      token: process.env.GITHUB_TOKEN || '',
+      branch: process.env.SITE_BRANCH || 'main',
+      // Off in tests: the suite must never commit to a real repository. A test
+      // that needs publishing on sets SITE_AUTOPUBLISH=on explicitly.
+      enabled: process.env.SITE_AUTOPUBLISH
+        ? process.env.SITE_AUTOPUBLISH !== 'off'
+        : process.env.NODE_ENV !== 'test',
+      log: (m) => console.log(`[site] ${m}`)
+    });
 const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || '';
 const LLM_BASE_URL = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -615,6 +631,19 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`Deeprealm site running on http://localhost:${PORT}`);
     if (!LLM_API_KEY) console.warn('ВНИМАНИЕ: LLM_API_KEY не задан — ИИ-чаты будут недоступны до настройки ключа.');
   });
+
+  // The container starts from the image, which cannot contain articles approved
+  // after the deploy. Reading the repository back restores them, so a restart
+  // never loses a player race or class.
+  if (process.env.GITHUB_REPO) {
+    hydrateArticles({
+      repo: process.env.GITHUB_REPO,
+      token: process.env.GITHUB_TOKEN || '',
+      branch: process.env.SITE_BRANCH || 'main',
+      store: articleStore,
+      log: (m) => console.log(`[articles] ${m}`)
+    }).then((r) => { if (!r.ok) console.warn(`[articles] hydrate skipped: ${r.reason || r.detail || ''}`); });
+  }
 
   // Keep player-made races/classes in sync with the blog; the site only reads the local cache.
   const SYNC_MINUTES = Number(process.env.BLOG_SYNC_MINUTES || 60);

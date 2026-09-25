@@ -51,6 +51,23 @@ test('the store lists, reads and updates articles', () => {
   assert.equal(store.get('воин').text, 'новое');
 });
 
+test('two articles sharing a generic blog slug both stay reachable', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dr-art-')), 'articles.json');
+  const store = createArticleStore(file);
+  // Blog URLs for different months can both end in `blog-post.html`, so the slug
+  // derived from the URL is not unique. Both articles must survive the import.
+  store.upsert({ slug: 'blog-post', title: 'Магистр сфер', kind: 'class', text: 'класс' });
+  store.upsert({ slug: 'blog-post', title: 'Администрация', kind: 'admin', text: 'админы' });
+
+  const slugs = store.list().map((a) => a.slug);
+  assert.equal(slugs.length, 2, 'one article must not overwrite the other');
+  assert.equal(new Set(slugs).size, 2, 'both articles need their own address');
+
+  // Re-reading the blog must not add a third copy of either article.
+  store.upsert({ slug: 'blog-post', title: 'Магистр сфер', kind: 'class', text: 'класс обновлён' });
+  assert.equal(store.list().length, 2, 're-import must update, not duplicate');
+});
+
 test('a published player race gets its own slug and never overwrites a blog article', () => {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dr-art-')), 'articles.json');
   const store = createArticleStore(file);

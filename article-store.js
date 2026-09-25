@@ -53,11 +53,28 @@ export function createArticleStore(filePath, { seedPath = null } = {}) {
     // A title that already exists is updated in place, so re-running the import after
     // an edit on the blog does not leave two copies of the same article.
     upsert(article) {
-      const slug = article.slug || slugify(article.title);
-      const idx = data.articles.findIndex((a) => a.slug === slug || a.title === article.title);
+      // Re-running the import after an edit on the blog must update the same
+      // article instead of adding a copy, so an entry with this title is reused.
+      // Its slug is left untouched: two blog posts can share a generic slug
+      // (`blog-post`), and reusing the incoming slug would collide the two.
+      const known = data.articles.find((a) => a.title === article.title);
+      if (known) {
+        const kept = known.slug;
+        Object.assign(known, article, { slug: kept });
+        save();
+        return known;
+      }
+
+      // A slug already held by another title is taken; a free one is derived, so
+      // two articles never collapse into a single address.
+      let slug = article.slug || slugify(article.title);
+      if (data.articles.some((a) => a.slug === slug)) {
+        const base = slug;
+        let n = 2;
+        while (data.articles.some((a) => a.slug === slug)) slug = `${base}-${n++}`;
+      }
       const entry = { ...article, slug };
-      if (idx >= 0) data.articles[idx] = { ...data.articles[idx], ...entry };
-      else data.articles.push(entry);
+      data.articles.push(entry);
       save();
       return entry;
     },

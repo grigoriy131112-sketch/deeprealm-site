@@ -11,6 +11,14 @@ services:
         value: 3000
       - key: LLM_API_KEY
         sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      # With a repository set, approved articles are published through the GitHub
+      # Contents API (the container has no checkout to commit into).
+      - key: GITHUB_REPO
+        value: grigoriy131112-sketch/deeprealm-site
+      - key: SITE_BRANCH
+        value: main
       - key: LLM_BASE_URL
         value: https://generativelanguage.googleapis.com/v1beta/openai
       - key: LLM_MODEL
