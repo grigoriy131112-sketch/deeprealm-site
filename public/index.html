@@ -85,6 +85,18 @@
       <div id="levelPassContent"></div>
     </section>
 
+    <!-- ARTICLES (every blog article, plus player-made races and classes) -->
+    <section class="page" data-page="articles">
+      <h2 data-i18n="articles.title">Статьи</h2>
+      <p class="hint" data-i18n="articles.hint">Все статьи мира: расы, классы, лор и правила. Новые расы и классы, одобренные анкетологом, появляются здесь автоматически.</p>
+      <div class="article-controls">
+        <input type="search" id="articleSearch" data-i18n-ph="articles.search" placeholder="Поиск по статьям…" />
+        <div class="chips" id="articleFilters"></div>
+      </div>
+      <div id="articleList"></div>
+      <div id="articleView" class="card article-view" hidden></div>
+    </section>
+
     <!-- ADMINISTRATION + STAFF APPLY -->
     <section class="page" data-page="admin">
       <h2 data-i18n="admin.title">Администрация</h2>

@@ -339,3 +339,58 @@ footer.site { border-top: 1px solid var(--line); color: var(--ink-dim); font-siz
   .ember-field { opacity: 0.4; }
   .page { animation: none; }
 }
+
+/* Articles: a browsable list of every blog article plus player-made races/classes. */
+.article-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
+.article-controls input[type="search"] {
+  flex: 1 1 240px;
+  padding: 10px 14px;
+  background: rgba(10, 8, 14, 0.7);
+  border: 1px solid rgba(201, 162, 75, 0.3);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+}
+.article-controls input[type="search"]:focus { outline: none; border-color: var(--gold); }
+#articleFilters { margin-top: 0; }
+#articleFilters .chip.active { color: var(--gold-bright); border-color: var(--gold); background: rgba(201, 162, 75, 0.12); }
+
+#articleList { display: grid; gap: 8px; margin-top: 8px; }
+.article-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  background: rgba(16, 12, 22, 0.65);
+  border: 1px solid rgba(201, 162, 75, 0.18);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s, background 0.2s;
+}
+.article-row:hover {
+  border-color: rgba(201, 162, 75, 0.5);
+  background: rgba(24, 18, 32, 0.8);
+  transform: translateY(-1px);
+}
+.article-title { font-family: 'Cinzel', serif; letter-spacing: 0.02em; }
+
+.article-view { margin-top: 16px; }
+.article-view h3 { margin: 12px 0 8px; }
+.article-body {
+  margin-top: 12px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+.article-body p {
+  margin: 0 0 6px;
+  font-family: 'Vollkorn', Georgia, serif;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.article-body p.gap { height: 8px; margin: 0; }

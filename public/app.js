@@ -2,7 +2,18 @@ const I18N = {
   ru: {
     brand: 'Deeprealm',
     tagline: 'Тёмное фэнтези-РП · мир после Единого Королевства',
-    tabs: { home: 'Главная', lore: 'Лор', rules: 'Правила', races: 'Расы', classes: 'Классы', levelpass: 'Пасс уровней', admin: 'Администрация', application: 'Анкетолог', guide: 'Проводник' },
+    tabs: { home: 'Главная', lore: 'Лор', rules: 'Правила', races: 'Расы', classes: 'Классы', articles: 'Статьи', levelpass: 'Пасс уровней', admin: 'Администрация', application: 'Анкетолог', guide: 'Проводник' },
+    'articles.title': 'Статьи',
+    'articles.hint': 'Все статьи мира: расы, классы, лор и правила. Новые расы и классы, одобренные анкетологом, появляются здесь автоматически.',
+    'articles.search': 'Поиск по статьям…',
+    'articles.all': 'Все',
+    'articles.race': 'Расы',
+    'articles.class': 'Классы',
+    'articles.other': 'Прочее',
+    'articles.empty': 'Ничего не найдено.',
+    'articles.count': 'Статей: {n}',
+    'articles.back': '← Назад к списку',
+    'articles.open': 'Открыть статью',
     'home.title': 'Добро пожаловать в Deeprealm',
     'home.lead': 'Мир, переживший гибель Спасителя, раскол Единого Королевства и Грохот. Здесь игроки создают персонажей, расы и классы, а ГМ ведёт их через мрак и свет.',
     'home.create': 'Создать персонажа',
@@ -83,7 +94,18 @@ const I18N = {
   en: {
     brand: 'Deeprealm',
     tagline: 'Dark fantasy RP · a world after the Single Kingdom',
-    tabs: { home: 'Home', lore: 'Lore', rules: 'Rules', races: 'Races', classes: 'Classes', levelpass: 'Level pass', admin: 'Administration', application: 'Interviewer', guide: 'Guide' },
+    tabs: { home: 'Home', lore: 'Lore', rules: 'Rules', races: 'Races', classes: 'Classes', articles: 'Articles', levelpass: 'Level pass', admin: 'Administration', application: 'Interviewer', guide: 'Guide' },
+    'articles.title': 'Articles',
+    'articles.hint': 'Every article of the world: races, classes, lore and rules. New races and classes approved by the interviewer appear here automatically.',
+    'articles.search': 'Search articles…',
+    'articles.all': 'All',
+    'articles.race': 'Races',
+    'articles.class': 'Classes',
+    'articles.other': 'Other',
+    'articles.empty': 'Nothing found.',
+    'articles.count': 'Articles: {n}',
+    'articles.back': '← Back to the list',
+    'articles.open': 'Open article',
     'home.title': 'Welcome to Deeprealm',
     'home.lead': 'A world that survived the death of the Savior, the fall of the Single Kingdom and the Rumble. Players create characters, races and classes while the GM leads them through shadow and light.',
     'home.create': 'Create a character',
@@ -165,8 +187,81 @@ const I18N = {
 
 const state = {
   lang: localStorage.getItem('dr_lang') || 'ru',
-  knowledge: null
+  knowledge: null,
+  articles: [],
+  articleFilter: 'all',
+  articleQuery: ''
 };
+
+function renderArticles() {
+  const filters = [
+    ['all', t('articles.all')],
+    ['race', t('articles.race')],
+    ['class', t('articles.class')],
+    ['other', t('articles.other')]
+  ];
+  el('articleFilters').innerHTML = filters
+    .map(([key, label]) => `<button class="chip${state.articleFilter === key ? ' active' : ''}" data-filter="${key}">${esc(label)}</button>`)
+    .join('');
+  el('articleFilters').querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', () => { state.articleFilter = b.dataset.filter; renderArticles(); });
+  });
+
+  const q = state.articleQuery.trim().toLowerCase();
+  const list = state.articles.filter((a) => {
+    if (state.articleFilter === 'race' && a.kind !== 'race') return false;
+    if (state.articleFilter === 'class' && a.kind !== 'class') return false;
+    if (state.articleFilter === 'other' && ['race', 'class'].includes(a.kind)) return false;
+    return !q || a.title.toLowerCase().includes(q);
+  });
+
+  const rows = list.map((a) => {
+    const tag = a.kind === 'race' ? t('articles.race') : a.kind === 'class' ? t('articles.class') : t('articles.other');
+    return `<button class="article-row" type="button" data-slug="${esc(a.slug)}">
+      <span class="article-title">${esc(a.title)}</span>
+      <span class="tag">${esc(tag)}</span>
+    </button>`;
+  }).join('');
+
+  el('articleList').innerHTML = list.length
+    ? `<p class="hint">${esc(t('articles.count').replace('{n}', String(list.length)))}</p>${rows}`
+    : `<p class="hint">${esc(t('articles.empty'))}</p>`;
+
+  el('articleList').querySelectorAll('.article-row').forEach((b) => {
+    b.addEventListener('click', () => openArticle(b.dataset.slug));
+  });
+}
+
+async function openArticle(slug) {
+  const view = el('articleView');
+  view.hidden = false;
+  view.innerHTML = `<p class="hint">…</p>`;
+  const res = await fetch(`/api/articles/${encodeURIComponent(slug)}`);
+  if (!res.ok) { view.innerHTML = `<p class="hint">${esc(t('articles.empty'))}</p>`; return; }
+  const a = await res.json();
+  // Text is kept line by line by the blog import, so each line is rendered as its own row.
+  const body = String(a.text || '').split('\n').map((line) => (line.trim() ? `<p>${esc(line)}</p>` : '<p class="gap"></p>')).join('');
+  const back = String(a.url || '');
+  view.innerHTML = `
+    <button class="btn" type="button" id="articleBack">${esc(t('articles.back'))}</button>
+    <h3>${esc(a.title)}</h3>
+    ${back ? `<p><a href="${esc(back)}" target="_blank" rel="noopener">${esc(t('articles.open'))}</a></p>` : ''}
+    <div class="article-body">${body}</div>`;
+  el('articleBack').addEventListener('click', () => { view.hidden = true; view.innerHTML = ''; });
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function loadArticles() {
+  if (!el('articleList')) return;
+  try {
+    const res = await fetch('/api/articles');
+    const data = await res.json();
+    state.articles = Array.isArray(data.articles) ? data.articles : [];
+  } catch {
+    state.articles = [];
+  }
+  renderArticles();
+}
 
 // ---------- chats: persistence, multiple conversations, message actions ----------
 
@@ -217,7 +312,9 @@ async function boot() {
   wireNav();
   wireChats();
   wireLang();
+  wireArticles();
   showAiStatus();
+  await loadArticles();
   openFromHash();
 }
 
@@ -260,6 +357,10 @@ function renderStatic() {
       .replace('{owner}', `<a href="https://t.me/${esc(owner.replace('@', ''))}" target="_blank" rel="noopener">${esc(owner)}</a>`)
       .replace('{chat}', `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>`);
   }
+  document.querySelectorAll('[data-i18n-ph]').forEach((node) => {
+    const value = t(node.dataset.i18nPh);
+    if (value) node.placeholder = value;
+  });
 }
 
 function buildTabs() {
@@ -298,10 +399,18 @@ function wireLang() {
     renderStatic();
     buildTabs();
     renderKnowledge();
+    renderArticles();
     renderChips();
     renderAllChats();
     showPage(location.hash.replace('#', '') || 'home');
   });
+}
+
+// Search runs on every keystroke; the list is local, so no request is needed.
+function wireArticles() {
+  const search = el('articleSearch');
+  if (!search) return;
+  search.addEventListener('input', () => { state.articleQuery = search.value; renderArticles(); });
 }
 
 function esc(s) {
@@ -764,6 +873,9 @@ async function sendInterview(text) {
     }
     const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
     addMessage('interview', 'assistant', reply);
+    // A newly approved race or class lands in the article store; refresh the list so
+    // it shows up without a page reload.
+    if (data.published) await loadArticles();
   } catch (err) {
     pending.remove();
     pushMsg('interviewLog', 'system', 'Error: ' + err.message);

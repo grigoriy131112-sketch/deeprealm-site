@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { syncPlayerContent, defaultSources } from './blog-sync.js';
+import { createArticleStore } from './article-store.js';
+import { detectSheetKind, buildArticle } from './publish.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KNOWLEDGE_PATH = path.join(__dirname, 'data', 'knowledge.json');
@@ -18,6 +20,11 @@ if (process.env.NODE_ENV !== 'test' && fs.existsSync(envFile)) {
 
 let knowledge = JSON.parse(fs.readFileSync(KNOWLEDGE_PATH, 'utf8'));
 const reloadKnowledge = () => { knowledge = JSON.parse(fs.readFileSync(KNOWLEDGE_PATH, 'utf8')); };
+
+// Articles live beside the knowledge file. The path stays overridable so tests can
+// point at a temporary copy instead of the real data.
+const ARTICLES_PATH = process.env.ARTICLES_PATH || path.join(__dirname, 'data', 'articles.json');
+const articleStore = createArticleStore(ARTICLES_PATH);
 
 const PORT = process.env.PORT || 3000;
 const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || '';
@@ -59,6 +66,32 @@ app.get('/api/knowledge', (req, res) => {
     administration: knowledge.administration
   });
 });
+
+// Article list for the site: metadata only, so the index page stays light.
+app.get('/api/articles', (req, res) => {
+  const kind = req.query.kind;
+  let list = articleStore.list();
+  if (kind) list = list.filter((a) => a.kind === kind);
+  res.json({ count: list.length, articles: list });
+});
+
+app.get('/api/articles/:slug', (req, res) => {
+  const article = articleStore.get(req.params.slug);
+  if (!article) return res.status(404).json({ error: 'not_found' });
+  res.json(article);
+});
+
+// Publishes an approved race or class sheet as a site article. Returns null when the
+// sheet is not a race/class, or when the write fails - the player still gets the
+// hand-off either way, so a review is never lost because of a publishing error.
+async function publishFromSheet({ messages, lang, application }) {
+  const kind = detectSheetKind(messages, application);
+  if (!kind) return null;
+  const article = await buildArticle({ kind, messages, lang, knowledge, callLLM });
+  if (!article) return null;
+  const entry = articleStore.publish({ title: article.title, kind, text: article.text });
+  return { slug: entry.slug, title: entry.title, kind: entry.kind };
+}
 
 // Compact, structured context injected into every model prompt.
 function buildKnowledgeContext(lang) {
@@ -243,20 +276,16 @@ function findRole(key) {
 }
 
 // The hand-off wording is fixed here so the destination and the owner's username
-// are never paraphrased by the model. Custom race/class articles are written by the
-// owner in the blog, so the interview routes those through him too.
-function handoffText(type, lang, { approved = false } = {}) {
+// are never paraphrased by the model. When the bot managed to publish the race or
+// class article itself, it says so instead of asking for the owner.
+function handoffText(type, lang, { approved = false, published = null } = {}) {
   const chat = knowledge.chat.telegram;
   const owner = knowledge.chat.owner;
   if (type === 'interview') {
-    if (lang === 'en') {
-      return approved
-        ? `Send the character sheet to the application desk in the Telegram chat:\n${chat}\n\nWant your own race or class? Articles on the site are published by the owner: send the sheets to ${owner} and you are in.`
-        : `Send the character sheet to the application desk in the Telegram chat:\n${chat}\nWant your own race or class? Articles on the site are published by the owner ${owner}.`;
-    }
-    return approved
-      ? `Кидайте анкету персонажа в анкетницу в тг-чате:\n${chat}\n\nХочешь свою расу или класс? Статьи на сайте ведёт владелец — скинь анкеты владельцу ${owner}, и ты принят.`
-      : `Кидайте анкету персонажа в анкетницу в тг-чате:\n${chat}\nХочешь свою расу или класс? Статьи на сайте ведёт владелец ${owner}.`;
+    const note = publishNote(lang, published, owner);
+    return lang === 'en'
+      ? `Send the character sheet to the application desk in the Telegram chat:\n${chat}${note}`
+      : `Кидайте анкету персонажа в анкетницу в тг-чате:\n${chat}${note}`;
   }
   if (type === 'staff') {
     return lang === 'en'
@@ -266,6 +295,19 @@ function handoffText(type, lang, { approved = false } = {}) {
   return lang === 'en'
     ? `The chat link stays here, so you can join whenever you like:\n${chat}`
     : `Ссылка на чат остаётся здесь, по ней можно перейти в любой момент:\n${chat}`;
+}
+
+// What an approved player is told about their race or class article.
+function publishNote(lang, published, owner) {
+  if (!published) {
+    return lang === 'en'
+      ? `\n\nWant your own race or class? The article is published by the owner ${owner}: send the sheet and you are in.`
+      : `\n\nХочешь свою расу или класс? Статью публикует владелец ${owner}: скинь анкету, и ты принят.`;
+  }
+  const kind = published.kind === 'race' ? (lang === 'en' ? 'race' : 'раса') : (lang === 'en' ? 'class' : 'класс');
+  return lang === 'en'
+    ? `\n\nYour article is already on the site: ${kind} "${published.title}". See the Articles section.`
+    : `\n\nСтатья уже на сайте: ${kind} «${published.title}». Смотри раздел «Статьи».`;
 }
 
 // `approved` marks a completed check. Ending early still gives the hand-off, but
@@ -450,9 +492,15 @@ app.post('/api/interview', async (req, res) => {
     // The model's own "ОДОБРЕНО" means the check passed; attach the fixed hand-off so
     // the sheet destination and the owner's username are never paraphrased.
     const approved = approvedWithSheet(clean);
+    let published = null;
+    if (approved) {
+      published = await publishFromSheet({ messages: history, lang, application: appState }).catch(() => null);
+    }
+    const handoff = handoffText('interview', lang, { approved, published });
     res.json({
-      reply: approved ? `${clean}\n\n${handoffText('interview', lang)}` : clean,
+      reply: approved ? `${clean}\n\n${handoff}` : clean,
       application: appState,
+      published,
       finale: approved
     });
   } catch (err) {
