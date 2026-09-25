@@ -321,6 +321,17 @@ function handoffText(type, lang, { approved = false, published = null } = {}) {
     : `Ссылка на чат остаётся здесь, по ней можно перейти в любой момент:\n${chat}`;
 }
 
+// The owner requires every assistant reply to end with this word. It is appended
+// here rather than left to the model, which forgets it on longer answers; the
+// guard keeps a reply that already ends with it from getting a second one.
+const END_WORD = 'конец';
+function withEnd(text) {
+  const body = String(text ?? '').trim();
+  if (!body) return body;
+  if (new RegExp(`(^|\\s)${END_WORD}\\s*[.!?]*$`, 'i').test(body)) return body;
+  return `${body}\n\n${END_WORD}`;
+}
+
 // What an approved player is told about their race or class article.
 function publishNote(lang, published, owner) {
   if (!published) {
@@ -492,14 +503,14 @@ app.post('/api/guide', async (req, res) => {
   const history = Array.isArray(messages) ? messages.slice(-20) : [];
   // Ending the dialogue needs no model, so it is handled before the key check.
   const lastText = history.filter((m) => m.role !== 'assistant').pop()?.content;
-  if (isEndCommand(lastText)) return res.json({ reply: finaleText('guide', lang), finale: true });
+  if (isEndCommand(lastText)) return res.json({ reply: withEnd(finaleText('guide', lang)), finale: true });
   if (!LLM_API_KEY) return res.status(503).json({ error: 'not_configured' });
   try {
     const reply = await callLLM([
       { role: 'system', content: GUIDE_SYSTEM(lang) },
       ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
     ]);
-    res.json({ reply: stripMarkdown(reply) });
+    res.json({ reply: withEnd(stripMarkdown(reply)) });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -511,7 +522,7 @@ app.post('/api/interview', async (req, res) => {
   const appState = application && typeof application === 'object' ? application : {};
   // Ending the dialogue needs no model, so it is handled before the key check.
   const lastText = history.filter((m) => m.role !== 'assistant').pop()?.content;
-  if (isEndCommand(lastText)) return res.json({ reply: finaleText('interview', lang), application: appState, finale: true });
+  if (isEndCommand(lastText)) return res.json({ reply: withEnd(finaleText('interview', lang)), application: appState, finale: true });
   if (!LLM_API_KEY) return res.status(503).json({ error: 'not_configured' });
   try {
     const reply = await callLLM([
@@ -529,7 +540,7 @@ app.post('/api/interview', async (req, res) => {
     }
     const handoff = handoffText('interview', lang, { approved, published });
     res.json({
-      reply: approved ? `${clean}\n\n${handoff}` : clean,
+      reply: withEnd(approved ? `${clean}\n\n${handoff}` : clean),
       application: appState,
       published,
       finale: approved
@@ -552,7 +563,7 @@ app.post('/api/staff', async (req, res) => {
 
   if (isEndCommand(lastText)) {
     return res.json({
-      reply: finaleText('staff', lang, { approved: turn.done }),
+      reply: withEnd(finaleText('staff', lang, { approved: turn.done })),
       application: appState,
       role: turn.role?.key || null,
       done: true,
@@ -570,13 +581,13 @@ app.post('/api/staff', async (req, res) => {
             { role: 'system', content: `${STAFF_SYSTEM(lang)}\n\nКандидат задал уточняющий вопрос до выбора направления. Ответь на него коротко и дружелюбно, опираясь на факт ниже, затем задай вопрос о направлении.\nФАКТ: ${faq.a}` },
             ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
           ], { temperature: 0.3 });
-          return res.json({ reply: stripMarkdown(reply), application: appState, role: null, done: false });
+          return res.json({ reply: withEnd(stripMarkdown(reply)), application: appState, role: null, done: false });
         } catch (err) {
           return res.status(502).json({ error: err.message });
         }
       }
     }
-    return res.json({ reply: turn.question, application: appState, role: null, done: false });
+    return res.json({ reply: withEnd(turn.question), application: appState, role: null, done: false });
   }
   const { role, asked, done } = turn;
   const questions = role.questions || [];
@@ -587,7 +598,7 @@ app.post('/api/staff', async (req, res) => {
   // instead of asking the model to improvise one.
   if (done && !faq) {
     return res.json({
-      reply: finaleText('staff', lang),
+      reply: withEnd(finaleText('staff', lang)),
       application: { ...appState, branch: role.key },
       role: role.key,
       done: true,
@@ -613,7 +624,7 @@ app.post('/api/staff', async (req, res) => {
       { role: 'user', content: `ЧЕРНОВАЯ ЗАЯВКА (JSON): ${JSON.stringify({ ...appState, branch: role.key })}` },
       ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
     ], { temperature: 0.2 });
-    res.json({ reply: stripMarkdown(reply), application: { ...appState, branch: role.key }, role: role.key, done });
+    res.json({ reply: withEnd(stripMarkdown(reply)), application: { ...appState, branch: role.key }, role: role.key, done });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -653,7 +664,7 @@ if (process.env.NODE_ENV !== 'test') {
   }
 }
 
-export { app, buildKnowledgeContext, buildStaffContext, isLLMConfigured, staffTurn, stripMarkdown, matchActivityFaq, finaleText, isEndCommand, approvedWithSheet };
+export { app, buildKnowledgeContext, buildStaffContext, isLLMConfigured, staffTurn, stripMarkdown, matchActivityFaq, finaleText, isEndCommand, approvedWithSheet, withEnd };
 function isLLMConfigured() {
   return Boolean(LLM_API_KEY);
 }
