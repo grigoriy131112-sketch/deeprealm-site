@@ -104,6 +104,15 @@ host works). Deploy once, then publish updates from any sandbox or chat with
 
 ## Operational notes (learned 2026-09-25)
 
+- The two sandbox preview URLs map to fixed ports: `work-1` -> 12000,
+  `work-2` -> 12001. Opening the wrong one shows "Bad Gateway" (502), which
+  looks like a crash but only means nothing is listening on that port. Start the
+  server on **both** ports so either link works, since the owner may open either.
+- Never stop the preview server while the owner is still looking at the site.
+  Cleanup steps must only remove scratch files. Killing `node server.js` was
+  what produced the "Bad Gateway" the owner reported.
+- Start the server detached so it survives the shell command that launched it:
+  `PORT=12000 setsid nohup node server.js > /tmp/local.log 2>&1 < /dev/null &`
 - Sandbox hostnames change when a paused sandbox is resumed. An old
   `work-1-<old-sandbox-id>.prod-runtime.all-hands.dev` link returns **404**,
   not 502. Re-read `exposed_urls` from the sandbox API after a resume.
