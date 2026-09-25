@@ -1,10 +1,10 @@
 :root {
   --bg: #0b0a0e;
-  --bg-2: #14121a;
-  --panel: #1a1622;
-  --panel-2: #221c2d;
+  --bg-2: #0e0c14;
+  --panel: #14101c;
+  --panel-2: #1c1726;
   --ink: #e8e0d2;
-  --ink-dim: #a99c8a;
+  --ink-dim: #c2b5a4;
   --gold: #c9a24b;
   --gold-bright: #e6c877;
   --blood: #8a1f2b;
@@ -28,13 +28,87 @@ html, body {
 }
 
 body {
+  background-color: var(--bg);
   background-image:
     radial-gradient(1200px 500px at 50% -10%, rgba(138, 31, 43, 0.22), transparent 70%),
     radial-gradient(900px 500px at 100% 0%, rgba(201, 162, 75, 0.08), transparent 60%),
     linear-gradient(180deg, #0b0a0e 0%, #0e0c13 100%);
   background-attachment: fixed;
   min-height: 100vh;
+  overflow-x: hidden;
 }
+
+/* --- animated night scene ------------------------------------------------ */
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+}
+
+/* Depth between the painted scene and the readable content. Kept light: the
+   cards carry their own solid background, so text stays readable while the
+   keep and the horizon remain visible. */
+.scene-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg,
+      rgba(5, 4, 9, 0.5) 0%,
+      rgba(6, 5, 10, 0.22) 26%,
+      rgba(6, 5, 10, 0.1) 46%,
+      rgba(6, 5, 10, 0.3) 78%,
+      rgba(5, 4, 9, 0.55) 100%),
+    radial-gradient(60% 46% at 50% 22%, rgba(6, 5, 10, 0.42), transparent 72%);
+}
+
+/* Slow drifting embers drawn in CSS, so they keep moving even where canvas is
+   throttled. The canvas has its own embers for depth. */
+.ember-field {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.75;
+}
+.ember-field::before,
+.ember-field::after {
+  content: "";
+  position: absolute;
+  inset: -10% -10% -10% -10%;
+  background-repeat: repeat;
+  background-image:
+    radial-gradient(1.6px 1.6px at 12% 92%, rgba(230, 200, 119, 0.85), transparent 60%),
+    radial-gradient(1.2px 1.2px at 27% 88%, rgba(201, 162, 75, 0.7), transparent 60%),
+    radial-gradient(1.8px 1.8px at 41% 95%, rgba(184, 51, 63, 0.6), transparent 60%),
+    radial-gradient(1.3px 1.3px at 58% 90%, rgba(230, 200, 119, 0.7), transparent 60%),
+    radial-gradient(1.5px 1.5px at 73% 94%, rgba(201, 162, 75, 0.65), transparent 60%),
+    radial-gradient(1.1px 1.1px at 88% 89%, rgba(230, 200, 119, 0.6), transparent 60%);
+  background-size: 100% 100%;
+  animation: ember-rise 22s linear infinite;
+}
+.ember-field::after {
+  filter: blur(1px);
+  opacity: 0.6;
+  animation-duration: 34s;
+  animation-delay: -9s;
+}
+@keyframes ember-rise {
+  0%   { transform: translate3d(0, 12vh, 0) scale(1); opacity: 0; }
+  12%  { opacity: 0.9; }
+  70%  { opacity: 0.7; }
+  100% { transform: translate3d(-2.5vw, -78vh, 0) scale(1.06); opacity: 0; }
+}
+
+/* Everything above the scene. */
+header.site, main, footer.site { position: relative; z-index: 2; }
 
 a { color: var(--gold-bright); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -187,3 +261,70 @@ input[type="text"] {
 footer.site { border-top: 1px solid var(--line); color: var(--ink-dim); font-size: 14px; padding: 22px 0; text-align: center; }
 
 .flourish { text-align: center; color: var(--gold); opacity: 0.5; letter-spacing: 0.6em; margin: 6px 0 0; }
+
+/* --- extra atmosphere ---------------------------------------------------- */
+
+/* The sigil breathes, and a rune ring turns slowly behind it. */
+.brand .sigil {
+  position: relative;
+  animation: sigil-pulse 4.5s ease-in-out infinite;
+}
+.brand .sigil::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1px dashed rgba(201, 162, 75, 0.42);
+  animation: sigil-spin 26s linear infinite;
+}
+@keyframes sigil-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(201, 162, 75, 0.35) inset, 0 0 10px rgba(201, 162, 75, 0.18); }
+  50%      { box-shadow: 0 0 26px rgba(230, 200, 119, 0.55) inset, 0 0 22px rgba(201, 162, 75, 0.4); }
+}
+@keyframes sigil-spin { to { transform: rotate(360deg); } }
+
+/* Headline glows like torchlight, brightest where the light falls. */
+.hero h2 {
+  font-size: 40px;
+  margin: 0 0 10px;
+  background: linear-gradient(100deg, var(--gold) 12%, #fff3d2 38%, var(--gold-bright) 52%, var(--gold) 74%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 24px rgba(201, 162, 75, 0.3));
+  animation: title-shimmer 9s ease-in-out infinite;
+}
+@keyframes title-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* Cards catch a thin gold edge, as if lit from above. */
+.card { position: relative; overflow: hidden; }
+.card::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 75, 0.5), transparent);
+}
+
+.rule-section { transition: border-color 0.25s, transform 0.25s; }
+.rule-section:hover { border-color: rgba(201, 162, 75, 0.45); }
+.rule-section[open] > summary { background: rgba(201, 162, 75, 0.1); }
+
+.btn { transition: 0.22s transform, 0.22s box-shadow, 0.22s background; }
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand .sigil,
+  .brand .sigil::before,
+  .hero h2,
+  .ember-field::before,
+  .ember-field::after { animation: none; }
+  .ember-field { opacity: 0.4; }
+  .page { animation: none; }
+}

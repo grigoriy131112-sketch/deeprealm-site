@@ -4,11 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Deeprealm — мир после Единого Королевства</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Vollkorn:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="scene-veil" aria-hidden="true"></div>
+  <div class="ember-field" aria-hidden="true"></div>
   <header class="site">
     <div class="wrap">
       <div class="brand">
@@ -137,6 +141,7 @@
     </div>
   </footer>
 
+  <script src="scene.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -144,3 +144,41 @@ test('the GM plot template is rendered for the interviewer', async () => {
   assert.match(box.textContent, /Шаблон заявки на сюжет для ГМ/);
   assert.match(box.textContent, /Свобода игроков/);
 });
+
+// The background scene must never break the page. jsdom has no canvas 2D
+// context, which is exactly the hostile case: the scene has to bail out
+// quietly and leave the site fully usable.
+test('the site still works when canvas 2D is unavailable', async () => {
+  const state = {};
+  const win = await boot(state);
+  const scene = fs.readFileSync(path.join(ROOT, '..', 'public', 'scene.js'), 'utf8');
+
+  // jsdom's getContext returns null, same as an unsupported browser.
+  win.eval(scene);
+
+  assert.ok(win.document.querySelector('.page.active'), 'a page is still shown');
+  assert.ok(win.document.querySelectorAll('nav.tabs button').length > 5, 'navigation still built');
+
+  await send(win, 'guide');
+  assert.ok(win.document.querySelector('#guideLog .msg'), 'chat still works without the scene');
+});
+
+test('a failing canvas does not take the page down', async () => {
+  const state = {};
+  const win = await boot(state);
+  const scene = fs.readFileSync(path.join(ROOT, '..', 'public', 'scene.js'), 'utf8');
+
+  const canvas = win.document.getElementById('scene');
+  canvas.getContext = () => { throw new Error('boom'); };
+
+  let threw = false;
+  try {
+    win.eval(scene);
+  } catch (err) {
+    threw = true;
+  }
+  // The scene may swallow the failure or let it escape; what must never happen
+  // is the page being left broken afterwards.
+  assert.ok(win.document.querySelector('.page.active'), 'page intact (threw=' + threw + ')');
+  assert.ok(win.document.querySelectorAll('nav.tabs button').length > 5, 'navigation intact');
+});

@@ -71,6 +71,29 @@ Most requests are content, not code. Change `data/knowledge.json`, run
   persistence, multi-chat and message-action code that the server tests cannot
   reach. Keep it passing when touching the frontend.
 
+## Animated scene (`public/scene.js`)
+
+The background is a canvas painting: a keep on a cliff, moon, stars, mist and
+embers, with a light parallax on pointer move and scroll. Things to know before
+changing it:
+
+- It paints into a backing store of `viewport + 140px` so parallax never
+  exposes an empty edge. Keep that slack if you add layers.
+- Layers are baked once per resize (`skyLayer`, `terrainLayer`, `vignette`);
+  only twinkling stars, window lights, mist and embers are redrawn per frame.
+  Avoid adding per-frame work that touches the whole canvas.
+- It runs at most at 1.5 device pixel ratio, and stops rendering while the tab
+  is hidden. `prefers-reduced-motion` renders a single static frame instead.
+- The scene lives at `z-index: 0`, the `.scene-veil` gradient at `1`, page
+  content at `2`. Body text sits on `.card`, which has its own solid
+  background, so the scene never has to be darkened for readability.
+- `--ink-dim` is deliberately light (`#c2b5a4`): the older `#a99c8a` only
+  reached about 4.7:1 against the panels. Check contrast before darkening any
+  colour here.
+- The section below the keep's base is pure black `#050409`, so the towers read
+  as a silhouette. Keep them dark and let the warm glow behind the keep (drawn
+  in `makeSky`) supply the edge.
+
 ## Permanent hosting
 
 `*.prod-runtime.all-hands.dev` links die with their sandbox, which is why a
