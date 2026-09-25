@@ -24,7 +24,9 @@ const reloadKnowledge = () => { knowledge = JSON.parse(fs.readFileSync(KNOWLEDGE
 // Articles live beside the knowledge file. The path stays overridable so tests can
 // point at a temporary copy instead of the real data.
 const ARTICLES_PATH = process.env.ARTICLES_PATH || path.join(__dirname, 'data', 'articles.json');
-const articleStore = createArticleStore(ARTICLES_PATH);
+const articleStore = createArticleStore(ARTICLES_PATH, {
+  seedPath: process.env.ARTICLES_SEED || path.join(__dirname, 'data', 'articles.json')
+});
 
 const PORT = process.env.PORT || 3000;
 const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || '';
@@ -223,6 +225,7 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Анкетолог чата Deepr
 7. Будь дружелюбным, но требовательным к балансу и логике лора.
 8. ЕДИНСТВЕННАЯ ссылка, которую ты можешь давать — на чат Telegram: ${knowledge.chat.telegram}. НИКОГДА не придумывай другие ссылки, кнопки, файлы, "базы данных" или адреса сайтов. Если ссылка на чат ещё не положена по проверке — не давай никаких ссылок вообще.
 9. Ты не сохраняешь ничего в базах и не запускаешь игру. Единственное финальное действие — резюме проверки, пометка "ОДОБРЕНО ✅" и ссылка на Telegram-чат.
+10. Если анкета расы или класса заполнена полностью и нарушений баланса нет — СРАЗУ пиши пометку "ОДОБРЕНО ✅" и завершай проверку. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали: статья для сайта будет опубликована автоматически. Никаких вопросов после одобрения.
 
 ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ:
 Если игрок хочет предложить сюжет, приключение или квест для ГМ — помоги оформить заявку по шаблону ниже. Не требуй заполнить всё сразу: задавай по 2–3 вопроса за раз и в конце собери заявку целиком. Если игрок не знает, что написать — предложи пример и объясни, почему для ГМ это важно. Напоминай правила: не пиши сценарий, пиши ситуацию; давай личный крючок под персонажей; согласуй идеи с лором мира.
@@ -328,16 +331,23 @@ function finaleText(type, lang, { approved = false } = {}) {
   return `${lang === 'en' ? 'That is the end.' : 'На этом всё.'}\n\n${handoffText('guide', lang)}`;
 }
 
-// An approval counts when the model says the application passed AND the reply shows a
-// filled-in sheet, so a bare verdict on an empty draft cannot hand out the chat link.
-// Wording varies ("ОДОБРЕНО ✅", "заявка одобрена"), so several forms are accepted.
-const APPROVAL_RE = /одобрен|принят|approv|accept/i;
+// An approval counts when the model says the application passed AND the conversation
+// actually holds a filled-in sheet. The model paraphrases its verdict freely
+// ("ОДОБРЕНО ✅", "заявка одобрена", "официально одобряю"), so the verdict is matched
+// loosely while the sheet itself is checked against the dialogue and the draft.
+const APPROVAL_RE = /одобр|принят|approv|accept/i;
+const SHEET_FIELDS = [/имя\s*[:\-—]/i, /раса\s*[:\-—]/i, /класс\s*[:\-—]/i, /"name"/i, /"race"/i, /"class"/i, /название\s*[:\-—]/i, /самоназвание/i, /уязвимост/i];
 
-function approvedWithSheet(text) {
+function hasFilledSheet(messages, application = {}) {
+  if (detectSheetKind(messages, application)) return true;
+  const text = `${(Array.isArray(messages) ? messages : []).map((m) => String(m?.content || '')).join('\n')}\n${JSON.stringify(application || {})}`;
+  return SHEET_FIELDS.filter((re) => re.test(text)).length >= 2;
+}
+
+function approvedWithSheet(text, messages, application) {
   const s = String(text || '');
   if (!APPROVAL_RE.test(s)) return false;
-  const fields = [/имя\s*[:\-—]/i, /раса\s*[:\-—]/i, /класс\s*[:\-—]/i, /"name"/i, /"race"/i, /"class"/i];
-  return fields.filter((re) => re.test(s)).length >= 2;
+  return hasFilledSheet(messages, application);
 }
 
 function buildStaffContext() {
@@ -491,7 +501,7 @@ app.post('/api/interview', async (req, res) => {
     const clean = stripMarkdown(reply);
     // The model's own "ОДОБРЕНО" means the check passed; attach the fixed hand-off so
     // the sheet destination and the owner's username are never paraphrased.
-    const approved = approvedWithSheet(clean);
+    const approved = approvedWithSheet(clean, history, appState);
     let published = null;
     if (approved) {
       published = await publishFromSheet({ messages: history, lang, application: appState }).catch(() => null);

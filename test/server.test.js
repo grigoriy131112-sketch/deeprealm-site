@@ -268,10 +268,17 @@ test('ending early gives the hand-off but never claims approval', () => {
 });
 
 test('approval is only accepted together with a filled-in sheet', () => {
-  assert.equal(approvedWithSheet('ОДОБРЕНО ✅\nИмя: Лира\nРаса: Эльф'), true);
-  assert.equal(approvedWithSheet('Решение: заявка одобрена\n{"name":"Лира","race":"Эльф","class":"Маг"}'), true, 'plain wording must count');
-  assert.equal(approvedWithSheet('ОДОБРЕНО ✅'), false, 'a bare approval on an empty sheet is ignored');
-  assert.equal(approvedWithSheet('Имя: Лира\nРаса: Эльф'), false, 'a sheet without approval is not final');
+  const sheet = [{ role: 'user', content: 'Имя: Лира, раса: Эльф, класс: Маг, характер: спокойная.' }];
+  assert.equal(approvedWithSheet('ОДОБРЕНО ✅', sheet), true);
+  assert.equal(approvedWithSheet('Я официально одобряю эту анкету.', sheet), true, 'the model paraphrases its verdict');
+  assert.equal(approvedWithSheet('ОДОБРЕНО ✅', []), false, 'a bare approval on an empty sheet is ignored');
+  assert.equal(approvedWithSheet('Имя: Лира, раса: Эльф', sheet), false, 'a sheet without approval is not final');
+});
+
+test('a sheet is recognised from the dialogue itself when the draft is empty', () => {
+  const race = [{ role: 'user', content: 'Название: Стеклянные. Самоназвание: Звонари. Уязвимость: хрупкость.' }];
+  assert.equal(approvedWithSheet('официально одобряю', race), true, 'a race sheet needs no draft JSON');
+  assert.equal(approvedWithSheet('официально одобряю', [{ role: 'user', content: 'привет' }]), false);
 });
 
 test('finishing a staff interview returns the hand-off without calling the model', async () => {

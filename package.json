@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "NODE_ENV=test node --test test/*.test.js"
+    "test": "NODE_ENV=test node --test test/*.test.js",
+    "import-articles": "node scripts/import-articles.js"
   },
   "dependencies": {
     "express": "^4.19.2"

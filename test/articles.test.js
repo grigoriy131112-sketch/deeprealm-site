@@ -65,6 +65,21 @@ test('a published player race gets its own slug and never overwrites a blog arti
   assert.equal(store.list().filter((a) => a.title === 'Орки').length, 3);
 });
 
+test('a fresh store seeds itself from the bundled copy when a disk file is missing', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dr-art-'));
+  const seed = path.join(dir, 'bundled.json');
+  fs.writeFileSync(seed, JSON.stringify({ source: 'blog', articles: [{ slug: 'орки', title: 'Орки', kind: 'race', text: 'из блога' }] }));
+
+  // The disk file does not exist yet, which is the case on a first boot with a mount.
+  const disk = path.join(dir, 'data', 'articles.json');
+  const store = createArticleStore(disk, { seedPath: seed });
+  assert.equal(store.list().length, 1, 'the imported articles must be available at once');
+
+  store.publish({ title: 'Орки', kind: 'race', text: 'от игрока' });
+  const reopened = createArticleStore(disk, { seedPath: seed });
+  assert.equal(reopened.list().length, 2, 'a player article must survive a restart');
+});
+
 test('a race sheet is told apart from a class sheet and from a character', () => {
   const race = [
     { role: 'user', content: 'Хочу создать свою расу. Название: Куклы. Самоназвание: Никто.' },
