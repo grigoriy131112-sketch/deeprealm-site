@@ -59,10 +59,10 @@ function scaffold() {
   git(repo, 'remote', 'add', 'origin', bare);
 
   const src = process.cwd();
-  // Copy whole folders, not a hand-written file list: the list used to miss files
-  // and the build then failed on a source it could not find.
+  // Copy whole folders and every root module, not a hand-written file list: the
+  // list used to miss files and the build then failed on a source it could not find.
   fs.cpSync(path.join(src, 'public'), path.join(repo, 'public'), { recursive: true });
-  for (const f of ['knowledge-view.js', 'github-publish.js', 'article-store.js', 'articles.js', 'blog-sync.js', 'publish.js', 'server.js']) {
+  for (const f of fs.readdirSync(src).filter((n) => n.endsWith('.js'))) {
     fs.copyFileSync(path.join(src, f), path.join(repo, f));
   }
   fs.cpSync(path.join(src, 'scripts'), path.join(repo, 'scripts'), { recursive: true });

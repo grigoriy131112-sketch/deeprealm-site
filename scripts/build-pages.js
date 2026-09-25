@@ -17,6 +17,7 @@ const files = [
   ['public/styles.css', 'styles.css'],
   ['public/app.js', 'app.js'],
   ['public/scene.js', 'scene.js'],
+  ['public/chat-browser.js', 'chat-browser.js'],
   ['public/favicon.svg', 'favicon.svg'],
   ['public/404.html', '404.html'],
   ['data/articles.json', 'data/articles.json']
@@ -37,6 +38,10 @@ for (const [from, to] of files) {
 // build runs the same view the server uses instead of shipping the source file.
 const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/knowledge.json'), 'utf8'));
 fs.writeFileSync(path.join(out, 'data/knowledge.json'), JSON.stringify(knowledgeView(raw), null, 2) + '\n');
+
+// The chats read the file in its stored shape, so the browser gets that too. It is
+// what lets the site answer when no server is running.
+fs.writeFileSync(path.join(out, 'data/knowledge.raw.json'), JSON.stringify(raw, null, 2) + '\n');
 
 // Pages serves static files only; a config file avoids Jekyll touching anything.
 fs.writeFileSync(path.join(out, '.nojekyll'), '');

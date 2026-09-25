@@ -329,6 +329,10 @@ async function readJson(apiPath, staticPath) {
 
 async function boot() {
   state.knowledge = await readJson('/api/knowledge', 'data/knowledge.json');
+  // The chats read the knowledge file in its stored shape, which differs from the
+  // reshaped payload the page renders. Without it the browser could not answer on
+  // its own, so it is loaded alongside - and its absence simply disables that path.
+  state.rawKnowledge = await readJson('/api/knowledge-raw', 'data/knowledge.raw.json').catch(() => null);
   el('langSelect').value = state.lang;
   renderStatic();
   renderKnowledge();
@@ -342,16 +346,16 @@ async function boot() {
   openFromHash();
 }
 
-// The AI chats cannot answer without a key, and nothing used to say so: a
-// visitor typed, got no reply, and concluded the site was broken. Static hosting
-// cannot run the server at all, so it is treated the same way: the notice shows
-// and the rest of the site stays fully usable.
+// The notice must appear only when nothing can answer. The server reports whether it
+// holds a key, and static hosting has no server but can answer in the browser, so the
+// chat is considered available whenever the bundled rules are present.
 async function showAiStatus() {
+  if (localChat() && state.rawKnowledge) return;
   try {
     const res = await fetch('/api/status');
     const data = await res.json();
     if (data && data.configured) return;
-  } catch { /* static hosting: the chats cannot run here by design */ }
+  } catch { /* static hosting: the chats run in the browser instead */ }
   const box = el('aiNotice');
   if (!box) return;
   box.textContent = t('chat.notConfigured');
@@ -839,6 +843,62 @@ function addMessage(type, role, content) {
   log.scrollTop = log.scrollHeight;
 }
 
+// The chat runs in two places. When our server answers, it owns the AI key and the
+// article publishing. On static hosting there is no server at all, so the same rules
+// are run in the browser against a keyless public endpoint. A missing server must
+// never surface as an error page or a dead chat.
+const CHAT_API = { guide: '/api/guide', interview: '/api/interview', staff: '/api/staff' };
+
+function localChat() {
+  return (typeof window !== 'undefined' && window.DeeprealmChat) || null;
+}
+
+// A server that answers with a real error has something to say, so its reason is kept.
+// A server that is absent is a different case: static hosting replies to /api with the
+// site's own HTML 404 page, which is not a chat answer at all. That, and a refused
+// connection, both mean "no server here" and the browser answers instead.
+async function askServer(type, body) {
+  let res;
+  try {
+    res = await fetch(CHAT_API[type], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    return { unreachable: true };
+  }
+  const data = await res.json().catch(() => null);
+  if (data && data.error === 'not_configured') return { unconfigured: true };
+  if (!data) return { unreachable: true };
+  if (res.status === 503) return { unconfigured: true };
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return { data };
+}
+
+async function askBrowser(type, body) {
+  const chat = localChat();
+  if (!chat) return null;
+  // The chats read the stored shape; without it the browser cannot answer.
+  if (!state.rawKnowledge) return null;
+  chat.setKnowledge(state.rawKnowledge);
+  if (type === 'guide') return chat.answerGuide(body);
+  if (type === 'interview') return chat.answerInterview(body);
+  return chat.answerStaff(body);
+}
+
+// One call the three senders share. A live server wins, because it also publishes
+// approved sheets. When it is unreachable, the bundled rules answer in the browser, so
+// a sleeping sandbox never turns into a dead chat. A server that reports a real error
+// keeps its message; only when nothing can answer is the visitor told why.
+async function askChat(type, body) {
+  const server = await askServer(type, body);
+  if (server.data) return server.data;
+  const local = await askBrowser(type, body).catch(() => null);
+  if (local) return local;
+  return { unconfigured: true };
+}
+
 function wireChats() {
   renderAllChats();
   el('guideForm').addEventListener('submit', (e) => { e.preventDefault(); sendGuide(el('guideInput').value); });
@@ -859,24 +919,18 @@ async function sendGuide(text) {
   const convo = activeConvo('guide');
   const pending = pushMsg('guideLog', 'system', t('chat.thinking'));
   try {
-    const res = await fetch('/api/guide', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: convo.messages, lang: state.lang })
-    });
-    const data = await res.json();
+    const data = await askChat('guide', { messages: convo.messages, lang: state.lang });
     pending.remove();
-    if (res.status === 503 || data.error === 'not_configured') {
+    if (data.unconfigured) {
       // Keep the typed message: deleting it made the chat look like nothing was
       // sent, which is how the "messages disappear" bug was reported.
       pushMsg('guideLog', 'system', t('chat.notConfigured'));
       return;
     }
-    const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
-    addMessage('guide', 'assistant', reply);
+    addMessage('guide', 'assistant', data.reply);
   } catch (err) {
     pending.remove();
-    // A missing server (static hosting) should not surface as a JS error.
-    pushMsg('guideLog', 'system', t('chat.notConfigured'));
+    pushMsg('guideLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());
   }
 }
 
@@ -889,25 +943,19 @@ async function sendInterview(text) {
   maybeSaveApplication(text);
   const pending = pushMsg('interviewLog', 'system', t('chat.thinkingApp'));
   try {
-    const res = await fetch('/api/interview', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: convo.messages, lang: state.lang, application: convo.application })
-    });
-    const data = await res.json();
+    const data = await askChat('interview', { messages: convo.messages, lang: state.lang, application: convo.application });
     pending.remove();
-    if (res.status === 503 || data.error === 'not_configured') {
+    if (data.unconfigured) {
       pushMsg('interviewLog', 'system', t('chat.notConfigured'));
       return;
     }
-    const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
-    addMessage('interview', 'assistant', reply);
+    addMessage('interview', 'assistant', data.reply);
     // A newly approved race or class lands in the article store; refresh the list so
     // it shows up without a page reload.
     if (data.published) await loadArticles();
   } catch (err) {
     pending.remove();
-    // A missing server (static hosting) should not surface as a JS error.
-    pushMsg('interviewLog', 'system', t('chat.notConfigured'));
+    pushMsg('interviewLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());
   }
 }
 
@@ -933,23 +981,17 @@ async function sendStaff(text) {
   }
   const pending = pushMsg('staffLog', 'system', t('chat.thinkingApp'));
   try {
-    const res = await fetch('/api/staff', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: convo.messages, lang: state.lang, application: convo.application })
-    });
-    const data = await res.json();
+    const data = await askChat('staff', { messages: convo.messages, lang: state.lang, application: convo.application });
     pending.remove();
-    if (res.status === 503 || data.error === 'not_configured') {
+    if (data.unconfigured) {
       pushMsg('staffLog', 'system', t('chat.notConfigured'));
       return;
     }
-    const reply = res.ok ? data.reply : `${t('chat.error')} ${data.error || ''}`;
-    addMessage('staff', 'assistant', reply);
+    addMessage('staff', 'assistant', data.reply);
     if (data && data.application) { convo.application = data.application; saveStore(); }
   } catch (err) {
     pending.remove();
-    // A missing server (static hosting) should not surface as a JS error.
-    pushMsg('staffLog', 'system', t('chat.notConfigured'));
+    pushMsg('staffLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());
   }
 }
 

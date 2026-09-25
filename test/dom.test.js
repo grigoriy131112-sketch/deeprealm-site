@@ -12,6 +12,7 @@ import { knowledgeView } from '../knowledge-view.js';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const HTML = fs.readFileSync(path.join(ROOT, '..', 'public', 'index.html'), 'utf8');
 const APP_JS = fs.readFileSync(path.join(ROOT, '..', 'public', 'app.js'), 'utf8');
+const CHAT_BROWSER_JS = fs.readFileSync(path.join(ROOT, '..', 'public', 'chat-browser.js'), 'utf8');
 const KNOWLEDGE = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'data', 'knowledge.json'), 'utf8'));
 
 const PAYLOAD = {
@@ -47,7 +48,8 @@ async function boot(state = {}, opts = {}) {
     }
   });
   window.fetch = opts.fetch || (async (url, opts2 = {}) => {
-    if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
+    if (String(url).includes('/api/knowledge-raw')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
+      if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
     const body = JSON.parse(opts2.body || '{}');
     return { ok: true, status: 200, json: async () => ({ reply: 'echo: ' + body.messages.at(-1).content, application: body.application || {} }) };
   });
@@ -56,6 +58,11 @@ async function boot(state = {}, opts = {}) {
   // jsdom does not implement scrolling; real browsers do, so it is stubbed here
   // rather than guarded in the app.
   window.Element.prototype.scrollIntoView = () => {};
+  // The real page loads the chat bundle before app.js; the tests must do the same,
+  // otherwise the browser fallback would look missing. `opts.noChatBundle` simulates
+  // a page that somehow shipped without it, which is the only case left where the
+  // visitor has to be told that nothing can answer.
+  if (!opts.noChatBundle) window.eval(CHAT_BROWSER_JS);
   window.eval(APP_JS);
   await sleep(30);
   return window;
@@ -191,14 +198,21 @@ test('a failing canvas does not take the page down', async () => {
 // The reported bug: in the AI chats a sent message vanished. Root cause was
 // that an unconfigured AI (503) made the app delete the user's message, so the
 // conversation looked like nothing had been sent.
-test('a sent message stays visible when the AI is not configured', async () => {
+//
+// The page normally answers this itself through the bundled rules, so the missing
+// bundle is what is simulated here: it is the only state left in which nothing can
+// answer and the visitor must be told why.
+test('a sent message stays visible when nothing can answer', async () => {
   const state = {};
-  const win = await boot(state, {
+  const offline = {
+    noChatBundle: true,
     fetch: async (url) => {
+      if (String(url).includes('/api/knowledge-raw')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
       if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
       return { ok: false, status: 503, json: async () => ({ error: 'not_configured' }) };
     }
-  });
+  };
+  const win = await boot(state, offline);
 
   for (const who of ['guide', 'interview', 'staff']) {
     const input = win.document.getElementById(`${who}Input`);
@@ -214,21 +228,29 @@ test('a sent message stays visible when the AI is not configured', async () => {
   }
 
   // And it must survive a reload, not just the current render.
-  const reloaded = await boot(state, {
-    fetch: async (url) => {
-      if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
-      return { ok: false, status: 503, json: async () => ({ error: 'not_configured' }) };
-    }
-  });
+  const reloaded = await boot(state, offline);
   for (const who of ['guide', 'interview', 'staff']) {
     assert.match(reloaded.document.getElementById(`${who}Log`).textContent, /привет/, `${who}: message persisted`);
   }
+});
+
+// The whole point of shipping the rules to the browser: with no server at all the
+// chat still answers, so a sleeping host is invisible to a visitor.
+test('with no server the chat answers in the browser', async () => {
+  const win = await boot({}, { fetch: browserOnlyFetch() });
+  await send(win, 'guide');
+
+  const log = win.document.getElementById('guideLog');
+  assert.ok(!/Failed to fetch/.test(log.textContent), 'a network error must not leak into the chat');
+  assert.match(log.textContent, /конец/, 'the reply must keep the closing word');
+  assert.ok(!/ИИ ещё не подключён/.test(log.textContent), 'the chat must not claim the AI is missing');
 });
 
 test('a server error keeps the message and reports the failure', async () => {
   const state = {};
   const win = await boot(state, {
     fetch: async (url) => {
+      if (String(url).includes('/api/knowledge-raw')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
       if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
       return { ok: false, status: 502, json: async () => ({ error: 'upstream exploded' }) };
     }
@@ -244,21 +266,34 @@ test('a server error keeps the message and reports the failure', async () => {
   assert.match(log.textContent, /upstream exploded/, 'the server error must be shown');
 });
 
-// A visitor could not tell that the AI simply had no key, so the page now says so up front.
-test('the AI notice appears only when the AI is not configured', async () => {
+// A visitor could not tell that the AI simply had no key, so the page now says so up
+// front. That notice is only correct when nothing can answer at all - with the bundle
+// present the browser covers a missing server, so the notice must stay hidden.
+test('the AI notice appears only when nothing can answer', async () => {
   const unconfigured = await boot({}, {
+    noChatBundle: true,
     fetch: async (url) => {
+      if (String(url).includes('/api/knowledge-raw')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
       if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
       if (String(url).includes('/api/status')) return { ok: true, status: 200, json: async () => ({ configured: false }) };
       return { ok: false, status: 503, json: async () => ({ error: 'not_configured' }) };
     }
   });
   const box = unconfigured.document.getElementById('aiNotice');
-  assert.equal(box.hidden, false, 'notice must be visible when unconfigured');
+  assert.equal(box.hidden, false, 'notice must be visible when nothing can answer');
   assert.match(box.textContent, /ИИ ещё не подключён/, 'notice must explain the reason');
 
+  // With the bundled rules loaded, a static host still has a working chat, so the
+  // notice would be wrong and must not be shown.
+  const covered = await boot({}, { fetch: staticFetch() });
+  await sleep(40);
+  assert.equal(covered.document.getElementById('aiNotice').hidden, true, 'the browser covers a missing server');
+});
+
+test('the AI notice stays hidden when the server has a key', async () => {
   const configured = await boot({}, {
     fetch: async (url) => {
+      if (String(url).includes('/api/knowledge-raw')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
       if (String(url).includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
       if (String(url).includes('/api/status')) return { ok: true, status: 200, json: async () => ({ configured: true }) };
       return { ok: true, status: 200, json: async () => ({ reply: 'ok' }) };
@@ -280,8 +315,31 @@ function staticFetch() {
     const u = String(url);
     if (u.includes('/api/')) throw new TypeError('Failed to fetch');
     if (u.includes('data/articles.json')) return { ok: true, status: 200, json: async () => ARTICLES };
+    if (u.includes('data/knowledge.raw.json')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
     if (u.includes('data/knowledge.json')) return { ok: true, status: 200, json: async () => shaped };
     // A static host answers a missing file with the site's own 404 page.
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+}
+
+// No server of ours and no static host: the site itself comes from memory, so the
+// only reachable endpoint is the public one the browser bundle calls. This is the
+// sleeping-sandbox case that used to leave the chat dead.
+function browserOnlyFetch() {
+  const shaped = knowledgeView(KNOWLEDGE);
+  return async (url) => {
+    const u = String(url);
+    if (u.includes('pollinations.ai')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ choices: [{ message: { content: 'Здравствуй, путник.' } }] })
+      };
+    }
+    if (u.includes('/api/')) throw new TypeError('Failed to fetch');
+    if (u.includes('data/articles.json')) return { ok: true, status: 200, json: async () => ARTICLES };
+    if (u.includes('data/knowledge.raw.json')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
+    if (u.includes('data/knowledge.json')) return { ok: true, status: 200, json: async () => shaped };
     return { ok: false, status: 404, json: async () => ({}) };
   };
 }
@@ -293,7 +351,8 @@ test('on static hosting the site loads from the bundled JSON, not from /api', as
   const rows = win.document.querySelectorAll('#articleList .article-row');
   assert.equal(rows.length, ARTICLES.articles.length, 'every article must be listed');
   assert.ok(win.document.querySelector('.page.active'), 'a page is shown');
-  assert.equal(win.document.getElementById('aiNotice').hidden, false, 'the AI notice explains why chats are off');
+  // No server, but the bundled rules answer, so the chats are not "off".
+  assert.equal(win.document.getElementById('aiNotice').hidden, true, 'the chats are usable without a server');
 });
 
 test('an article opens on static hosting using the bundled text', async () => {
@@ -310,14 +369,5 @@ test('an article opens on static hosting using the bundled text', async () => {
   assert.equal(view.hidden, false, 'the article view must open');
   assert.match(view.querySelector('h3').textContent, new RegExp(expected.title.slice(0, 12)));
   assert.ok(view.querySelectorAll('.article-body p').length > 0, 'the body must be rendered from the file');
-});
-
-test('a chat on static hosting explains itself instead of showing a JS error', async () => {
-  const win = await boot({}, { fetch: staticFetch() });
-  await send(win, 'guide');
-
-  const log = win.document.getElementById('guideLog');
-  assert.ok(!/Failed to fetch/.test(log.textContent), 'a network error must not leak into the chat');
-  assert.match(log.textContent, /ИИ|сервер|подключ/i, 'the visitor is told why there is no answer');
 });
 
