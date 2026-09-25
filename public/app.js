@@ -72,6 +72,9 @@ const I18N = {
     'chat.deleteChat': 'Удалить чат',
     'chat.confirmDeleteChat': 'Удалить этот чат? Действие необратимо.',
     'chat.empty': 'Пустой чат',
+    'chat.end': 'Конец',
+    'chat.endTitle': 'Завершить диалог',
+    'chat.endCommand': 'конец',
     guideWelcome: 'Привет, путник. Я Проводник Deeprealm. Спрошу тебя о правилах, лоре, расах, классах — или подскажу, как вступить в чат.',
     appWelcome: 'Привет. Я Анкетолог Deeprealm. Расскажи о своём персонаже: имя, раса, класс, характер, сильные и слабые стороны. Когда захочешь добавить что-то в анкету — напиши «добавь в анкету». Когда закончим — я проверю всё и дам ссылку на чат.',
     chipsGuide: ['Как вступить в чат?', 'Какие есть расы?', 'Какие есть классы?', 'Расскажи про Воина', 'Что такое пасс уровней?', 'Кто в администрации?', 'Что такое Подземелье?', 'Правила про метагейм?'],
@@ -150,6 +153,9 @@ const I18N = {
     'chat.deleteChat': 'Delete chat',
     'chat.confirmDeleteChat': 'Delete this chat? This cannot be undone.',
     'chat.empty': 'Empty chat',
+    'chat.end': 'Finish',
+    'chat.endTitle': 'Finish the conversation',
+    'chat.endCommand': 'finish',
     guideWelcome: 'Greetings, traveler. I am the Deeprealm Guide. Ask me about the rules, lore, races or classes — or how to join the chat.',
     appWelcome: 'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, personality, strengths and weaknesses. Say "add to the application" to save details. When we are done I will review everything and grant the chat link.',
     chipsGuide: ['How do I join?', 'What races are there?', 'What classes are there?', 'Tell me about the Warrior', 'What is the level pass?', 'Who is in the administration?', 'What is the Dungeon?', 'Rules on metagaming?'],
@@ -627,6 +633,20 @@ function renderToolbar(type) {
   add.textContent = t('chat.new');
   add.addEventListener('click', () => newChat(type));
   bar.appendChild(add);
+
+  // Lets the visitor end the conversation without knowing the magic word.
+  const end = document.createElement('button');
+  end.type = 'button';
+  end.className = 'msg-action wide';
+  end.textContent = t('chat.end');
+  end.title = t('chat.endTitle');
+  end.addEventListener('click', () => {
+    const command = t('chat.endCommand');
+    if (type === 'guide') sendGuide(command);
+    else if (type === 'interview') sendInterview(command);
+    else sendStaff(command);
+  });
+  bar.appendChild(end);
 
   const del = document.createElement('button');
   del.type = 'button';

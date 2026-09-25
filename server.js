@@ -185,7 +185,7 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Анкетолог чата Deepr
 2. Когда игрок говорит "добавь в анкету" (или "add to the application"), ты ОБЯЗАТЕЛЬНО подтверждаешь: "Добавил в анкету: ..." и перечисляешь, что именно записал.
 3. Когда игрок говорит "покажи анкету"/"show application" — выводи текущую собранную анкету по шаблону.
 4. Проверяй заявку по правилам баланса (см. информацию). Если что-то не так — вежливо объясни, что исправить.
-5. Когда всё заполнено и проверено и нарушений нет — напиши краткое резюме проверки, пометку "ОДОБРЕНО ✅" и дай ссылку на чат: ${knowledge.chat.telegram}. Не выдавай ссылку, пока проверка не завершена.
+5. Когда всё заполнено и проверено и нарушений нет — напиши краткое резюме проверки и пометку "ОДОБРЕНО ✅". Финальную фразу про отправку анкеты и контакт владельца сайт добавит сам, поэтому тебе её писать не нужно. Не выдавай ссылку на чат раньше окончания проверки.
 6. Персонаж не может быть неуязвимым: обязательно должны быть сильные и слабые стороны. Если игрок делает "имбу" — укажи на это.
 7. Будь дружелюбным, но требовательным к балансу и логике лора.
 8. ЕДИНСТВЕННАЯ ссылка, которую ты можешь давать — на чат Telegram: ${knowledge.chat.telegram}. НИКОГДА не придумывай другие ссылки, кнопки, файлы, "базы данных" или адреса сайтов. Если ссылка на чат ещё не положена по проверке — не давай никаких ссылок вообще.
@@ -212,7 +212,7 @@ const STAFF_SYSTEM = (lang) => `Ты — Анкетолог по кандида�
 3. Если ответ кандидата пустой или уклончивый — мягко переспроси тот же вопрос.
 4. Если кандидат просит показать заявку — выведи то, что собрано.
 5. Единственная допустимая ссылка — ${knowledge.chat.telegram}. Контакт владельца: ${knowledge.chat.owner}. Больше никаких ссылок.
-6. Когда тебе дают команду подвести итог — дай краткое заключение: сильные стороны, сомнения, и поставь пометку «РЕКОМЕНДОВАН», если ответы были по существу. Укажи, что решение за владельцем.
+6. Когда тебе дают команду подвести итог — дай краткое заключение: сильные стороны и сомнения. Финальную фразу про пометку «РЕКОМЕНДОВАН», юз владельца и просьбу написать ему сайт добавляет сам, поэтому тебе её писать не нужно.
 7. ОТВЕЧАЙ НА УТОЧНЯЮЩИЕ ВОПРОСЫ. Кандидаты часто спрашивают «а как часто надо приводить людей?», «сколько времени это займёт?», «а если я пропаду?», «платят ли за это?». Это нормально — ответь по существу, опираясь на данные об активности ниже, и постарайся назвать конкретные числа (например: «для пиарщика норма — 1–2 человека в две недели»). Ответ на такой вопрос НЕ считается ответом на вопрос собеседования: после ответа задай тот же самый вопрос кандидату заново.
 8. Тон — дружелюбный и спокойный, без жёсткости и давления. Ты не отказываешь и не осуждаешь, а объясняешь. Кандидаты не обязаны знать нормы заранее — это ты им и рассказываешь.`;
 
@@ -240,6 +240,62 @@ function matchActivityFaq(text) {
 
 function findRole(key) {
   return (knowledge.administration?.roles || []).find((r) => r.key === key) || null;
+}
+
+// The hand-off wording is fixed here so the destination and the owner's username
+// are never paraphrased by the model. Custom race/class articles are written by the
+// owner in the blog, so the interview routes those through him too.
+function handoffText(type, lang, { approved = false } = {}) {
+  const chat = knowledge.chat.telegram;
+  const owner = knowledge.chat.owner;
+  if (type === 'interview') {
+    if (lang === 'en') {
+      return approved
+        ? `Send the character sheet to the application desk in the Telegram chat:\n${chat}\n\nWant your own race or class? Articles on the site are published by the owner: send the sheets to ${owner} and you are in.`
+        : `Send the character sheet to the application desk in the Telegram chat:\n${chat}\nWant your own race or class? Articles on the site are published by the owner ${owner}.`;
+    }
+    return approved
+      ? `Кидайте анкету персонажа в анкетницу в тг-чате:\n${chat}\n\nХочешь свою расу или класс? Статьи на сайте ведёт владелец — скинь анкеты владельцу ${owner}, и ты принят.`
+      : `Кидайте анкету персонажа в анкетницу в тг-чате:\n${chat}\nХочешь свою расу или класс? Статьи на сайте ведёт владелец ${owner}.`;
+  }
+  if (type === 'staff') {
+    return lang === 'en'
+      ? `Here is the owner: ${owner}\nWrite to the owner and say that I checked you.`
+      : `Вот юз владельца: ${owner}\nНапиши ему, что я тебя проверил.`;
+  }
+  return lang === 'en'
+    ? `The chat link stays here, so you can join whenever you like:\n${chat}`
+    : `Ссылка на чат остаётся здесь, по ней можно перейти в любой момент:\n${chat}`;
+}
+
+// `approved` marks a completed check. Ending early still gives the hand-off, but
+// without the approval mark, which would be a false claim.
+function finaleText(type, lang, { approved = false } = {}) {
+  if (type === 'interview') {
+    const head = approved
+      ? (lang === 'en' ? 'That is the end of the check. ОДОБРЕНО ✅' : 'На этом проверка закончена. ОДОБРЕНО ✅')
+      : (lang === 'en' ? 'That is the end.' : 'На этом всё.');
+    return `${head}\n\n${handoffText('interview', lang, { approved })}`;
+  }
+  if (type === 'staff') {
+    const head = approved
+      ? (lang === 'en' ? 'That is the end of the interview. РЕКОМЕНДОВАН ✅' : 'На этом собеседование закончено. РЕКОМЕНДОВАН ✅')
+      : (lang === 'en' ? 'That is the end of the interview.' : 'На этом собеседование закончено.');
+    return `${head}\n\n${handoffText('staff', lang)}`;
+  }
+  return `${lang === 'en' ? 'That is the end.' : 'На этом всё.'}\n\n${handoffText('guide', lang)}`;
+}
+
+// An approval counts when the model says the application passed AND the reply shows a
+// filled-in sheet, so a bare verdict on an empty draft cannot hand out the chat link.
+// Wording varies ("ОДОБРЕНО ✅", "заявка одобрена"), so several forms are accepted.
+const APPROVAL_RE = /одобрен|принят|approv|accept/i;
+
+function approvedWithSheet(text) {
+  const s = String(text || '');
+  if (!APPROVAL_RE.test(s)) return false;
+  const fields = [/имя\s*[:\-—]/i, /раса\s*[:\-—]/i, /класс\s*[:\-—]/i, /"name"/i, /"race"/i, /"class"/i];
+  return fields.filter((re) => re.test(s)).length >= 2;
 }
 
 function buildStaffContext() {
@@ -292,6 +348,17 @@ function looksLikeQuestion(text) {
   if (!s) return false;
   return s.includes('?') || QUESTION_START.test(s);
 }
+
+// The user explicitly ends the conversation. Checked before question detection so
+// "конец?" still counts as an ending, not as a counter-question.
+const END_COMMAND = /^(конец|закончили|закончить|итог|завершить|завершай|финал|end|finish|done|that'?s all|the end)\s*[.!?]*$/i;
+
+function isEndCommand(text) {
+  const s = String(text || '').trim().toLowerCase();
+  if (!s) return false;
+  return END_COMMAND.test(s);
+}
+
 
 // Fixed question order per branch. The model only phrases the next scripted question,
 // which keeps the interview on track instead of drifting into generic advice.
@@ -350,6 +417,9 @@ app.post('/api/refresh', async (req, res) => {
 app.post('/api/guide', async (req, res) => {
   const { messages = [], lang = 'ru' } = req.body || {};
   const history = Array.isArray(messages) ? messages.slice(-20) : [];
+  // Ending the dialogue needs no model, so it is handled before the key check.
+  const lastText = history.filter((m) => m.role !== 'assistant').pop()?.content;
+  if (isEndCommand(lastText)) return res.json({ reply: finaleText('guide', lang), finale: true });
   if (!LLM_API_KEY) return res.status(503).json({ error: 'not_configured' });
   try {
     const reply = await callLLM([
@@ -366,6 +436,9 @@ app.post('/api/interview', async (req, res) => {
   const { messages = [], lang = 'ru', application = {} } = req.body || {};
   const history = Array.isArray(messages) ? messages.slice(-30) : [];
   const appState = application && typeof application === 'object' ? application : {};
+  // Ending the dialogue needs no model, so it is handled before the key check.
+  const lastText = history.filter((m) => m.role !== 'assistant').pop()?.content;
+  if (isEndCommand(lastText)) return res.json({ reply: finaleText('interview', lang), application: appState, finale: true });
   if (!LLM_API_KEY) return res.status(503).json({ error: 'not_configured' });
   try {
     const reply = await callLLM([
@@ -373,7 +446,15 @@ app.post('/api/interview', async (req, res) => {
       { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(appState)}` },
       ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') }))
     ]);
-    res.json({ reply: stripMarkdown(reply), application: appState });
+    const clean = stripMarkdown(reply);
+    // The model's own "ОДОБРЕНО" means the check passed; attach the fixed hand-off so
+    // the sheet destination and the owner's username are never paraphrased.
+    const approved = approvedWithSheet(clean);
+    res.json({
+      reply: approved ? `${clean}\n\n${handoffText('interview', lang)}` : clean,
+      application: appState,
+      finale: approved
+    });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -386,9 +467,21 @@ app.post('/api/staff', async (req, res) => {
   const { messages = [], lang = 'ru', application = {} } = req.body || {};
   const history = Array.isArray(messages) ? messages.slice(-30) : [];
   const appState = application && typeof application === 'object' ? application : {};
-  if (!LLM_API_KEY) return res.status(503).json({ error: 'not_configured' });
 
+  const lastText = history.filter((m) => m.role !== 'assistant').pop()?.content;
   const turn = staffTurn(history, appState, lang);
+
+  if (isEndCommand(lastText)) {
+    return res.json({
+      reply: finaleText('staff', lang, { approved: turn.done }),
+      application: appState,
+      role: turn.role?.key || null,
+      done: true,
+      finale: true
+    });
+  }
+
+  if (!LLM_API_KEY) return res.status(503).json({ error: 'not_configured' });
   if (!turn.role) {
     if (turn.askingQuestion) {
       const faq = matchActivityFaq(history.filter((m) => m.role !== 'assistant').pop()?.content);
@@ -410,6 +503,18 @@ app.post('/api/staff', async (req, res) => {
   const questions = role.questions || [];
   const lastUser = history.filter((m) => m.role !== 'assistant').pop();
   const faq = turn.askingQuestion ? matchActivityFaq(lastUser?.content) : null;
+
+  // Every scripted question has been answered: close the interview with the hand-off
+  // instead of asking the model to improvise one.
+  if (done && !faq) {
+    return res.json({
+      reply: finaleText('staff', lang),
+      application: { ...appState, branch: role.key },
+      role: role.key,
+      done: true,
+      finale: true
+    });
+  }
 
   const focus = [
     `НАПРАВЛЕНИЕ: ${role.name}. ${role.main}`,
@@ -456,7 +561,7 @@ if (process.env.NODE_ENV !== 'test') {
   }
 }
 
-export { app, buildKnowledgeContext, buildStaffContext, isLLMConfigured, staffTurn, stripMarkdown, matchActivityFaq };
+export { app, buildKnowledgeContext, buildStaffContext, isLLMConfigured, staffTurn, stripMarkdown, matchActivityFaq, finaleText, isEndCommand, approvedWithSheet };
 function isLLMConfigured() {
   return Boolean(LLM_API_KEY);
 }

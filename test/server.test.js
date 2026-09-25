@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlayerEntries } from '../blog-sync.js';
-import { buildKnowledgeContext, buildStaffContext, isLLMConfigured, app, staffTurn, stripMarkdown, matchActivityFaq } from '../server.js';
+import { buildKnowledgeContext, buildStaffContext, isLLMConfigured, app, staffTurn, stripMarkdown, matchActivityFaq, finaleText, isEndCommand, approvedWithSheet } from '../server.js';
 
 // Real markup fragments copied from the Deeprealm blog index pages.
 const CLASSES_HTML = `<p>Собственно вот сами классы:</p><p>1. Класс:&nbsp;<a href="https://deeprealm1.blogspot.com/2026/09/blog-post.html">Магистр сфер</a> <br />Создатель: @ghg23456</p><p>2. Класс: <a href="https://deeprealm1.blogspot.com/2026/09/blog-post_09.html">Трикстер</a><br />Создатель: @LokalError</p>`;
@@ -231,3 +231,63 @@ test('activity FAQ matches the question by keywords', () => {
   assert.match(match.a, /1–2/);
   assert.equal(matchActivityFaq('совсем не по теме текст'), null);
 });
+
+test('the end command is recognised in both languages', () => {
+  for (const word of ['конец', 'Конец!', 'закончили', 'итог', 'end', 'Finish', 'done', "that's all"]) {
+    assert.ok(isEndCommand(word), `"${word}" must end the dialogue`);
+  }
+  for (const other of ['', 'конечно', 'а конец?', 'расскажи про конец света', 'finish the story']) {
+    assert.equal(isEndCommand(other), false, `"${other}" must not end the dialogue`);
+  }
+});
+
+test('each assistant ends with its own hand-off wording', () => {
+  const interview = finaleText('interview', 'ru', { approved: true });
+  assert.match(interview, /Кидайте анкету персонажа в анкетницу в тг-чате/);
+  assert.match(interview, /ОДОБРЕНО/);
+  assert.match(interview, /@Omega_Gribcha/);
+  assert.match(interview, /ты принят/, 'an approved sheet still routes custom races through the owner');
+
+  const staff = finaleText('staff', 'ru', { approved: true });
+  assert.match(staff, /Вот юз владельца/);
+  assert.match(staff, /Напиши ему, что я тебя проверил/);
+  assert.match(staff, /РЕКОМЕНДОВАН/);
+
+  const guide = finaleText('guide', 'ru');
+  assert.match(guide, /t\.me\/Deeprealm5/);
+});
+
+test('ending early gives the hand-off but never claims approval', () => {
+  const interview = finaleText('interview', 'ru');
+  assert.doesNotMatch(interview, /ОДОБРЕНО/, 'a cut-short check must not be called approved');
+  assert.match(interview, /Кидайте анкету персонажа в анкетницу/, 'the sheet destination is still useful');
+
+  const staff = finaleText('staff', 'ru');
+  assert.doesNotMatch(staff, /РЕКОМЕНДОВАН/, 'a cut-short interview must not be called recommended');
+  assert.match(staff, /Вот юз владельца/, 'the owner is still handed over');
+});
+
+test('approval is only accepted together with a filled-in sheet', () => {
+  assert.equal(approvedWithSheet('ОДОБРЕНО ✅\nИмя: Лира\nРаса: Эльф'), true);
+  assert.equal(approvedWithSheet('Решение: заявка одобрена\n{"name":"Лира","race":"Эльф","class":"Маг"}'), true, 'plain wording must count');
+  assert.equal(approvedWithSheet('ОДОБРЕНО ✅'), false, 'a bare approval on an empty sheet is ignored');
+  assert.equal(approvedWithSheet('Имя: Лира\nРаса: Эльф'), false, 'a sheet without approval is not final');
+});
+
+test('finishing a staff interview returns the hand-off without calling the model', async () => {
+  const server = app.listen(0);
+  const port = server.address().port;
+  const res = await fetch(`http://127.0.0.1:${port}/api/staff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Конец' }], application: { branch: 'moderator' } })
+  });
+  server.close();
+  // No API key in tests, so a finale reply proves the end command is handled
+  // before the model lookup, which would otherwise answer 503.
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.finale, true);
+  assert.match(data.reply, /Напиши ему, что я тебя проверил/);
+});
+
