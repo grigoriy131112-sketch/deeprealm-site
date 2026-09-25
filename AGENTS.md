@@ -67,6 +67,17 @@ Most requests are content, not code. Change `data/knowledge.json`, run
 - `README.md` describes the site for its owner; keep it in sync with features.
 - When a test asserts a 503 for unconfigured AI, run tests with `NODE_ENV=test`
   (as `npm test` does) so a local `.env` key does not change the outcome.
+- `test/dom.test.js` runs `public/app.js` in jsdom, so it covers the chat
+  persistence, multi-chat and message-action code that the server tests cannot
+  reach. Keep it passing when touching the frontend.
+
+## Permanent hosting
+
+`*.prod-runtime.all-hands.dev` links die with their sandbox, which is why a
+sandbox error used to make the whole site unreachable. The site is meant to run
+on a real host (`render.yaml` + `Dockerfile` are ready for Render; any Docker
+host works). Deploy once, then publish updates from any sandbox or chat with
+`scripts/sync_from_conversation.py`. Never point users at a sandbox URL.
 
 ## Operational notes (learned 2026-09-25)
 
