@@ -94,6 +94,36 @@ changing it:
   as a silhouette. Keep them dark and let the warm glow behind the keep (drawn
   in `makeSky`) supply the edge.
 
+## Publishing to GitHub
+
+The sandbox token is a GitHub App installation token. Its permission set is
+narrow, and the exact set matters:
+
+- **Contents: Read and write** is required to push commits at all. Without it
+  every write fails with `Resource not accessible by integration` even though
+  `GET /repos/:owner/:repo` reports `permissions.push: true`. Do not trust that
+  field; probe with a real write (`PUT /contents/...`).
+- **Workflows: Read and write** is additionally required because this repo
+  tracks `.github/workflows/dependabot-auto-merge.yml`; a push touching that
+  path is rejected without it.
+- `Repository creation: write` is only needed to create the repo itself. If the
+  owner creates an empty repo by hand, this permission is unnecessary.
+- `/user/installations` reports `total_count: 0` for this token even when the
+  installation is healthy, so it cannot be used to diagnose access.
+
+Grant these at https://github.com/settings/installations -> Configure ->
+Repository permissions. Verify before a long operation with:
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' -X PUT \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H 'Accept: application/vnd.github+json' \
+  https://api.github.com/repos/<owner>/<repo>/contents/probe.txt \
+  -d '{"message":"probe","content":"aGVsbG8="}'
+```
+
+`201` means writes work; `403` means the permission is still missing.
+
 ## Permanent hosting
 
 `*.prod-runtime.all-hands.dev` links die with their sandbox, which is why a
