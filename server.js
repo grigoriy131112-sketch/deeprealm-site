@@ -494,6 +494,12 @@ async function runBlogSync() {
   }
 }
 
+// A tiny health endpoint. The uptime pinger that keeps a free host awake hits
+// this instead of the app shell, so the check stays cheap.
+app.get('/healthz', (req, res) => {
+  res.json({ ok: true, articles: articleStore.list().length, llm: Boolean(LLM_API_KEY) });
+});
+
 app.post('/api/refresh', async (req, res) => {
   res.json(await runBlogSync());
 });
