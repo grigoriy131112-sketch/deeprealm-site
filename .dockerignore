@@ -1,0 +1,15 @@
+# Docker's COPY does not read .gitignore, so this file is what keeps the API
+# key out of the image layers.
+.env
+.env.*
+!.env.example
+*.log
+.git
+.gitignore
+node_modules
+npm-debug.log*
+.DS_Store
+test
+chat-archive
+AGENTS.md
+README.md
