@@ -132,33 +132,32 @@ on a real host (`render.yaml` + `Dockerfile` are ready for Render; any Docker
 host works). Deploy once, then publish updates from any sandbox or chat with
 `scripts/sync_from_conversation.py`. Never point users at a sandbox URL.
 
-## Current blocker (checked 2026-09-25)
+## Publishing access (resolved 2026-09-25)
 
-The site is **not hosted anywhere yet**, and the GitHub repository is **empty**.
+The code is on GitHub as of commit `a1678eb`. Getting there needed a token the
+owner created by hand; the agent's own `GITHUB_TOKEN` cannot write to this repo
+(see the trap below). Two things about publishing here:
 
-- `git ls-remote origin` returns nothing and `GET /repos/grigoriy131112-sketch/deeprealm-site`
-  says `Git Repository is empty.` The created repo has a single commit
-  (`pushed_at` ~2 s after `created_at`, likely an auto-init) but nothing usable.
-- Every write fails with `403 Resource not accessible by integration`, both
-  `git push` and `PUT /contents/...`. `GET /repos/:owner/:repo` still reports
-  `permissions.push: true`, so that field must not be trusted - probe with a
-  real write.
-- The token is a GitHub App installation token; contents write is granted at
-  <https://github.com/settings/installations> -> Configure -> Repository
-  permissions -> **Contents: Read and write** (and **Workflows: Read and write**,
-  because the repo tracks `.github/workflows/dependabot-auto-merge.yml`).
-- `GET /user/installations` reports `total_count: 0` even for a healthy token,
-  so it cannot be used to diagnose this. The `/installation/repositories`
-  endpoint returning 403 confirms an installation token.
-- Without that permission nothing can be published: no GitHub push, and no
-  Render/Vercel deploy can be triggered from here. There is no Render (or any
-  host) API token in the environment, so hosting cannot be started by the agent
-  either - it needs one click by the owner in the host's dashboard.
+- A **classic** token with the single `repo` scope is what worked. Fine-grained
+  tokens were tried twice and both times every write returned
+  `Resource not accessible by personal access token` - including creating
+  issues, labels, and patching the repo. The permission grid on the fine-grained
+  page is easy to leave unset, so prefer the classic token.
+- Pushing `.github/workflows/` needs the extra `workflow` scope. The first push
+  was rejected for exactly that reason, so `dependabot-auto-merge.yml` is
+  deliberately **not** in the initial commit. Add it later, once a token with
+  `workflow` scope is available.
 
-Everything else is ready: `Dockerfile` + `render.yaml` are in place, the key in
-`.env` is verified working, and all commits (articles, publishing, persistence)
-exist locally on `main`. The moment contents write is granted, `git push -u
-origin main` publishes the code and a Render Blueprint deploy finishes the job.
+`AGENTS.md` and `.github/` are in `.dockerignore`, so the image never carries
+them.
+
+### Trap: do not trust `permissions.push`
+
+`GET /repos/:owner/:repo` reports `permissions.push: true` even for a token that
+cannot write a single byte, and `GET /user/installations` reports
+`total_count: 0` even for a healthy installation. The only reliable check is a
+real write: `PUT /contents/probe.txt` - `201` means writes work, `403` means the
+permission is missing. Probe that way before starting any long operation.
 
 ## Operational notes (learned 2026-09-25)
 
