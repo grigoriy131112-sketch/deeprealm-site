@@ -175,8 +175,8 @@ function loadStore() {
   try { raw = JSON.parse(localStorage.getItem(STORE_KEY)); } catch { raw = null; }
   const store = {};
   for (const type of CHAT_TYPES) {
-    const entry = raw && typeof raw[type] === 'object' ? raw[type] : null;
-    let convos = Array.isArray(entry && entry.convos) ? entry.convos : [];
+    const entry = raw && typeof raw[type] === 'object' && raw[type] ? raw[type] : {};
+    let convos = Array.isArray(entry.convos) ? entry.convos : [];
     convos = convos.filter((c) => c && typeof c === 'object' && Array.isArray(c.messages));
     convos.forEach((c) => { if (!c.application) c.application = {}; });
     if (!convos.length) convos = [newConvo()];
