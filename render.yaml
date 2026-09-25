@@ -14,8 +14,8 @@ services:
       - key: LLM_BASE_URL
         value: https://generativelanguage.googleapis.com/v1beta/openai
       - key: LLM_MODEL
-        value: gemini-flash-latest
+        value: gemini-flash-lite-latest
       - key: LLM_FALLBACK_MODELS
-        value: gemini-3.5-flash,gemini-3.6-flash,gemini-3.7-flash
+        value: gemini-3.5-flash-lite,gemini-3-flash-preview
       - key: BLOG_SYNC_MINUTES
         value: "60"

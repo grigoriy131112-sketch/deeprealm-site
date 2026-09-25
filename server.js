@@ -366,6 +366,13 @@ app.post('/api/staff', async (req, res) => {
   }
 });
 
+// The frontend routes by hash (#staff), but links may arrive without the hash.
+// Serve the app shell for unknown paths so deep links do not 404.
+app.get(/^(?!\/api\/).*/, (req, res, next) => {
+  if (path.extname(req.path)) return next();
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`Deeprealm site running on http://localhost:${PORT}`);
