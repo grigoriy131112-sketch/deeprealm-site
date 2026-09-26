@@ -9,8 +9,9 @@ services:
     envVars:
       - key: PORT
         value: 3000
-      - key: LLM_API_KEY
-        sync: false
+      # No AI key is required: the built-in engine (ai-engine.js) answers on its
+      # own. LLM_API_KEY stays optional and can be added later in the dashboard
+      # to upgrade the wording; nothing here asks for it at deploy time.
       - key: GITHUB_TOKEN
         sync: false
       # With a repository set, approved articles are published through the GitHub
@@ -19,11 +20,5 @@ services:
         value: grigoriy131112-sketch/deeprealm-site
       - key: SITE_BRANCH
         value: main
-      - key: LLM_BASE_URL
-        value: https://generativelanguage.googleapis.com/v1beta/openai
-      - key: LLM_MODEL
-        value: gemini-flash-lite-latest
-      - key: LLM_FALLBACK_MODELS
-        value: gemini-3.5-flash-lite,gemini-3-flash-preview
       - key: BLOG_SYNC_MINUTES
         value: "60"

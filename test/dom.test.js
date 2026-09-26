@@ -224,7 +224,7 @@ test('a sent message stays visible when nothing can answer', async () => {
   for (const who of ['guide', 'interview', 'staff']) {
     const log = win.document.getElementById(`${who}Log`);
     assert.match(log.textContent, /привет/, `${who}: the sent message must remain visible`);
-    assert.match(log.textContent, /ИИ ещё не подключён|not connected/i, `${who}: the reason must be explained`);
+    assert.match(log.textContent, /ИИ-движок|AI engine/i, `${who}: the reason must be explained`);
   }
 
   // And it must survive a reload, not just the current render.
@@ -266,9 +266,9 @@ test('a server error keeps the message and reports the failure', async () => {
   assert.match(log.textContent, /upstream exploded/, 'the server error must be shown');
 });
 
-// A visitor could not tell that the AI simply had no key, so the page now says so up
-// front. That notice is only correct when nothing can answer at all - with the bundle
-// present the browser covers a missing server, so the notice must stay hidden.
+// The chats answer with no key at all, so the notice can only mean the bundled
+// engine itself failed to load. That is only correct when nothing can answer at all -
+// with the bundle present the browser covers a missing server, so it must stay hidden.
 test('the AI notice appears only when nothing can answer', async () => {
   const unconfigured = await boot({}, {
     noChatBundle: true,
@@ -281,7 +281,7 @@ test('the AI notice appears only when nothing can answer', async () => {
   });
   const box = unconfigured.document.getElementById('aiNotice');
   assert.equal(box.hidden, false, 'notice must be visible when nothing can answer');
-  assert.match(box.textContent, /ИИ ещё не подключён/, 'notice must explain the reason');
+  assert.match(box.textContent, /ИИ-движок|AI engine/i, 'notice must explain the reason');
 
   // With the bundled rules loaded, a static host still has a working chat, so the
   // notice would be wrong and must not be shown.

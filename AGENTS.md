@@ -28,8 +28,12 @@ npm test          # NODE_ENV=test node --test test/*.test.js
 npm start         # http://localhost:3000, override with PORT
 ```
 
-AI endpoints need `LLM_API_KEY` in `.env` (see `.env.example`). Without a key
-the AI chats return a "not configured" message; that is expected.
+AI endpoints need no key. `ai-engine.js` is the site's own engine: it retrieves
+the right part of `data/knowledge.json` and the player articles and answers with
+no network. `LLM_API_KEY` in `.env` (see `.env.example`) is an optional wording
+upgrade; without it the chats still answer, so a missing or expired key is never
+a failure. The browser bundle (`public/chat-browser.js`) carries the same engine,
+which is why the static site answers too.
 
 ## Deploy model
 
@@ -179,9 +183,17 @@ permission is missing. Probe that way before starting any long operation.
   earlier session. `server.js` only reads `.env` when a variable is unset, so a
   restart inherits the old models and keeps returning 429. Unset
   `LLM_MODEL LLM_FALLBACK_MODELS LLM_API_KEY LLM_BASE_URL` before starting.
+  A stale key no longer breaks anything: every model failure falls through to
+  `ai-engine.js`, so the chats answer from the knowledge base either way.
 - Verified working Gemini models on the free tier: `gemini-flash-lite-latest`,
   `gemini-3.5-flash-lite`, `gemini-3-flash-preview`. `gemini-3.6-flash` and
   `gemini-3.7-flash` do not exist.
+- `ai-engine.js` (added 2026-09-26) is the site's own keyless AI: it builds
+  documents from the knowledge base plus articles, retrieves by stemmed tokens
+  with IDF weighting, and phrases the answer. The Guide, Interviewer and Staff
+  handlers in `chat-answers.js` call the model only as an upgrade and always
+  have the engine behind it. `scripts/build-chat-browser.js` bundles the engine
+  into `public/chat-browser.js`, so the same answers work offline.
 
 ## Permanent site and auto-publishing (added 2026-09-25)
 

@@ -72,7 +72,7 @@ const I18N = {
     'chat.placeholderStaff': 'Куда хочешь вступить?',
     'chat.thinking': 'Проводник думает…',
     'chat.thinkingApp': 'Анкетолог думает…',
-    'chat.notConfigured': '⚠️ ИИ ещё не подключён. Добавьте ключ в файл .env, чтобы Проводник и Анкетолог заработали.',
+    'chat.notConfigured': '⚠️ Не удалось загрузить ИИ-движок. Обновите страницу — чаты работают без ключа.',
     'chat.error': 'Не удалось получить ответ от ИИ.',
     'chat.copy': 'Копировать',
     'chat.edit': 'Изменить',
@@ -164,7 +164,7 @@ const I18N = {
     'chat.placeholderStaff': 'Which branch do you want?',
     'chat.thinking': 'The Guide is thinking…',
     'chat.thinkingApp': 'The Interviewer is thinking…',
-    'chat.notConfigured': '⚠️ AI is not connected yet. Add a key to the .env file to enable the Guide and the Interviewer.',
+    'chat.notConfigured': '⚠️ The AI engine could not be loaded. Reload the page — the chats need no key.',
     'chat.error': 'Could not get a reply from the AI.',
     'chat.copy': 'Copy',
     'chat.edit': 'Edit',
@@ -346,9 +346,9 @@ async function boot() {
   openFromHash();
 }
 
-// The notice must appear only when nothing can answer. The server reports whether it
-// holds a key, and static hosting has no server but can answer in the browser, so the
-// chat is considered available whenever the bundled rules are present.
+// The chats now always have an answer: the built-in engine needs no key. The notice
+// only appears when even the bundled engine is missing (an old page without
+// chat-browser.js), so a stale key can never produce a "not connected" warning.
 async function showAiStatus() {
   if (localChat() && state.rawKnowledge) return;
   try {
@@ -882,6 +882,10 @@ async function askBrowser(type, body) {
   // The chats read the stored shape; without it the browser cannot answer.
   if (!state.rawKnowledge) return null;
   chat.setKnowledge(state.rawKnowledge);
+  // Player-made races and classes are answered from the article store too.
+  if (typeof chat.setEngineArticles === 'function') {
+    chat.setEngineArticles(Array.from(state.articleText?.values() || []));
+  }
   if (type === 'guide') return chat.answerGuide(body);
   if (type === 'interview') return chat.answerInterview(body);
   return chat.answerStaff(body);

@@ -5,14 +5,40 @@ import {
   withEnd, stripMarkdown, finaleText, isEndCommand, approvedWithSheet, handoffText,
   staffTurn, matchActivityFaq, GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM
 } from './chat-core.js';
+import { localGuide, localInterview, localStaff } from './ai-engine.js';
 
 let modelCaller = null;
+let freeCaller = null;
 export function setModelCaller(fn) { modelCaller = typeof fn === 'function' ? fn : null; }
+// An optional keyless wording upgrade. It is tried only for the free-form Guide
+// chat and only when no paid key is set; the built-in engine answers either way.
+export function setFreeModelCaller(fn) { freeCaller = typeof fn === 'function' ? fn : null; }
 
 function callModel(messages, options) {
   if (!modelCaller) throw new Error('model caller is not configured');
   return modelCaller(messages, options);
 }
+
+// The site's own engine is the floor, not a fallback of last resort: it needs no
+// key and no network, so a missing, expired or rate-limited model key can never
+// take the chats down. A working model still wins, because its wording is better;
+// every failure below simply falls through to the built-in answer.
+async function askModelOrLocal(promptMessages, localAnswer, options) {
+  if (modelCaller) {
+    try {
+      const reply = await callModel(promptMessages, options);
+      if (reply && String(reply).trim()) return { reply: stripMarkdown(reply), by: 'model' };
+    } catch { /* no key, expired key, quota or network: the built-in engine answers */ }
+  }
+  if (freeCaller && options && options.keyless) {
+    try {
+      const reply = await freeCaller(promptMessages, options);
+      if (reply && String(reply).trim()) return { reply: stripMarkdown(reply), by: 'keyless' };
+    } catch { /* the free public endpoint is often down: fall through */ }
+  }
+  return { reply: localAnswer(), by: 'local' };
+}
+
 
 const toHistory = (messages, limit) => (Array.isArray(messages) ? messages.slice(-limit) : []);
 const asRole = (m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '') });
@@ -28,11 +54,11 @@ export async function answerGuide({ messages = [], lang = 'ru' } = {}) {
   const history = toHistory(messages, 20);
   // Ending the dialogue needs no model, so it works with no key and no network.
   if (isEndCommand(lastUserText(history))) return { reply: withEnd(finaleText('guide', lang)), finale: true };
-  const reply = await callModel([
+  const { reply, by } = await askModelOrLocal([
     { role: 'system', content: GUIDE_SYSTEM(lang) },
     ...history.map(asRole)
-  ]);
-  return { reply: withEnd(stripMarkdown(reply)) };
+  ], () => localGuide({ messages: history, lang }), { keyless: true });
+  return { reply: withEnd(reply), source: by };
 }
 
 export async function answerInterview({ messages = [], lang = 'ru', application = {}, publish = null } = {}) {
@@ -41,12 +67,12 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   if (isEndCommand(lastUserText(history))) {
     return { reply: withEnd(finaleText('interview', lang)), application: appState, finale: true };
   }
-  const reply = await callModel([
+  const { reply: raw, by } = await askModelOrLocal([
     { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
     { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(appState)}` },
     ...history.map(asRole)
-  ]);
-  const clean = stripMarkdown(reply);
+  ], () => localInterview({ messages: history, lang, application: appState }));
+  const clean = raw;
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.
   const approved = approvedWithSheet(clean, history, appState);
@@ -59,6 +85,7 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
     reply: withEnd(approved ? `${clean}\n\n${handoff}` : clean),
     application: appState,
     published,
+    source: by,
     finale: approved
   };
 }
@@ -67,6 +94,7 @@ export async function answerStaff({ messages = [], lang = 'ru', application = {}
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   const turn = staffTurn(history, appState, lang);
+  const local = () => localStaff({ messages: history, lang, application: appState });
 
   if (isEndCommand(lastUserText(history))) {
     return {
@@ -83,16 +111,16 @@ export async function answerStaff({ messages = [], lang = 'ru', application = {}
     // the knowledge base actually holds an answer for.
     const faq = turn.askingQuestion ? matchActivityFaq(lastUserText(history)) : null;
     if (faq) {
-      const reply = await callModel([
+      const { reply, by } = await askModelOrLocal([
         { role: 'system', content: `${STAFF_SYSTEM(lang)}\n\nКандидат задал уточняющий вопрос до выбора направления. Ответь на него коротко и дружелюбно, опираясь на факт ниже, затем задай вопрос о направлении.\nФАКТ: ${faq.a}` },
         ...history.map(asRole)
-      ], { temperature: 0.3 });
-      return { reply: withEnd(stripMarkdown(reply)), application: appState, role: null, done: false };
+      ], () => local(), { temperature: 0.3 });
+      return { reply: withEnd(reply), application: appState, role: null, done: false, source: by };
     }
     return { reply: withEnd(turn.question), application: appState, role: null, done: false };
   }
 
-  const { role, asked, done } = turn;
+  const { role, done } = turn;
   const questions = role.questions || [];
   const faq = turn.askingQuestion ? matchActivityFaq(lastUserText(history)) : null;
 
@@ -112,21 +140,23 @@ export async function answerStaff({ messages = [], lang = 'ru', application = {}
     `НАПРАВЛЕНИЕ: ${role.name}. ${role.main}`,
     role.pace ? `ОБЫЧНАЯ АКТИВНОСТЬ: ${role.pace}` : '',
     `ВОПРОСЫ ПО ПОРЯДКУ: ${questions.map((q, i) => `${i + 1}) ${q}`).join(' ')}`,
-    `Прогресс: задано ${asked} из ${questions.length}.`,
+    `Прогресс: задано ${turn.asked} из ${questions.length}.`,
     faq
       ? `КАНДИДАТ ЗАДАЛ УТОЧНЯЮЩИЙ ВОПРОС. Ответь дружелюбно и конкретно, опираясь на факт ниже, и НЕ считай это ответом на собеседование. Затем задай тот же вопрос заново: "${turn.question}"\nФАКТ ДЛЯ ОТВЕТА: ${faq.a}`
       : `ЗАДАНИЕ: коротко отреагируй на ответ кандидата и задай РОВНО ОДИН следующий вопрос: "${turn.question}". Больше ничего не добавляй.`
   ].filter(Boolean).join('\n');
 
-  const reply = await callModel([
+  const { reply, by } = await askModelOrLocal([
     { role: 'system', content: `${STAFF_SYSTEM(lang)}\n\nТЕКУЩЕЕ ЗАДАНИЕ:\n${focus}\n\nЗапрещённые темы ещё раз: Discord, VK, Roll20, Foundry, настольные системы, возраст, город, часовой пояс, контакты, гранты.` },
     { role: 'user', content: `ЧЕРНОВАЯ ЗАЯВКА (JSON): ${JSON.stringify({ ...appState, branch: role.key })}` },
     ...history.map(asRole)
-  ], { temperature: 0.2 });
+  ], () => local(), { temperature: 0.2 });
   return {
-    reply: withEnd(stripMarkdown(reply)),
+    reply: withEnd(reply),
     application: { ...appState, branch: role.key },
     role: role.key,
-    done
+    done,
+    source: by
   };
 }
+

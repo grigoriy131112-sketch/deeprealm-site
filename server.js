@@ -14,7 +14,8 @@ import {
   finaleText, isEndCommand, approvedWithSheet, withEnd, handoffText,
   GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM, setKnowledge, setSheetDetector
 } from './chat-core.js';
-import { answerGuide, answerInterview, answerStaff, setModelCaller, needsModel } from './chat-answers.js';
+import { answerGuide, answerInterview, answerStaff, setModelCaller, setFreeModelCaller, needsModel } from './chat-answers.js';
+import { setEngineArticles } from './ai-engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KNOWLEDGE_PATH = path.join(__dirname, 'data', 'knowledge.json');
@@ -42,6 +43,9 @@ const ARTICLES_PATH = process.env.ARTICLES_PATH || path.join(__dirname, 'data', 
 const articleStore = createArticleStore(ARTICLES_PATH, {
   seedPath: process.env.ARTICLES_SEED || path.join(__dirname, 'data', 'articles.json')
 });
+// The built-in AI answers questions about races and classes too, so it reads the
+// article store as well as the knowledge base.
+setEngineArticles(articleStore.all());
 
 const PORT = process.env.PORT || 3000;
 
@@ -175,9 +179,62 @@ async function callModel(model, messages, options = {}) {
 // piece they cannot own, so it is handed to them here.
 setModelCaller((messages, options) => callLLM(messages, options));
 
+// A keyless public endpoint, used only as a wording upgrade for the free-form
+// Guide chat and only when no paid key is configured. It is deliberately optional:
+// it is often down, so every failure falls through to the built-in engine, which
+// always answers. This is why the owner never has to renew a key.
+const FREE_BASE_URL = process.env.FREE_LLM_BASE_URL || 'https://text.pollinations.ai/openai';
+const FREE_MODEL = process.env.FREE_LLM_MODEL || 'openai-fast';
+// The endpoint is flaky, so a failure opens a breaker for a few minutes. Without
+// it every question would pay the full timeout again while the built-in answer
+// waits behind it, which users would feel as the chat hanging.
+let freeDownUntil = 0;
+const FREE_COOLDOWN_MS = 5 * 60 * 1000;
+
+async function callFreeModel(messages, options = {}) {
+  if (Date.now() < freeDownUntil) throw new Error('free LLM is in cooldown');
+  // The public endpoint rejects a "system" role with a 502 but accepts the same
+  // text as a user message, so the rules are folded into the first user turn.
+  const rules = messages.filter((m) => m.role === 'system').map((m) => String(m.content || ''));
+  const rest = messages.filter((m) => m.role !== 'system');
+  const payload = rules.length
+    ? [{ role: 'user', content: rules.join('\n\n') }, ...rest]
+    : rest;
+
+  const controller = new AbortController();
+  // A dead endpoint must not delay the built-in answer waiting behind it.
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(FREE_BASE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: FREE_MODEL, messages: payload, temperature: options.temperature ?? 0.6 }),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`free LLM error ${response.status}`);
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content ?? '';
+    if (!String(reply).trim()) throw new Error('free LLM returned an empty reply');
+    return reply;
+  } catch (err) {
+    freeDownUntil = Date.now() + FREE_COOLDOWN_MS;
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+setFreeModelCaller((messages, options) => callFreeModel(messages, options));
+
 
 app.get('/api/status', (req, res) => {
-  res.json({ configured: Boolean(LLM_API_KEY) });
+  // The chats are always available: the built-in engine needs no key. `mode`
+  // reports whether a model key upgrades the wording; `builtin` is the floor.
+  res.json({
+    configured: true,
+    builtin: true,
+    mode: LLM_API_KEY ? 'model' : 'keyless'
+  });
 });
 
 // Always-available join link, so the site can show it without waiting for AI.
@@ -201,7 +258,7 @@ async function runBlogSync() {
 // A tiny health endpoint. The uptime pinger that keeps a free host awake hits
 // this instead of the app shell, so the check stays cheap.
 app.get('/healthz', (req, res) => {
-  res.json({ ok: true, articles: articleStore.list().length, llm: Boolean(LLM_API_KEY) });
+  res.json({ ok: true, articles: articleStore.list().length, llm: Boolean(LLM_API_KEY), builtin: true });
 });
 
 app.post('/api/refresh', async (req, res) => {
@@ -210,7 +267,6 @@ app.post('/api/refresh', async (req, res) => {
 
 app.post('/api/guide', async (req, res) => {
   const { messages = [], lang = 'ru' } = req.body || {};
-  if (!LLM_API_KEY && needsModel({ messages })) return res.status(503).json({ error: 'not_configured' });
   try {
     res.json(await answerGuide({ messages, lang }));
   } catch (err) {
@@ -220,7 +276,6 @@ app.post('/api/guide', async (req, res) => {
 
 app.post('/api/interview', async (req, res) => {
   const { messages = [], lang = 'ru', application = {} } = req.body || {};
-  if (!LLM_API_KEY && needsModel({ messages })) return res.status(503).json({ error: 'not_configured' });
   try {
     res.json(await answerInterview({ messages, lang, application, publish: publishFromSheet }));
   } catch (err) {
@@ -230,7 +285,6 @@ app.post('/api/interview', async (req, res) => {
 
 app.post('/api/staff', async (req, res) => {
   const { messages = [], lang = 'ru', application = {} } = req.body || {};
-  if (!LLM_API_KEY && needsModel({ messages })) return res.status(503).json({ error: 'not_configured' });
   try {
     res.json(await answerStaff({ messages, lang, application }));
   } catch (err) {
@@ -260,7 +314,7 @@ app.use((req, res) => {
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     console.log(`Deeprealm site running on http://localhost:${PORT}`);
-    if (!LLM_API_KEY) console.warn('ВНИМАНИЕ: LLM_API_KEY не задан — ИИ-чаты будут недоступны до настройки ключа.');
+    console.log('ИИ-чаты работают без ключа: встроенный движок отвечает всегда, а ключ лишь улучшает формулировки.');
   });
 
   // The container starts from the image, which cannot contain articles approved

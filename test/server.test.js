@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlayerEntries } from '../blog-sync.js';
 import { buildKnowledgeContext, buildStaffContext, isLLMConfigured, app, staffTurn, stripMarkdown, matchActivityFaq, finaleText, isEndCommand, approvedWithSheet } from '../server.js';
+import { buildDocs, retrieve, localGuide, localInterview, localStaff } from '../ai-engine.js';
+import { getKnowledge } from '../chat-core.js';
 
 // Real markup fragments copied from the Deeprealm blog index pages.
 const CLASSES_HTML = `<p>Собственно вот сами классы:</p><p>1. Класс:&nbsp;<a href="https://deeprealm1.blogspot.com/2026/09/blog-post.html">Магистр сфер</a> <br />Создатель: @ghg23456</p><p>2. Класс: <a href="https://deeprealm1.blogspot.com/2026/09/blog-post_09.html">Трикстер</a><br />Создатель: @LokalError</p>`;
@@ -68,6 +70,60 @@ test('LLM is reported as unconfigured when no key is set', () => {
   assert.equal(isLLMConfigured(), false);
 });
 
+test('the built-in engine retrieves the right document for a real question', () => {
+  const docs = buildDocs(getKnowledge());
+  const hits = retrieve('Расскажи про класс Воин', docs, 2);
+  assert.ok(hits.length, 'the class question must match something');
+  assert.match(hits[0].doc.title, /Воин/);
+});
+
+test('the built-in engine answers a class question with its mechanics', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'Что за класс Маг?' }], lang: 'ru' });
+  assert.match(reply, /Маг/);
+  assert.match(reply, /Мана/);
+  assert.match(reply, /Истощение/);
+});
+
+test('the built-in engine admits an unknown question instead of inventing one', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'zzz qqq vvv' }], lang: 'ru' });
+  assert.match(reply, /нет ответа/);
+});
+
+test('the built-in engine answers about rules and lore', () => {
+  const rules = localGuide({ messages: [{ role: 'user', content: 'Какие наказания за спам?' }], lang: 'ru' });
+  assert.match(rules, /Спам|спам|мут|варн/i);
+  const lore = localGuide({ messages: [{ role: 'user', content: 'Что такое Подземелье?' }], lang: 'ru' });
+  assert.match(lore, /Подземелье/);
+});
+
+test('the built-in interviewer walks the template and approves a filled sheet', () => {
+  const draft = { Имя: 'Лира', Раса: 'Эльф', Класс: 'Маг' };
+  const reply = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: draft });
+  assert.match(reply, /ОДОБРЕНО/);
+});
+
+test('the built-in interviewer refuses to approve an empty sheet', () => {
+  const reply = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: {} });
+  assert.doesNotMatch(reply, /ОДОБРЕНО/);
+  assert.match(reply, /не заполнена/);
+});
+
+test('the built-in staff interviewer keeps the branch question order', () => {
+  const reply = localStaff({ messages: [{ role: 'user', content: 'Хочу в модераторы' }], lang: 'ru', application: {} });
+  assert.match(reply, /активить/);
+});
+
+test('the built-in staff interviewer answers a clarifying question and repeats it', () => {
+  const history = [
+    { role: 'user', content: 'Хочу в пиарщики' },
+    { role: 'assistant', content: 'Привлечь хотя бы 5–10 новых людей своими постами — сможешь?' },
+    { role: 'user', content: 'а как часто надо приводить людей?' }
+  ];
+  const reply = localStaff({ messages: history, lang: 'ru', application: {} });
+  assert.match(reply, /1–2/, 'the stored norm is quoted');
+  assert.match(reply, /5–10/, 'the same question is asked again');
+});
+
 test('staff context lists every branch with its questions', () => {
   const ctx = buildStaffContext();
   for (const role of ['Зам владельца', 'Пиарщик', 'Модератор', 'Разработчик', 'Гейм-мастер', 'Анкетолог', 'Ивентолог']) {
@@ -116,7 +172,11 @@ test('staff interview asks for the branch first and honours a stored branch', ()
   assert.match(resumed.question, /посты/);
 });
 
-test('staff endpoint returns 503 when AI is not configured', async () => {
+// The built-in engine needs no key, so the AI endpoints must answer even when no
+// model key is set. These three tests used to assert a 503; they now assert the
+// opposite, because a missing or expired key must never take the chats down.
+
+test('staff endpoint answers from the built-in engine without a key', async () => {
   const server = app.listen(0);
   const port = server.address().port;
   const res = await fetch(`http://127.0.0.1:${port}/api/staff`, {
@@ -125,9 +185,10 @@ test('staff endpoint returns 503 when AI is not configured', async () => {
     body: JSON.stringify({ messages: [{ role: 'user', content: 'хочу в модеры' }] })
   });
   server.close();
-  assert.equal(res.status, 503);
+  assert.equal(res.status, 200);
   const data = await res.json();
-  assert.equal(data.error, 'not_configured');
+  assert.match(data.reply, /активить/);
+  assert.equal(data.source, 'local');
 });
 
 test('knowledge endpoint exposes the administration data', async () => {
@@ -141,30 +202,33 @@ test('knowledge endpoint exposes the administration data', async () => {
   assert.ok(data.classes.level_pass.tiers.length === 3);
 });
 
-test('guide endpoint returns 503 when AI is not configured', async () => {
+test('guide endpoint answers from the built-in engine without a key', async () => {
   const server = app.listen(0);
   const port = server.address().port;
   const res = await fetch(`http://127.0.0.1:${port}/api/guide`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: [{ role: 'user', content: 'привет' }] })
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'Расскажи про класс Воин' }] })
   });
   server.close();
-  assert.equal(res.status, 503);
+  assert.equal(res.status, 200);
   const data = await res.json();
-  assert.equal(data.error, 'not_configured');
+  assert.match(data.reply, /Воин/);
+  assert.equal(data.source, 'local');
 });
 
-test('interview endpoint returns 503 when AI is not configured', async () => {
+test('interview endpoint answers from the built-in engine without a key', async () => {
   const server = app.listen(0);
   const port = server.address().port;
   const res = await fetch(`http://127.0.0.1:${port}/api/interview`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] })
+    body: JSON.stringify({ messages: [{ role: 'user', content: 'привет' }] })
   });
   server.close();
-  assert.equal(res.status, 503);
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.match(data.reply, /Анкетолог/);
 });
 
 test('status endpoint reports configuration state', async () => {
@@ -173,7 +237,9 @@ test('status endpoint reports configuration state', async () => {
   const res = await fetch(`http://127.0.0.1:${port}/api/status`);
   server.close();
   const data = await res.json();
-  assert.equal(typeof data.configured, 'boolean');
+  assert.equal(data.configured, true, 'the built-in engine is always available');
+  assert.equal(data.builtin, true);
+  assert.ok(['keyless', 'builtin'].includes(data.mode), 'no key set, so the built-in engine or its keyless upgrade answers');
 });
 
 test('knowledge context includes the GM plot template', () => {

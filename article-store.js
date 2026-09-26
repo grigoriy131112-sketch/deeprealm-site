@@ -47,6 +47,11 @@ export function createArticleStore(filePath, { seedPath = null } = {}) {
     list() {
       return data.articles.map(({ slug, title, kind, url }) => ({ slug, title, kind, url: url || '' }));
     },
+    // Full records, text included. The built-in AI reads these to answer questions
+    // about player-made races and classes with no model key.
+    all() {
+      return data.articles.map((a) => ({ ...a }));
+    },
     get(slug) {
       return data.articles.find((a) => a.slug === slug) || null;
     },
