@@ -8,21 +8,26 @@ import {
 } from '../telegram.js';
 import { keepsEssentials, createLiveSpeaker } from '../ai-maker.js';
 import {
-  sentToOwnerText, applicationTitle, staffAnswerPairs, setKnowledge, findRole
+  sentToOwnerText, applicationTitle, staffAnswerPairs, setKnowledge, findRole,
+  STAFF_MAX_QUESTIONS, setSheetDetector
 } from '../chat-core.js';
 import { setNotifier, answerInterview, answerStaff } from '../chat-answers.js';
+import { localInterview } from '../ai-engine.js';
+import { detectSheetKind } from '../publish.js';
 
 // These tests run against the real knowledge base, so the reply texts and the
 // scripted questions are the ones the site actually uses.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 setKnowledge(JSON.parse(fs.readFileSync(path.join(root, 'data', 'knowledge.json'), 'utf8')));
+// The same detector the server injects, so an approved plot is recognised here too.
+setSheetDetector(detectSheetKind);
 
 // A filled-in sheet followed by "проверь", which is how the built-in Interviewer
 // reaches its verdict when no model is present.
 const SHEET = 'Имя: Лира. Раса: Эльф. Класс: Маг. Характер: спокойная, есть слабость к огню.';
 const APPROVED_DIALOGUE = [
   { role: 'user', content: SHEET },
-  { role: 'assistant', content: 'Расскажи ещё что-нибудь о персонаже.' },
+  { role: 'assistant', content: 'Расскажи про «Внешность».' },
   { role: 'user', content: 'проверь' }
 ];
 
@@ -51,6 +56,30 @@ test('telegram config prefers the environment and reads the file as a fallback',
   const fromFile = telegramConfig({}, { token: 'file-token', chatId: '7', visitGapMinutes: 30 });
   assert.equal(fromFile.token, 'file-token');
   assert.equal(fromFile.visitGapMs, 30 * 60000);
+});
+
+test('every configured recipient gets the notification', async () => {
+  const fetchImpl = fakeFetch({ ok: true });
+  const notifier = createNotifier({
+    config: telegramConfig({ TELEGRAM_BOT_TOKEN: 't', TELEGRAM_CHAT_ID: '111', TELEGRAM_CHAT_IDS: '222, 333' }, {}),
+    fetchImpl
+  });
+  const result = await notifier.sheet({ kind: 'story', title: 'Банк призраков', text: 'текст' });
+  assert.equal(result.ok, true);
+  assert.equal(result.recipients, 3);
+  const ids = fetchImpl.calls.map((c) => c.body.chat_id);
+  assert.deepEqual(ids, ['222', '333', '111'], 'the extra ids plus the primary one');
+});
+
+test('a repeated recipient id is not sent to twice', async () => {
+  const fetchImpl = fakeFetch({ ok: true });
+  const notifier = createNotifier({
+    config: telegramConfig({ TELEGRAM_BOT_TOKEN: 't', TELEGRAM_CHAT_ID: '42', TELEGRAM_CHAT_IDS: '42,42' }, {}),
+    fetchImpl
+  });
+  const result = await notifier.visit({ session: 's', page: 'home' });
+  assert.equal(result.ok, true);
+  assert.equal(fetchImpl.calls.length, 1);
 });
 
 test('splitMessage keeps short text whole and splits long text on a line break', () => {
@@ -215,15 +244,81 @@ test('a finished staff interview sends all the answers to the owner', async () =
   const sent = [];
   setNotifier(async (info) => { sent.push(info); return { ok: true }; });
   const role = findRole('moderator');
+  const asked = role.questions.slice(0, STAFF_MAX_QUESTIONS);
   const messages = [{ role: 'user', content: 'хочу быть модератором' }];
-  for (const q of role.questions) {
+  for (const q of asked) {
     messages.push({ role: 'assistant', content: q });
     messages.push({ role: 'user', content: 'готов, отвечаю по делу' });
   }
   const out = await answerStaff({ messages, lang: 'ru' });
   assert.equal(out.done, true);
   assert.equal(sent.length, 1, 'one message carries the whole interview');
-  assert.equal(sent[0].answers.length, role.questions.length, 'every question is paired');
+  assert.equal(sent[0].answers.length, asked.length, 'every asked question is paired');
   assert.match(out.reply, /Все ответы отправлены владельцу/);
+  setNotifier(null);
+});
+
+test('a staff interview ends after the fixed number of questions', async () => {
+  // The candidate answers, but also asks a question of their own every time - the
+  // shape that used to make the interviewer loop forever.
+  const messages = [{ role: 'user', content: 'привет. Я хочу быть модератором, сколько вопросов ты задашь?' }];
+  for (let i = 0; i < 10; i++) {
+    const out = await answerStaff({ messages, lang: 'ru' });
+    if (out.done) return assert.ok(i < 10, `the interview ended after ${i} turns`);
+    messages.push({ role: 'assistant', content: out.reply });
+    messages.push({ role: 'user', content: 'Да, готов. А что если я пропаду?' });
+  }
+  assert.fail('the staff interview never ended');
+});
+
+test('a character interview stops asking once the essentials are covered', () => {
+  const answer = 'Меня зовут Лира, я эльфийка-маг, спокойная, волосы светлые.';
+  const history = [{ role: 'user', content: answer }];
+  const seen = new Set();
+  for (let i = 0; i < 12; i++) {
+    const reply = localInterview({ messages: history, lang: 'ru', application: {} });
+    // The closing nudge says "say проверь", which is not a field question.
+    const asked = (reply.match(/«([^»]+)»/) || [])[1];
+    if (asked && asked !== 'проверь') {
+      assert.ok(!seen.has(asked), `«${asked}» was asked twice`);
+      seen.add(asked);
+    }
+    history.push({ role: 'assistant', content: reply });
+    history.push({ role: 'user', content: answer });
+  }
+  assert.ok(seen.size <= 6, 'the walk stays short');
+  assert.ok(/проверь/i.test(history[history.length - 2].content), 'the check is offered');
+});
+
+test('a plot is recognised and walked through its own checklist', () => {
+  const history = [{ role: 'user', content: 'Хочу предложить сюжет для ГМ' }];
+  const first = localInterview({ messages: history, lang: 'ru', application: {} });
+  assert.match(first, /Название сюжета/, 'the plot checklist is used, not the character one');
+  history.push({ role: 'assistant', content: first });
+  history.push({ role: 'user', content: 'Название сюжета: Банк призраков. Жанр: мрачное фэнтези. Завязка: бармен падает замертво.' });
+  const second = localInterview({ messages: history, lang: 'ru', application: {} });
+  assert.match(second, /Главная проблема/, 'the walk continues with the next plot field');
+});
+
+test('an approved plot goes to the owner and is not published as an article', async () => {
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  let publishCalls = 0;
+  const messages = [
+    { role: 'user', content: 'Хочу предложить сюжет для ГМ' },
+    { role: 'assistant', content: 'Расскажи про «Название сюжета».' },
+    { role: 'user', content: 'Название сюжета: Банк призраков. Жанр: мрачное фэнтези. Завязка: бармен падает замертво. Главная проблема: город наводнён призраками. Антагонист: Леди Вереск. Локации: портовый город.' },
+    { role: 'assistant', content: 'Расскажи про «Локации».' },
+    { role: 'user', content: 'проверь' }
+  ];
+  const out = await answerInterview({
+    messages, lang: 'ru',
+    publish: async () => { publishCalls += 1; return null; }
+  });
+  assert.equal(sent.length, 1, 'the owner gets the plot');
+  assert.equal(sent[0].kind, 'story');
+  assert.equal(sent[0].title, 'Банк призраков', 'the plot title reaches the owner');
+  assert.match(out.reply, /Сюжет отправлен владельцу/);
+  assert.equal(publishCalls, 1, 'the server-side publish is asked, and it declines a plot');
   setNotifier(null);
 });

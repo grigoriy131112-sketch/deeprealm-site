@@ -1,6 +1,7 @@
 {
-  "_instructions": "Заполни token и chatId, чтобы уведомления приходили в Telegram. token даёт бот от @BotFather, chatId — твой личный id от @userinfobot. Пока поля пустые, сайт работает, но уведомления не отправляются.",
+  "_instructions": "Заполни token и chatId, чтобы уведомления приходили в Telegram. token даёт бот от @BotFather. chatId — id получателя; его можно узнать скриптом scripts/setup-telegram.js (напиши боту сообщение и запусти `node scripts/setup-telegram.js <токен>`). chatIds — необязательный список дополнительных получателей (например, для команды). Пока token пустой, сайт работает, но уведомления не отправляются.",
   "token": "",
   "chatId": "",
-  "visitGapMinutes": 360
+  "visitGapMinutes": 360,
+  "chatIds": []
 }

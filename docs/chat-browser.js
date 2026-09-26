@@ -181,10 +181,17 @@ function findRole(key) {
 // The hand-off wording is fixed here so the destination and the owner's username
 // are never paraphrased by the model. When the bot managed to publish the race or
 // class article itself, it says so instead of asking for the owner.
-function handoffText(type, lang, { approved = false, published = null } = {}) {
+function handoffText(type, lang, { approved = false, published = null, kind = null } = {}) {
   const chat = knowledge.chat.telegram;
   const owner = knowledge.chat.owner;
   if (type === 'interview') {
+    // A plot is not a character sheet: the player waits for the game master, so the
+    // closing line does not push the chat link and the race/class note.
+    if (kind === 'story') {
+      return lang === 'en'
+        ? `Your plot is with the owner. The game master will read it and get back to you.`
+        : `Сюжет у владельца. ГМ прочитает его и свяжется с тобой.`;
+    }
     const note = publishNote(lang, published, owner);
     return lang === 'en'
       ? `Your sheet is already with the owner. Join the chat while you wait:\n${chat}${note}`
@@ -202,31 +209,107 @@ function handoffText(type, lang, { approved = false, published = null } = {}) {
 
 // A human-readable heading for a forwarded sheet: the character name or the sheet
 // title if the draft holds one, otherwise the kind, so the owner can tell two
-// applications apart in the chat.
-function applicationTitle(application = {}, kind = '') {
+// applications apart in the chat. A plot is usually introduced as "Название
+// сюжета: ...", so the dialogue is read for that too. The value only goes into a
+// Telegram title, so it is capped and stripped of the prefix a player may have
+// typed themselves.
+function applicationTitle(application = {}, kind = '', history = []) {
   const app = application && typeof application === 'object' ? application : {};
-  for (const key of ['Имя', 'Название', 'Название расы', 'Название класса', 'name', 'title']) {
+  for (const key of ['Имя', 'Название', 'Название расы', 'Название класса', 'Название сюжета', 'name', 'title']) {
     const value = app[key];
-    if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 80);
+    if (typeof value === 'string' && value.trim()) return cleanTitle(value);
   }
+  const text = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || ''))
+    .join('\n');
+  const match = text.match(/название\s+сюжета\s*[:\-—]\s*(.+)/i);
+  if (match) return cleanTitle(match[1]);
   return { character: 'Персонаж', race: 'Раса', class: 'Класс', story: 'Сюжет' }[kind] || 'Анкета';
 }
 
-// The questions a staff candidate answered, paired with their answers, in the
-// order the branch asks them. The owner asked for the answers the person actually
-// gave, so only those are returned - an unanswered scripted question is left out
-// instead of being padded with a placeholder.
-function staffAnswerPairs(history, application = {}, lang = 'ru') {
-  const role = detectRole(Array.isArray(history) ? history : []) || findRole(application.branch || '');
-  const questions = (role && role.questions) || [];
-  const answers = (Array.isArray(history) ? history : [])
-    .filter((m) => m.role !== 'assistant')
-    .slice(1)
-    .filter((m) => !looksLikeQuestion(String(m.content || '')))
-    .map((m) => String(m.content || '').trim())
-    .filter(Boolean);
-  return answers.map((a, i) => ({ q: questions[i] || `${lang === 'en' ? 'Question' : 'Вопрос'} ${i + 1}`, a }));
+function cleanTitle(value) {
+  return String(value).replace(/^["«\s]+|["»\s]+$/g, '').split(/[.\n]/)[0].trim().slice(0, 80);
 }
+
+// The questions a staff candidate answered, paired with their answers. The
+// pairing follows the transcript rather than counting turns: the question is
+// recognised by its text in the assistant's own message, and the answer is the
+// candidate's next message. That way a candidate who answers a question and asks
+// one of their own in the same breath still moves the interview forward, which is
+// what stops the interview from looping on the same question.
+function staffAnswerPairs(history, application = {}, lang = 'ru') {
+  const msgs = Array.isArray(history) ? history : [];
+  const role = detectRole(msgs) || findRole(application.branch || '');
+  const questions = ((role && role.questions) || []).slice(0, STAFF_MAX_QUESTIONS);
+  const pairs = [];
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i];
+    if (!m || m.role !== 'assistant') continue;
+    const asked = questions.findIndex((q) => isStaffQuestion(m.content, q));
+    if (asked < 0) continue;
+    let reply = '';
+    for (let j = i + 1; j < msgs.length; j++) {
+      if (!msgs[j] || msgs[j].role === 'assistant') continue;
+      reply = String(msgs[j].content || '').trim();
+      break;
+    }
+    if (reply) pairs.push({ q: questions[asked], a: reply });
+  }
+  return pairs;
+}
+
+// The questions a candidate answered, ignoring a reply that was purely a question.
+// A candidate who asks "how often should I bring people in?" instead of answering
+// gets the fact and the same question back; counting that turn would silently skip
+// a step of the interview. A reply that both answers and asks something ("Да, смогу.
+// А как часто?") still counts, otherwise the interview would stall forever.
+function answeredStaffPairs(history, application = {}, lang = 'ru') {
+  const pairs = staffAnswerPairs(history, application, lang);
+  const stalls = new Map();
+  const out = [];
+  for (const pair of pairs) {
+    if (hasAnswerContent(pair.a)) { out.push(pair); continue; }
+    const n = (stalls.get(pair.q) || 0) + 1;
+    stalls.set(pair.q, n);
+    // Two clarifications in a row is enough: the candidate is clearly not
+    // answering, so the interview moves on instead of repeating forever.
+    if (n >= 2) out.push(pair);
+  }
+  return out;
+}
+
+function hasAnswerContent(reply) {
+  const parts = String(reply || '').split(/(?<=[.!?…])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  const statements = parts.filter((s) => !looksLikeQuestion(s));
+  return statements.join(' ').split(/\s+/).filter((w) => w.length > 1).length >= 1;
+}
+
+// A question is recognised in the assistant's message even when the model wrapped
+// it in a reaction ("Хорошо, спасибо. Привлечь хотя бы 5–10 людей — сможешь?").
+function isStaffQuestion(content, question) {
+  const got = normalizeQuestion(content);
+  const want = normalizeQuestion(question);
+  if (!got || !want) return false;
+  if (got.includes(want) || want.includes(got)) return true;
+  const a = new Set(want.split(' '));
+  const b = got.split(' ').filter((w) => w.length > 3);
+  if (!b.length) return false;
+  return b.filter((w) => a.has(w)).length / b.length >= 0.6;
+}
+
+function normalizeQuestion(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// The interview is deliberately short: three questions are enough to judge a
+// candidate, and a fixed limit is what guarantees the conversation ends.
+const STAFF_MAX_QUESTIONS = 3;
 
 // The owner requires every assistant reply to end with this word. It is appended
 // here rather than left to the model, which forgets it on longer answers; the
@@ -256,7 +339,7 @@ function publishNote(lang, published, owner) {
 // owner asked for this closing line, so it is fixed text rather than left to the
 // model. A failed delivery says so plainly with the owner's contact, because
 // silently pretending it was sent would lose the application.
-function sentToOwnerText(type, lang, { delivered = true } = {}) {
+function sentToOwnerText(type, lang, { delivered = true, kind = null } = {}) {
   const owner = knowledge.chat.owner;
   if (type === 'staff') {
     if (!delivered) {
@@ -268,14 +351,16 @@ function sentToOwnerText(type, lang, { delivered = true } = {}) {
       ? '✅ All checked. All your answers have been sent to the owner.'
       : '✅ Всё одобрено. Все ответы отправлены владельцу.';
   }
+  const what = kind === 'story' ? 'Сюжет' : 'Анкета';
+  const whatEn = kind === 'story' ? 'plot' : 'sheet';
   if (!delivered) {
     return lang === 'en'
-      ? `✅ All checked. I could not reach the owner automatically — send the sheet to ${owner} so it is not lost.`
-      : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — скинь анкету ему сам ${owner}, чтобы она не потерялась.`;
+      ? `✅ All checked. I could not reach the owner automatically — send the ${whatEn} to ${owner} so it is not lost.`
+      : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — скинь ${kind === 'story' ? 'сюжет' : 'анкету'} ему сам ${owner}, чтобы ${kind === 'story' ? 'он' : 'она'} не потерял${kind === 'story' ? 'ся' : 'ась'}.`;
   }
   return lang === 'en'
-    ? '✅ All checked. Your sheet has been sent to the owner.'
-    : '✅ Всё одобрено. Анкета отправлена владельцу.';
+    ? `✅ All checked. Your ${whatEn} has been sent to the owner.`
+    : `✅ Всё одобрено. ${what} отправлен${kind === 'story' ? '' : 'а'} владельцу.`;
 }
 
 // `approved` marks a completed check. Ending early still gives the hand-off, but
@@ -388,12 +473,15 @@ function staffTurn(history, appState = {}, lang = 'ru') {
       askingQuestion: Boolean(last && looksLikeQuestion(last.content))
     };
   }
-  const questions = role.questions || [];
-  const userMessages = history.filter((m) => m.role !== 'assistant');
-  // The first user message picks the branch; only later messages can be answers.
-  const answers = userMessages.slice(1).filter((m) => !looksLikeQuestion(m.content));
-  const asked = answers.length;
-  const last = userMessages[userMessages.length - 1];
+  const questions = (role.questions || []).slice(0, STAFF_MAX_QUESTIONS);
+  // Progress is read from the transcript, not from a turn count: the question is
+  // matched by its text in the assistant's own message and the answer is the
+  // candidate's next message. Counting turns broke as soon as a candidate answered
+  // and asked something in the same breath - the answer was dropped and the same
+  // question came back forever.
+  const answered = answeredStaffPairs(history, { ...appState, branch: role.key }, lang);
+  const asked = answered.length;
+  const last = history.filter((m) => m.role !== 'assistant').pop();
   const done = asked >= questions.length;
   return {
     role,
@@ -700,16 +788,140 @@ const isCheckCmd = (text) => /проверь|проверить|check my|про�
 // The character interview walks the fields of the chat's own template, in order,
 // and only asks for one thing at a time. That is what makes it usable without a
 // model: the next question is derived from what the draft is still missing.
-function nextFieldPrompt(app, lang) {
-  const fields = getKnowledge().character_template?.fields || {};
-  const order = Object.keys(fields);
-  const asked = new Set(Object.keys(app || {}));
-  const missing = order.find((f) => !asked.has(f));
-  if (missing) {
-    const hint = typeof fields[missing] === 'string' && fields[missing] ? ` (${fields[missing]})` : '';
-    return pick(lang, `Расскажи про «${missing}»${hint}.`, `Tell me about "${missing}"${hint}.`);
+//
+// A player does not say "add to the application" after every sentence, so the
+// dialogue itself is read as an answer: whatever the last message says about a
+// field counts as that field being filled. Without this the same first field was
+// asked forever, because the draft never grew.
+function hasFieldText(history, field) {
+  const text = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || ''))
+    .join('\n');
+  if (!text.trim()) return false;
+  const name = String(field || '').toLowerCase();
+  // A value written as "Поле: значение" counts for that field.
+  if (new RegExp(`${name}\\s*[:\\-—]\\s*\\S`, 'i').test(text)) return true;
+  // Some fields are recognised by what a player actually writes about them. The
+  // boundaries are lookarounds rather than \b: \b is defined on [A-Za-z0-9_], so in
+  // Cyrillic text it matches at the wrong places and "Меня зовут Лира" would not be
+  // recognised as a name.
+  const markers = {
+    'имя': /(?<![а-яё])(меня зовут|мо[её] имя|зовут)/i,
+    'раса': /(?<![а-яё])(эльф|гном|орк|человек|полурослик|дварф|тифлинг|демон|ангел|нежить|раса)/i,
+    'класс': /(?<![а-яё])(воин|маг|лучник|некромант|чернокнижник|жрец|вор|класс|паладин)/i,
+    'характер': /(характер|спокойн|вспыльчив|добр|зл|упрям|замкнут|общительн)/i,
+    'внешность': /(внешност|волос|глаз|рост|одежд|шрам|татуировк)/i,
+    'происхождение': /(предыстор|происхожден|родил|вырос|детств)/i,
+    'хобби': /(хобби|увлека|люблю|занимаюсь|интерес)/i,
+    'особенности внешности': /(особенност|шрам|татуировк|метк|крыл)/i,
+    'стартовое снаряжение': /(снаряжен|оружи|брон|меч|лук|посох|кинжал|доспех)/i
+  };
+  return Object.entries(markers).some(([key, re]) => name.includes(key) && re.test(text));
+}
+
+// The field the assistant last asked about, read from its own wording. The scan
+// walks back to the most recent question rather than looking only at the last
+// message: once the walk is over the assistant adds a "say проверь" nudge that names
+// no field, and re-asking the previous field from there would restart the loop.
+function lastAskedField(history, names = null) {
+  const list = names || INTERVIEW_FIELDS.character;
+  const msgs = Array.isArray(history) ? history : [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (!m || m.role !== 'assistant') continue;
+    const found = list.find((f) => String(m.content || '').includes(`«${f}»`));
+    if (found) return found;
   }
-  return pick(lang, 'Расскажи ещё что-нибудь о персонаже — или скажи «проверь», когда закончим.', 'Tell me more about the character — or say "check" when we are done.');
+  return null;
+}
+
+// Whether the player has said anything since the assistant's last question.
+function repliedSinceLastQuestion(history) {
+  const msgs = Array.isArray(history) ? history : [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (!m) continue;
+    if (m.role === 'assistant') return false;
+    if (String(m.content || '').trim()) return true;
+  }
+  return false;
+}
+
+// The fields worth asking about out loud. The character template has seventeen, but
+// asking a player for "Ориентация" or "Физические характеристики" one by one turns a
+// chat into a form; the rest stay in the template for the player to fill in themselves.
+// A plot has its own checklist, taken from the GM template's own headings.
+const INTERVIEW_FIELDS = {
+  character: ['Имя', 'Раса', 'Класс', 'Характер', 'Внешность', 'Происхождение'],
+  story: ['Название сюжета', 'Жанр', 'Завязка', 'Главная проблема', 'Антагонист', 'Локации']
+};
+
+const STORY_INTENT = /заявк\w*\s+на\s+сюжет|предложить\s+сюжет|придумать\s+сюжет|создать\s+сюжет|мой\s+сюжет|сюжет\s+для\s+гм|new plot|create a plot|propose a plot|название\s+сюжета|завязка|главная\s+проблема|тэглайн|теглайн|крючок/i;
+
+// Which checklist the interview is walking. A plot is recognised by what the player
+// asked for, and remembered in the draft so the walk continues on later turns.
+function interviewKind(application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  if (app._kind === 'story' || app._kind === 'character') return app._kind;
+  const text = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || ''))
+    .join('\n');
+  return STORY_INTENT.test(text) ? 'story' : 'character';
+}
+
+function interviewFields(application, history) {
+  return INTERVIEW_FIELDS[interviewKind(application, history)] || INTERVIEW_FIELDS.character;
+}
+
+function nextFieldPrompt(app, lang, history = []) {
+  const fields = getKnowledge().character_template?.fields || {};
+  const names = interviewFields(app, history);
+  const drafted = new Set(Object.keys(app || {}));
+  const covered = new Set(names.filter((f) => drafted.has(f) || hasFieldText(history, f)));
+  const missing = names.filter((f) => !covered.has(f));
+  const checkNudge = pick(lang, 'Если основное рассказал — скажи «проверь», и я проверю.', 'If that is the essentials — say "check" and I will review it.');
+  const tellMore = pick(lang, 'Расскажи ещё что-нибудь.', 'Tell me more.');
+  if (!missing.length) return [tellMore, checkNudge].join('\n');
+  const next = nextMissingField(missing, fields, lang, history);
+  // Nothing left after the field just asked and answered: the walk is over, and
+  // asking the same field again would be the loop this engine exists to avoid.
+  if (!next) return [tellMore, checkNudge].join('\n');
+  // Once the essentials are covered, the interview offers the check alongside the
+  // next field instead of asking for one more.
+  return covered.size >= INTERVIEW_MIN_FIELDS ? [next, checkNudge].join('\n') : next;
+}
+
+// The next field to ask about, skipping the one just asked so the same question
+// never comes twice in a row. Null means the walk has nothing left to ask.
+function nextMissingField(missing, fields, lang, history) {
+  const names = interviewFields({}, history);
+  const asked = lastAskedField(history, names);
+  if (asked && repliedSinceLastQuestion(history)) {
+    const idx = names.indexOf(asked);
+    const after = missing.find((f) => names.indexOf(f) > idx);
+    return after ? fieldPrompt(after, fields, lang) : null;
+  }
+  return fieldPrompt(missing[0], fields, lang);
+}
+
+function fieldPrompt(field, fields, lang) {
+  const hint = typeof fields[field] === 'string' && fields[field] ? ` (${fields[field]})` : '';
+  return pick(lang, `Расскажи про «${field}»${hint}.`, `Tell me about "${field}"${hint}.`);
+}
+
+// How many essentials must be covered before a check can pass. The template has
+// seventeen fields, and demanding all of them would turn the chat into a form, so
+// a filled-in character is recognised by name, race and class at the least.
+const INTERVIEW_MIN_FIELDS = 3;
+
+function countFilledFields(app, history) {
+  const names = interviewFields(app, history);
+  const drafted = Object.keys(app || {}).filter((k) => !k.startsWith('_') && !k.startsWith('note_'));
+  const covered = new Set(drafted.filter((k) => names.includes(k)));
+  for (const field of names) if (hasFieldText(history, field)) covered.add(field);
+  return covered.size;
 }
 
 function renderApplication(app, lang) {
@@ -728,24 +940,22 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
     const note = text.replace(/добавь в анкету/gi, '').replace(/add to the application/gi, '').trim();
     return [
       pick(lang, `Добавил в анкету: ${note || '(пусто)'}.`, `Added to the application: ${note || '(empty)'}.`),
-      nextFieldPrompt(app, lang)
+      nextFieldPrompt(app, lang, history)
     ].join('\n');
   }
   if (isShowCmd(text)) return renderApplication(app, lang);
   if (isCheckCmd(text)) {
-    // The sheet may live in the draft (saved with "add to the application") or in
-    // the dialogue itself, so both are counted before the check can pass.
-    const convo = history.map((m) => String(m?.content || '')).join('\n');
-    const filled = Object.keys(app).filter((k) => !k.startsWith('note_')).length
-      + [/имя\s*[:\-—]/i, /раса\s*[:\-—]/i, /класс\s*[:\-—]/i, /характер\s*[:\-—]/i, /внешност/i].filter((re) => re.test(convo)).length;
-    if (filled < 3) {
+    // A filled-in character is recognised from the draft and from the dialogue, so
+    // a player who never used "add to the application" can still be checked.
+    const filled = countFilledFields(app, history);
+    if (filled < INTERVIEW_MIN_FIELDS) {
       return [
         pick(lang, 'Анкета ещё не заполнена: мне нужно больше деталей, иначе проверять нечего.', 'The application is not filled in yet: I need more detail before checking.'),
-        nextFieldPrompt(app, lang)
+        nextFieldPrompt(app, lang, history)
       ].join('\n');
     }
     return [
-      pick(lang, 'Проверил анкету: сильные и слабые стороны указаны, нарушения баланса не вижу. ОДОБРЕНО ✅', 'I checked the application: strengths and weaknesses are there, no balance issues. APPROVED ✅')
+      pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅')
     ].join('\n');
   }
   if (/создать.*расу|свою расу|new race|create a race/i.test(text)) {
@@ -758,10 +968,10 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   }
   if (isGreeting(text) || !text.trim()) {
     return pick(lang,
-      'Привет. Я Анкетолог Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Скажи «добавь в анкету», чтобы сохранить детали.',
-      'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, character, strengths and weaknesses. Say "add to the application" to save details.');
+      'Привет. Я Анкетолог Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
+      'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
   }
-  return nextFieldPrompt(app, lang);
+  return nextFieldPrompt(app, lang, history);
 }
 
 // -------------------------------------------------------------------- staff
@@ -949,6 +1159,9 @@ function telegramConfig(env = {}, file = null) {
   return {
     token: String(pick(env.TELEGRAM_BOT_TOKEN, fromFile.token) || '').trim(),
     chatId: String(pick(env.TELEGRAM_CHAT_ID, fromFile.chatId) || '').trim(),
+    // Extra recipients: the owner can add teammates by separating ids with a comma.
+    // `chatId` stays the first one so existing configs keep working unchanged.
+    chatIds: parseChatIds(pick(env.TELEGRAM_CHAT_IDS, fromFile.chatIds)),
     // A visit ping every few hours per session is enough to show the site is
     // alive; without this an open tab would notify on every reload.
     visitGapMs: Number(pick(env.TELEGRAM_VISIT_GAP_MINUTES, fromFile.visitGapMinutes) || 0) * 60000 || 6 * 60 * 60000
@@ -974,8 +1187,27 @@ function splitMessage(text, limit = MAX_LEN) {
 
 // `enabled` is false when no token or chat is configured; the caller then reports
 // the notification as skipped instead of failing.
+// A list of recipients, from a comma-separated string or an array. Duplicates are
+// dropped so a repeated id does not receive the same sheet twice.
+function parseChatIds(value) {
+  const raw = Array.isArray(value) ? value : String(value == null ? '' : value).split(',');
+  const out = [];
+  for (const item of raw) {
+    const id = String(item == null ? '' : item).trim();
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
 function isConfigured(config) {
-  return Boolean(config && config.token && config.chatId);
+  if (!config || !config.token) return false;
+  return recipients(config).length > 0;
+}
+
+// Everyone who should get the message: the extra ids plus the primary one.
+function recipients(config) {
+  if (!config) return [];
+  return parseChatIds([...(config.chatIds || []), config.chatId]);
 }
 
 function createNotifier(options = {}) {
@@ -990,24 +1222,27 @@ function createNotifier(options = {}) {
     if (!isConfigured(config)) return { ok: false, skipped: true, reason: 'not_configured' };
     if (!fetchImpl) return { ok: false, skipped: true, reason: 'no_fetch' };
     const parts = splitMessage(text);
-    for (const part of parts) {
-      // Space the parts out, and never run two sends at once, so Telegram's rate
-      // limit is not tripped by a long sheet.
-      const wait = Math.max(0, lastSent + MIN_GAP_MS - Date.now());
-      if (wait) await new Promise((r) => setTimeout(r, wait));
-      const res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: config.chatId, text: part, disable_web_page_preview: true })
-      });
-      lastSent = Date.now();
-      if (!res || !res.ok) {
-        const detail = res && typeof res.text === 'function' ? await res.text().catch(() => '') : '';
-        log(`telegram error: ${res ? res.status : 'no response'} ${detail}`.trim());
-        return { ok: false, error: `telegram ${res ? res.status : 'unreachable'}` };
+    const to = recipients(config);
+    for (const chatId of to) {
+      for (const part of parts) {
+        // Space the parts out, and never run two sends at once, so Telegram's rate
+        // limit is not tripped by a long sheet.
+        const wait = Math.max(0, lastSent + MIN_GAP_MS - Date.now());
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        const res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: part, disable_web_page_preview: true })
+        });
+        lastSent = Date.now();
+        if (!res || !res.ok) {
+          const detail = res && typeof res.text === 'function' ? await res.text().catch(() => '') : '';
+          log(`telegram error: ${res ? res.status : 'no response'} ${detail}`.trim());
+          return { ok: false, error: `telegram ${res ? res.status : 'unreachable'}` };
+        }
       }
     }
-    return { ok: true, parts: parts.length };
+    return { ok: true, parts: parts.length, recipients: to.length };
   }
 
   // Sends are serialised so two chats approving at once cannot interleave their
@@ -1194,17 +1429,18 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, p
   const approved = approvedWithSheet(clean, history, appState);
   let published = null;
   let delivered = false;
+  let sheetKind = null;
   if (approved) {
     // The article publish and the owner notification are independent: a failed
     // notification must not undo a published race, and vice versa.
+    sheetKind = detectSheet(history, appState);
     if (typeof publish === 'function') {
       published = await publish({ messages: history, lang, application: appState }).catch(() => null);
     }
     if (typeof send === 'function') {
-      const kind = detectSheet(history, appState);
       const result = await send({
-        kind,
-        title: applicationTitle(appState, kind),
+        kind: sheetKind,
+        title: applicationTitle(appState, sheetKind, history),
         text: sheetText(history, appState),
         lang
       }).catch(() => null);
@@ -1214,8 +1450,8 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, p
   // The player is told the sheet went to the owner. When delivery failed the line
   // says so and repeats the owner's contact, so an application is never lost to a
   // silent failure.
-  const closing = approved ? sentToOwnerText('interview', lang, { delivered }) : '';
-  const handoff = handoffText('interview', lang, { approved, published });
+  const closing = approved ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
+  const handoff = handoffText('interview', lang, { approved, published, kind: sheetKind });
   return {
     reply: withEnd(approved ? `${clean}\n\n${closing}\n\n${handoff}` : clean),
     application: appState,

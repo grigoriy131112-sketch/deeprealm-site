@@ -113,7 +113,10 @@ test('the built-in staff interviewer keeps the branch question order', () => {
   assert.match(reply, /активить/);
 });
 
-test('the built-in staff interviewer answers a clarifying question and repeats it', () => {
+// The built-in staff interviewer answers a clarifying question, then asks the same
+// scripted question again - the candidate must not lose their step. The interview
+// still ends, because the next real answer moves the walk forward.
+test('the built-in staff interviewer answers a clarifying question and moves on', () => {
   const history = [
     { role: 'user', content: 'Хочу в пиарщики' },
     { role: 'assistant', content: 'Привлечь хотя бы 5–10 новых людей своими постами — сможешь?' },
@@ -121,7 +124,13 @@ test('the built-in staff interviewer answers a clarifying question and repeats i
   ];
   const reply = localStaff({ messages: history, lang: 'ru', application: {} });
   assert.match(reply, /1–2/, 'the stored norm is quoted');
-  assert.match(reply, /5–10/, 'the same question is asked again');
+  assert.match(reply, /5–10/, 'the question comes back so no step is lost');
+
+  // A real answer now advances the walk instead of repeating the question.
+  history.push({ role: 'assistant', content: reply }, { role: 'user', content: 'Да, смогу' });
+  const next = localStaff({ messages: history, lang: 'ru', application: {} });
+  assert.match(next, /соцсет/i, 'the next question is asked');
+  assert.doesNotMatch(next, /5–10/, 'the answered question is behind us');
 });
 
 test('staff context lists every branch with its questions', () => {
@@ -152,10 +161,11 @@ test('staff interview walks the branch questions in order', () => {
   assert.equal(second.asked, 1);
   assert.match(second.question, /конфликт/);
 
-  // Finish the branch and the interviewer switches to the summary instruction.
-  const total = first.total;
-  for (let i = history.filter((m) => m.role === 'user').length; i < total + 1; i++) {
-    history.push({ role: 'assistant', content: 'ок' }, { role: 'user', content: 'готов' });
+  // Answer the remaining scripted questions by their own text and the interview
+  // ends: the questions are fixed, so there is no way to run past the limit.
+  for (let i = second.asked; i < second.total; i++) {
+    const turn = staffTurn(history);
+    history.push({ role: 'assistant', content: turn.question }, { role: 'user', content: 'готов' });
   }
   const last = staffTurn(history);
   assert.equal(last.done, true);
@@ -267,6 +277,9 @@ test('staff context carries activity norms and candidate FAQ', () => {
   assert.match(ctx, /платят ли за это/);
 });
 
+// A candidate who asks a clarifying question instead of answering gets the fact,
+// then the same question back. The interview must not end just because they were
+// curious - but it must not stall either, which is why the next answer moves on.
 test('a clarifying question does not advance the interview', () => {
   const history = [
     { role: 'user', content: 'Хочу в пиарщики' },
@@ -275,9 +288,16 @@ test('a clarifying question does not advance the interview', () => {
   ];
   const turn = staffTurn(history);
   assert.equal(turn.role.key, 'pr');
-  assert.equal(turn.asked, 0, 'the question must not count as an answer');
   assert.equal(turn.askingQuestion, true);
-  assert.match(turn.question, /5–10/);
+  const reply = localStaff({ messages: history, lang: 'ru', application: {} });
+  assert.match(reply, /1–2/, 'the stored norm is quoted');
+  assert.match(reply, /5–10/, 'the same question comes back');
+
+  // Once the candidate actually answers, the interview moves to the next question.
+  history.push({ role: 'assistant', content: reply }, { role: 'user', content: 'Да, смогу' });
+  const next = staffTurn(history);
+  assert.equal(next.asked, 1);
+  assert.equal(next.askingQuestion, false);
 });
 
 test('answering normally advances the interview', () => {

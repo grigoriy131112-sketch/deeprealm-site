@@ -173,10 +173,17 @@ export function findRole(key) {
 // The hand-off wording is fixed here so the destination and the owner's username
 // are never paraphrased by the model. When the bot managed to publish the race or
 // class article itself, it says so instead of asking for the owner.
-export function handoffText(type, lang, { approved = false, published = null } = {}) {
+export function handoffText(type, lang, { approved = false, published = null, kind = null } = {}) {
   const chat = knowledge.chat.telegram;
   const owner = knowledge.chat.owner;
   if (type === 'interview') {
+    // A plot is not a character sheet: the player waits for the game master, so the
+    // closing line does not push the chat link and the race/class note.
+    if (kind === 'story') {
+      return lang === 'en'
+        ? `Your plot is with the owner. The game master will read it and get back to you.`
+        : `Сюжет у владельца. ГМ прочитает его и свяжется с тобой.`;
+    }
     const note = publishNote(lang, published, owner);
     return lang === 'en'
       ? `Your sheet is already with the owner. Join the chat while you wait:\n${chat}${note}`
@@ -194,31 +201,107 @@ export function handoffText(type, lang, { approved = false, published = null } =
 
 // A human-readable heading for a forwarded sheet: the character name or the sheet
 // title if the draft holds one, otherwise the kind, so the owner can tell two
-// applications apart in the chat.
-export function applicationTitle(application = {}, kind = '') {
+// applications apart in the chat. A plot is usually introduced as "Название
+// сюжета: ...", so the dialogue is read for that too. The value only goes into a
+// Telegram title, so it is capped and stripped of the prefix a player may have
+// typed themselves.
+export function applicationTitle(application = {}, kind = '', history = []) {
   const app = application && typeof application === 'object' ? application : {};
-  for (const key of ['Имя', 'Название', 'Название расы', 'Название класса', 'name', 'title']) {
+  for (const key of ['Имя', 'Название', 'Название расы', 'Название класса', 'Название сюжета', 'name', 'title']) {
     const value = app[key];
-    if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 80);
+    if (typeof value === 'string' && value.trim()) return cleanTitle(value);
   }
+  const text = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || ''))
+    .join('\n');
+  const match = text.match(/название\s+сюжета\s*[:\-—]\s*(.+)/i);
+  if (match) return cleanTitle(match[1]);
   return { character: 'Персонаж', race: 'Раса', class: 'Класс', story: 'Сюжет' }[kind] || 'Анкета';
 }
 
-// The questions a staff candidate answered, paired with their answers, in the
-// order the branch asks them. The owner asked for the answers the person actually
-// gave, so only those are returned - an unanswered scripted question is left out
-// instead of being padded with a placeholder.
-export function staffAnswerPairs(history, application = {}, lang = 'ru') {
-  const role = detectRole(Array.isArray(history) ? history : []) || findRole(application.branch || '');
-  const questions = (role && role.questions) || [];
-  const answers = (Array.isArray(history) ? history : [])
-    .filter((m) => m.role !== 'assistant')
-    .slice(1)
-    .filter((m) => !looksLikeQuestion(String(m.content || '')))
-    .map((m) => String(m.content || '').trim())
-    .filter(Boolean);
-  return answers.map((a, i) => ({ q: questions[i] || `${lang === 'en' ? 'Question' : 'Вопрос'} ${i + 1}`, a }));
+function cleanTitle(value) {
+  return String(value).replace(/^["«\s]+|["»\s]+$/g, '').split(/[.\n]/)[0].trim().slice(0, 80);
 }
+
+// The questions a staff candidate answered, paired with their answers. The
+// pairing follows the transcript rather than counting turns: the question is
+// recognised by its text in the assistant's own message, and the answer is the
+// candidate's next message. That way a candidate who answers a question and asks
+// one of their own in the same breath still moves the interview forward, which is
+// what stops the interview from looping on the same question.
+export function staffAnswerPairs(history, application = {}, lang = 'ru') {
+  const msgs = Array.isArray(history) ? history : [];
+  const role = detectRole(msgs) || findRole(application.branch || '');
+  const questions = ((role && role.questions) || []).slice(0, STAFF_MAX_QUESTIONS);
+  const pairs = [];
+  for (let i = 0; i < msgs.length; i++) {
+    const m = msgs[i];
+    if (!m || m.role !== 'assistant') continue;
+    const asked = questions.findIndex((q) => isStaffQuestion(m.content, q));
+    if (asked < 0) continue;
+    let reply = '';
+    for (let j = i + 1; j < msgs.length; j++) {
+      if (!msgs[j] || msgs[j].role === 'assistant') continue;
+      reply = String(msgs[j].content || '').trim();
+      break;
+    }
+    if (reply) pairs.push({ q: questions[asked], a: reply });
+  }
+  return pairs;
+}
+
+// The questions a candidate answered, ignoring a reply that was purely a question.
+// A candidate who asks "how often should I bring people in?" instead of answering
+// gets the fact and the same question back; counting that turn would silently skip
+// a step of the interview. A reply that both answers and asks something ("Да, смогу.
+// А как часто?") still counts, otherwise the interview would stall forever.
+export function answeredStaffPairs(history, application = {}, lang = 'ru') {
+  const pairs = staffAnswerPairs(history, application, lang);
+  const stalls = new Map();
+  const out = [];
+  for (const pair of pairs) {
+    if (hasAnswerContent(pair.a)) { out.push(pair); continue; }
+    const n = (stalls.get(pair.q) || 0) + 1;
+    stalls.set(pair.q, n);
+    // Two clarifications in a row is enough: the candidate is clearly not
+    // answering, so the interview moves on instead of repeating forever.
+    if (n >= 2) out.push(pair);
+  }
+  return out;
+}
+
+function hasAnswerContent(reply) {
+  const parts = String(reply || '').split(/(?<=[.!?…])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  const statements = parts.filter((s) => !looksLikeQuestion(s));
+  return statements.join(' ').split(/\s+/).filter((w) => w.length > 1).length >= 1;
+}
+
+// A question is recognised in the assistant's message even when the model wrapped
+// it in a reaction ("Хорошо, спасибо. Привлечь хотя бы 5–10 людей — сможешь?").
+export function isStaffQuestion(content, question) {
+  const got = normalizeQuestion(content);
+  const want = normalizeQuestion(question);
+  if (!got || !want) return false;
+  if (got.includes(want) || want.includes(got)) return true;
+  const a = new Set(want.split(' '));
+  const b = got.split(' ').filter((w) => w.length > 3);
+  if (!b.length) return false;
+  return b.filter((w) => a.has(w)).length / b.length >= 0.6;
+}
+
+function normalizeQuestion(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// The interview is deliberately short: three questions are enough to judge a
+// candidate, and a fixed limit is what guarantees the conversation ends.
+export const STAFF_MAX_QUESTIONS = 3;
 
 // The owner requires every assistant reply to end with this word. It is appended
 // here rather than left to the model, which forgets it on longer answers; the
@@ -248,7 +331,7 @@ export function publishNote(lang, published, owner) {
 // owner asked for this closing line, so it is fixed text rather than left to the
 // model. A failed delivery says so plainly with the owner's contact, because
 // silently pretending it was sent would lose the application.
-export function sentToOwnerText(type, lang, { delivered = true } = {}) {
+export function sentToOwnerText(type, lang, { delivered = true, kind = null } = {}) {
   const owner = knowledge.chat.owner;
   if (type === 'staff') {
     if (!delivered) {
@@ -260,14 +343,16 @@ export function sentToOwnerText(type, lang, { delivered = true } = {}) {
       ? '✅ All checked. All your answers have been sent to the owner.'
       : '✅ Всё одобрено. Все ответы отправлены владельцу.';
   }
+  const what = kind === 'story' ? 'Сюжет' : 'Анкета';
+  const whatEn = kind === 'story' ? 'plot' : 'sheet';
   if (!delivered) {
     return lang === 'en'
-      ? `✅ All checked. I could not reach the owner automatically — send the sheet to ${owner} so it is not lost.`
-      : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — скинь анкету ему сам ${owner}, чтобы она не потерялась.`;
+      ? `✅ All checked. I could not reach the owner automatically — send the ${whatEn} to ${owner} so it is not lost.`
+      : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — скинь ${kind === 'story' ? 'сюжет' : 'анкету'} ему сам ${owner}, чтобы ${kind === 'story' ? 'он' : 'она'} не потерял${kind === 'story' ? 'ся' : 'ась'}.`;
   }
   return lang === 'en'
-    ? '✅ All checked. Your sheet has been sent to the owner.'
-    : '✅ Всё одобрено. Анкета отправлена владельцу.';
+    ? `✅ All checked. Your ${whatEn} has been sent to the owner.`
+    : `✅ Всё одобрено. ${what} отправлен${kind === 'story' ? '' : 'а'} владельцу.`;
 }
 
 // `approved` marks a completed check. Ending early still gives the hand-off, but
@@ -380,12 +465,15 @@ export function staffTurn(history, appState = {}, lang = 'ru') {
       askingQuestion: Boolean(last && looksLikeQuestion(last.content))
     };
   }
-  const questions = role.questions || [];
-  const userMessages = history.filter((m) => m.role !== 'assistant');
-  // The first user message picks the branch; only later messages can be answers.
-  const answers = userMessages.slice(1).filter((m) => !looksLikeQuestion(m.content));
-  const asked = answers.length;
-  const last = userMessages[userMessages.length - 1];
+  const questions = (role.questions || []).slice(0, STAFF_MAX_QUESTIONS);
+  // Progress is read from the transcript, not from a turn count: the question is
+  // matched by its text in the assistant's own message and the answer is the
+  // candidate's next message. Counting turns broke as soon as a candidate answered
+  // and asked something in the same breath - the answer was dropped and the same
+  // question came back forever.
+  const answered = answeredStaffPairs(history, { ...appState, branch: role.key }, lang);
+  const asked = answered.length;
+  const last = history.filter((m) => m.role !== 'assistant').pop();
   const done = asked >= questions.length;
   return {
     role,

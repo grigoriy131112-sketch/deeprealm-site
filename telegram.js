@@ -28,6 +28,9 @@ export function telegramConfig(env = {}, file = null) {
   return {
     token: String(pick(env.TELEGRAM_BOT_TOKEN, fromFile.token) || '').trim(),
     chatId: String(pick(env.TELEGRAM_CHAT_ID, fromFile.chatId) || '').trim(),
+    // Extra recipients: the owner can add teammates by separating ids with a comma.
+    // `chatId` stays the first one so existing configs keep working unchanged.
+    chatIds: parseChatIds(pick(env.TELEGRAM_CHAT_IDS, fromFile.chatIds)),
     // A visit ping every few hours per session is enough to show the site is
     // alive; without this an open tab would notify on every reload.
     visitGapMs: Number(pick(env.TELEGRAM_VISIT_GAP_MINUTES, fromFile.visitGapMinutes) || 0) * 60000 || 6 * 60 * 60000
@@ -53,8 +56,27 @@ export function splitMessage(text, limit = MAX_LEN) {
 
 // `enabled` is false when no token or chat is configured; the caller then reports
 // the notification as skipped instead of failing.
+// A list of recipients, from a comma-separated string or an array. Duplicates are
+// dropped so a repeated id does not receive the same sheet twice.
+export function parseChatIds(value) {
+  const raw = Array.isArray(value) ? value : String(value == null ? '' : value).split(',');
+  const out = [];
+  for (const item of raw) {
+    const id = String(item == null ? '' : item).trim();
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
 export function isConfigured(config) {
-  return Boolean(config && config.token && config.chatId);
+  if (!config || !config.token) return false;
+  return recipients(config).length > 0;
+}
+
+// Everyone who should get the message: the extra ids plus the primary one.
+export function recipients(config) {
+  if (!config) return [];
+  return parseChatIds([...(config.chatIds || []), config.chatId]);
 }
 
 export function createNotifier(options = {}) {
@@ -69,24 +91,27 @@ export function createNotifier(options = {}) {
     if (!isConfigured(config)) return { ok: false, skipped: true, reason: 'not_configured' };
     if (!fetchImpl) return { ok: false, skipped: true, reason: 'no_fetch' };
     const parts = splitMessage(text);
-    for (const part of parts) {
-      // Space the parts out, and never run two sends at once, so Telegram's rate
-      // limit is not tripped by a long sheet.
-      const wait = Math.max(0, lastSent + MIN_GAP_MS - Date.now());
-      if (wait) await new Promise((r) => setTimeout(r, wait));
-      const res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: config.chatId, text: part, disable_web_page_preview: true })
-      });
-      lastSent = Date.now();
-      if (!res || !res.ok) {
-        const detail = res && typeof res.text === 'function' ? await res.text().catch(() => '') : '';
-        log(`telegram error: ${res ? res.status : 'no response'} ${detail}`.trim());
-        return { ok: false, error: `telegram ${res ? res.status : 'unreachable'}` };
+    const to = recipients(config);
+    for (const chatId of to) {
+      for (const part of parts) {
+        // Space the parts out, and never run two sends at once, so Telegram's rate
+        // limit is not tripped by a long sheet.
+        const wait = Math.max(0, lastSent + MIN_GAP_MS - Date.now());
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        const res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: part, disable_web_page_preview: true })
+        });
+        lastSent = Date.now();
+        if (!res || !res.ok) {
+          const detail = res && typeof res.text === 'function' ? await res.text().catch(() => '') : '';
+          log(`telegram error: ${res ? res.status : 'no response'} ${detail}`.trim());
+          return { ok: false, error: `telegram ${res ? res.status : 'unreachable'}` };
+        }
       }
     }
-    return { ok: true, parts: parts.length };
+    return { ok: true, parts: parts.length, recipients: to.length };
   }
 
   // Sends are serialised so two chats approving at once cannot interleave their

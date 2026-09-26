@@ -29,4 +29,5 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_CHAT_ID
+      - key: TELEGRAM_CHAT_IDS
         sync: false

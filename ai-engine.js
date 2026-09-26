@@ -292,16 +292,140 @@ const isCheckCmd = (text) => /проверь|проверить|check my|про�
 // The character interview walks the fields of the chat's own template, in order,
 // and only asks for one thing at a time. That is what makes it usable without a
 // model: the next question is derived from what the draft is still missing.
-function nextFieldPrompt(app, lang) {
-  const fields = getKnowledge().character_template?.fields || {};
-  const order = Object.keys(fields);
-  const asked = new Set(Object.keys(app || {}));
-  const missing = order.find((f) => !asked.has(f));
-  if (missing) {
-    const hint = typeof fields[missing] === 'string' && fields[missing] ? ` (${fields[missing]})` : '';
-    return pick(lang, `Расскажи про «${missing}»${hint}.`, `Tell me about "${missing}"${hint}.`);
+//
+// A player does not say "add to the application" after every sentence, so the
+// dialogue itself is read as an answer: whatever the last message says about a
+// field counts as that field being filled. Without this the same first field was
+// asked forever, because the draft never grew.
+function hasFieldText(history, field) {
+  const text = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || ''))
+    .join('\n');
+  if (!text.trim()) return false;
+  const name = String(field || '').toLowerCase();
+  // A value written as "Поле: значение" counts for that field.
+  if (new RegExp(`${name}\\s*[:\\-—]\\s*\\S`, 'i').test(text)) return true;
+  // Some fields are recognised by what a player actually writes about them. The
+  // boundaries are lookarounds rather than \b: \b is defined on [A-Za-z0-9_], so in
+  // Cyrillic text it matches at the wrong places and "Меня зовут Лира" would not be
+  // recognised as a name.
+  const markers = {
+    'имя': /(?<![а-яё])(меня зовут|мо[её] имя|зовут)/i,
+    'раса': /(?<![а-яё])(эльф|гном|орк|человек|полурослик|дварф|тифлинг|демон|ангел|нежить|раса)/i,
+    'класс': /(?<![а-яё])(воин|маг|лучник|некромант|чернокнижник|жрец|вор|класс|паладин)/i,
+    'характер': /(характер|спокойн|вспыльчив|добр|зл|упрям|замкнут|общительн)/i,
+    'внешность': /(внешност|волос|глаз|рост|одежд|шрам|татуировк)/i,
+    'происхождение': /(предыстор|происхожден|родил|вырос|детств)/i,
+    'хобби': /(хобби|увлека|люблю|занимаюсь|интерес)/i,
+    'особенности внешности': /(особенност|шрам|татуировк|метк|крыл)/i,
+    'стартовое снаряжение': /(снаряжен|оружи|брон|меч|лук|посох|кинжал|доспех)/i
+  };
+  return Object.entries(markers).some(([key, re]) => name.includes(key) && re.test(text));
+}
+
+// The field the assistant last asked about, read from its own wording. The scan
+// walks back to the most recent question rather than looking only at the last
+// message: once the walk is over the assistant adds a "say проверь" nudge that names
+// no field, and re-asking the previous field from there would restart the loop.
+function lastAskedField(history, names = null) {
+  const list = names || INTERVIEW_FIELDS.character;
+  const msgs = Array.isArray(history) ? history : [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (!m || m.role !== 'assistant') continue;
+    const found = list.find((f) => String(m.content || '').includes(`«${f}»`));
+    if (found) return found;
   }
-  return pick(lang, 'Расскажи ещё что-нибудь о персонаже — или скажи «проверь», когда закончим.', 'Tell me more about the character — or say "check" when we are done.');
+  return null;
+}
+
+// Whether the player has said anything since the assistant's last question.
+function repliedSinceLastQuestion(history) {
+  const msgs = Array.isArray(history) ? history : [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (!m) continue;
+    if (m.role === 'assistant') return false;
+    if (String(m.content || '').trim()) return true;
+  }
+  return false;
+}
+
+// The fields worth asking about out loud. The character template has seventeen, but
+// asking a player for "Ориентация" or "Физические характеристики" one by one turns a
+// chat into a form; the rest stay in the template for the player to fill in themselves.
+// A plot has its own checklist, taken from the GM template's own headings.
+const INTERVIEW_FIELDS = {
+  character: ['Имя', 'Раса', 'Класс', 'Характер', 'Внешность', 'Происхождение'],
+  story: ['Название сюжета', 'Жанр', 'Завязка', 'Главная проблема', 'Антагонист', 'Локации']
+};
+
+const STORY_INTENT = /заявк\w*\s+на\s+сюжет|предложить\s+сюжет|придумать\s+сюжет|создать\s+сюжет|мой\s+сюжет|сюжет\s+для\s+гм|new plot|create a plot|propose a plot|название\s+сюжета|завязка|главная\s+проблема|тэглайн|теглайн|крючок/i;
+
+// Which checklist the interview is walking. A plot is recognised by what the player
+// asked for, and remembered in the draft so the walk continues on later turns.
+export function interviewKind(application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  if (app._kind === 'story' || app._kind === 'character') return app._kind;
+  const text = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || ''))
+    .join('\n');
+  return STORY_INTENT.test(text) ? 'story' : 'character';
+}
+
+function interviewFields(application, history) {
+  return INTERVIEW_FIELDS[interviewKind(application, history)] || INTERVIEW_FIELDS.character;
+}
+
+function nextFieldPrompt(app, lang, history = []) {
+  const fields = getKnowledge().character_template?.fields || {};
+  const names = interviewFields(app, history);
+  const drafted = new Set(Object.keys(app || {}));
+  const covered = new Set(names.filter((f) => drafted.has(f) || hasFieldText(history, f)));
+  const missing = names.filter((f) => !covered.has(f));
+  const checkNudge = pick(lang, 'Если основное рассказал — скажи «проверь», и я проверю.', 'If that is the essentials — say "check" and I will review it.');
+  const tellMore = pick(lang, 'Расскажи ещё что-нибудь.', 'Tell me more.');
+  if (!missing.length) return [tellMore, checkNudge].join('\n');
+  const next = nextMissingField(missing, fields, lang, history);
+  // Nothing left after the field just asked and answered: the walk is over, and
+  // asking the same field again would be the loop this engine exists to avoid.
+  if (!next) return [tellMore, checkNudge].join('\n');
+  // Once the essentials are covered, the interview offers the check alongside the
+  // next field instead of asking for one more.
+  return covered.size >= INTERVIEW_MIN_FIELDS ? [next, checkNudge].join('\n') : next;
+}
+
+// The next field to ask about, skipping the one just asked so the same question
+// never comes twice in a row. Null means the walk has nothing left to ask.
+function nextMissingField(missing, fields, lang, history) {
+  const names = interviewFields({}, history);
+  const asked = lastAskedField(history, names);
+  if (asked && repliedSinceLastQuestion(history)) {
+    const idx = names.indexOf(asked);
+    const after = missing.find((f) => names.indexOf(f) > idx);
+    return after ? fieldPrompt(after, fields, lang) : null;
+  }
+  return fieldPrompt(missing[0], fields, lang);
+}
+
+function fieldPrompt(field, fields, lang) {
+  const hint = typeof fields[field] === 'string' && fields[field] ? ` (${fields[field]})` : '';
+  return pick(lang, `Расскажи про «${field}»${hint}.`, `Tell me about "${field}"${hint}.`);
+}
+
+// How many essentials must be covered before a check can pass. The template has
+// seventeen fields, and demanding all of them would turn the chat into a form, so
+// a filled-in character is recognised by name, race and class at the least.
+const INTERVIEW_MIN_FIELDS = 3;
+
+function countFilledFields(app, history) {
+  const names = interviewFields(app, history);
+  const drafted = Object.keys(app || {}).filter((k) => !k.startsWith('_') && !k.startsWith('note_'));
+  const covered = new Set(drafted.filter((k) => names.includes(k)));
+  for (const field of names) if (hasFieldText(history, field)) covered.add(field);
+  return covered.size;
 }
 
 function renderApplication(app, lang) {
@@ -320,24 +444,22 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
     const note = text.replace(/добавь в анкету/gi, '').replace(/add to the application/gi, '').trim();
     return [
       pick(lang, `Добавил в анкету: ${note || '(пусто)'}.`, `Added to the application: ${note || '(empty)'}.`),
-      nextFieldPrompt(app, lang)
+      nextFieldPrompt(app, lang, history)
     ].join('\n');
   }
   if (isShowCmd(text)) return renderApplication(app, lang);
   if (isCheckCmd(text)) {
-    // The sheet may live in the draft (saved with "add to the application") or in
-    // the dialogue itself, so both are counted before the check can pass.
-    const convo = history.map((m) => String(m?.content || '')).join('\n');
-    const filled = Object.keys(app).filter((k) => !k.startsWith('note_')).length
-      + [/имя\s*[:\-—]/i, /раса\s*[:\-—]/i, /класс\s*[:\-—]/i, /характер\s*[:\-—]/i, /внешност/i].filter((re) => re.test(convo)).length;
-    if (filled < 3) {
+    // A filled-in character is recognised from the draft and from the dialogue, so
+    // a player who never used "add to the application" can still be checked.
+    const filled = countFilledFields(app, history);
+    if (filled < INTERVIEW_MIN_FIELDS) {
       return [
         pick(lang, 'Анкета ещё не заполнена: мне нужно больше деталей, иначе проверять нечего.', 'The application is not filled in yet: I need more detail before checking.'),
-        nextFieldPrompt(app, lang)
+        nextFieldPrompt(app, lang, history)
       ].join('\n');
     }
     return [
-      pick(lang, 'Проверил анкету: сильные и слабые стороны указаны, нарушения баланса не вижу. ОДОБРЕНО ✅', 'I checked the application: strengths and weaknesses are there, no balance issues. APPROVED ✅')
+      pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅')
     ].join('\n');
   }
   if (/создать.*расу|свою расу|new race|create a race/i.test(text)) {
@@ -350,10 +472,10 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   }
   if (isGreeting(text) || !text.trim()) {
     return pick(lang,
-      'Привет. Я Анкетолог Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Скажи «добавь в анкету», чтобы сохранить детали.',
-      'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, character, strengths and weaknesses. Say "add to the application" to save details.');
+      'Привет. Я Анкетолог Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
+      'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
   }
-  return nextFieldPrompt(app, lang);
+  return nextFieldPrompt(app, lang, history);
 }
 
 // -------------------------------------------------------------------- staff

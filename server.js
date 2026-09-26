@@ -139,7 +139,9 @@ app.get('/api/articles/:slug', (req, res) => {
 // hand-off either way, so a review is never lost because of a publishing error.
 async function publishFromSheet({ messages, lang, application }) {
   const kind = detectSheetKind(messages, application);
-  if (!kind) return null;
+  // A plot is the game master's material, not a wiki entry: it is forwarded to the
+  // owner and stops there, so it never shows up in the races or classes lists.
+  if (!kind || kind === 'story') return null;
   const article = await buildArticle({ kind, messages, lang, knowledge, callLLM });
   if (!article) return null;
   const entry = articleStore.publish({ title: article.title, kind, text: article.text });

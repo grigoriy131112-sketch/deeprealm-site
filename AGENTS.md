@@ -287,3 +287,28 @@ permission is missing. Probe that way before starting any long operation.
 - The public fallback endpoint rejects a `system` role with a 502, so
   `flattenSystem` folds the rules into a user message. It is also unreliable
   (seen returning `ENOSPC`); it is a stopgap, not a substitute for `LLM_API_KEY`.
+
+## Interview loops and story sheets (fixed 2026-09-26)
+
+- Three separate bugs made the interviewers loop forever, all in `chat-core.js`
+  and `ai-engine.js`. Do not undo these without re-reading why:
+  - `\b` is defined on `[A-Za-z0-9_]`, so a Cyrillic `\bимя\b` never matches at
+    the right place. Field markers in `hasFieldText` use lookarounds
+    (`(?<![а-яё])`) instead.
+  - `lastAskedField` scans back to the most recent assistant message that names
+    a field in «guillemets». Looking only at the last message restarted the walk
+    once the closing «скажи проверь» nudge appeared.
+  - `staffAnswerPairs` counts the candidate next message as an answer. A pure
+    clarifying question must not advance the walk (`answeredStaffPairs` drops it,
+    but `hasAnswerContent` keeps "Да, смогу. А как часто?" as progress), and two
+    clarifications on the same question are enough to move on.
+- The character walk ends instead of repeating: when nothing is left after the
+  field just answered, `nextFieldPrompt` returns the closing nudge.
+- A plot is recognised both from intent and from the GM template headings
+  (`STORY_INTENT` in `ai-engine.js` mirrors `STORY_MARKERS` in `publish.js`).
+- An approved plot is forwarded to the owner but never published as an article:
+  `publishFromSheet` returns `null` for `story`. `detectSheetKind` must be wired
+  via `setSheetDetector` in any test that approves a sheet.
+- `telegram.js` accepts several recipients: `chatIds` in `data/telegram.json` or
+  `TELEGRAM_CHAT_IDS` next to the primary `chatId`. `scripts/setup-telegram.js`
+  reads the id from the bot own `getUpdates`, so @userinfobot is not needed.

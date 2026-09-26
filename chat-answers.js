@@ -127,17 +127,18 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   const approved = approvedWithSheet(clean, history, appState);
   let published = null;
   let delivered = false;
+  let sheetKind = null;
   if (approved) {
     // The article publish and the owner notification are independent: a failed
     // notification must not undo a published race, and vice versa.
+    sheetKind = detectSheet(history, appState);
     if (typeof publish === 'function') {
       published = await publish({ messages: history, lang, application: appState }).catch(() => null);
     }
     if (typeof send === 'function') {
-      const kind = detectSheet(history, appState);
       const result = await send({
-        kind,
-        title: applicationTitle(appState, kind),
+        kind: sheetKind,
+        title: applicationTitle(appState, sheetKind, history),
         text: sheetText(history, appState),
         lang
       }).catch(() => null);
@@ -147,8 +148,8 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // The player is told the sheet went to the owner. When delivery failed the line
   // says so and repeats the owner's contact, so an application is never lost to a
   // silent failure.
-  const closing = approved ? sentToOwnerText('interview', lang, { delivered }) : '';
-  const handoff = handoffText('interview', lang, { approved, published });
+  const closing = approved ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
+  const handoff = handoffText('interview', lang, { approved, published, kind: sheetKind });
   return {
     reply: withEnd(approved ? `${clean}\n\n${closing}\n\n${handoff}` : clean),
     application: appState,
