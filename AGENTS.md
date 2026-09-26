@@ -234,6 +234,37 @@ permission is missing. Probe that way before starting any long operation.
   reach it. `upsert` now matches on title and derives a free slug when one is
   taken. Do not go back to matching on slug first.
 
+## Owner notifications and live speech (added 2026-09-26)
+
+- The site's AI has two layers, and both are keyless. `ai-engine.js` always
+  answers from the knowledge base and the article store. `ai-maker.js` then asks a
+  free keyless model to rewrite that answer in a natural voice. The second layer is
+  optional: a dead endpoint means the engine's own text is used.
+- A rewrite is only accepted when `keepsEssentials` passes: it must keep the chat
+  link, the trailing «конец» and the «ОДОБРЕНО»/«РЕКОМЕНДОВАН» mark, and add no
+  markdown. Do not loosen this without a reason - it is what stops the free model
+  from inventing lore or stranding a player without the chat link.
+- Never make the live layer load-bearing. A failure opens a 10 minute cooldown and
+  one request runs at a time, so a broken endpoint costs one timeout and nothing
+  after it. The same rule applies to the free `FREE_LLM_*` path (5 minute breaker).
+- `telegram.js` sends owner notifications. With no token it is a no-op that
+  reports `skipped`; it must never throw into a chat. The bot token lives in
+  `data/telegram.json` (empty by default) or in `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`.
+- Notifications cover three things the owner asked for: every site visit
+  (`/api/visit`, throttled per browser session), every approved character/race/
+  class sheet, and every answer a staff candidate gave (paired question → answer).
+- An approved interview now forwards the sheet to the owner, so `handoffText`
+  no longer sends the player to an application desk. The closing line comes from
+  `sentToOwnerText`: it says the sheet was sent, or names the owner when delivery
+  failed. Never claim delivery that did not happen.
+- On GitHub Pages the page cannot reach a server, so `chat-browser.js` sends the
+  notifications to Telegram directly and reads `docs/data/telegram.json`. That
+  token is public there - use a dedicated bot. `scripts/build-pages.js` copies the
+  file but treats it as optional, because a checkout without it must still build.
+- `public/app.js` treats only a 2xx `/api/visit` as "our server handled it";
+  static hosting answers `/api` with its own 404 page, which is a response, not a
+  rejection, and would otherwise silently swallow the visit ping.
+
 ## Permanent hosting: GitHub Pages (decided 2026-09-25)
 
 - The site is permanently hosted on GitHub Pages, source `main` / `/docs`, at

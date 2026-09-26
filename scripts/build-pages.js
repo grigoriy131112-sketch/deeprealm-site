@@ -20,16 +20,22 @@ const files = [
   ['public/chat-browser.js', 'chat-browser.js'],
   ['public/favicon.svg', 'favicon.svg'],
   ['public/404.html', '404.html'],
-  ['data/articles.json', 'data/articles.json']
+  ['data/articles.json', 'data/articles.json'],
+  // Optional: when the owner has not configured the bot yet the file may be
+  // absent, and the site simply has no notifications.
+  ['data/telegram.json', 'data/telegram.json', { optional: true }]
 ];
 
 // Keep the checkout clean: rebuild from scratch so a deleted file cannot linger.
 fs.rmSync(out, { recursive: true, force: true });
 
-for (const [from, to] of files) {
+for (const [from, to, opts] of files) {
   const src = path.join(root, from);
   const dest = path.join(out, to);
-  if (!fs.existsSync(src)) throw new Error(`missing source: ${from}`);
+  if (!fs.existsSync(src)) {
+    if (opts && opts.optional) continue;
+    throw new Error(`missing source: ${from}`);
+  }
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(src, dest);
 }

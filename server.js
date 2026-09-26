@@ -14,8 +14,10 @@ import {
   finaleText, isEndCommand, approvedWithSheet, withEnd, handoffText,
   GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM, setKnowledge, setSheetDetector
 } from './chat-core.js';
-import { answerGuide, answerInterview, answerStaff, setModelCaller, setFreeModelCaller, needsModel } from './chat-answers.js';
+import { answerGuide, answerInterview, answerStaff, setModelCaller, setFreeModelCaller, setLiveCaller, needsModel } from './chat-answers.js';
 import { setEngineArticles } from './ai-engine.js';
+import { createLiveSpeaker } from './ai-maker.js';
+import { createNotifier, telegramConfig } from './telegram.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KNOWLEDGE_PATH = path.join(__dirname, 'data', 'knowledge.json');
@@ -48,6 +50,21 @@ const articleStore = createArticleStore(ARTICLES_PATH, {
 setEngineArticles(articleStore.all());
 
 const PORT = process.env.PORT || 3000;
+
+// The bot token is a secret, so it is normally set in the host's environment. A
+// checked-in file is also accepted, which is what makes the static build work:
+// the browser reads the same file over HTTPS. It ships with empty values, so
+// nothing is exposed until the owner fills it in.
+const TELEGRAM_FILE = path.join(__dirname, 'data', 'telegram.json');
+function readTelegramFile() {
+  try {
+    if (!fs.existsSync(TELEGRAM_FILE)) return null;
+    return JSON.parse(fs.readFileSync(TELEGRAM_FILE, 'utf8'));
+  } catch (err) {
+    console.warn(`[telegram] could not read data/telegram.json: ${err.message}`);
+    return null;
+  }
+}
 
 // Approved sheets are written to disk immediately, but the published site is
 // served from the repository, so the same article is also pushed there. Without
@@ -226,6 +243,22 @@ async function callFreeModel(messages, options = {}) {
 
 setFreeModelCaller((messages, options) => callFreeModel(messages, options));
 
+// The live-speech layer and the owner notifier. Both are optional: with no bot
+// token the notifications report `skipped`, and with a dead free endpoint the
+// engine's own wording stands. Neither can break a chat.
+const notifier = createNotifier({
+  config: telegramConfig(process.env, readTelegramFile()),
+  log: (m) => console.log(`[telegram] ${m}`)
+});
+if (!notifier.enabled) console.log('[telegram] уведомления выключены: нет TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID');
+
+const liveSpeaker = createLiveSpeaker({
+  env: process.env,
+  baseUrl: process.env.LIVE_LLM_BASE_URL,
+  model: process.env.LIVE_LLM_MODEL,
+  log: (m) => console.log(`[live] ${m}`)
+});
+if (liveSpeaker) setLiveCaller((messages, options) => liveSpeaker(messages, options));
 
 app.get('/api/status', (req, res) => {
   // The chats are always available: the built-in engine needs no key. `mode`
@@ -233,8 +266,30 @@ app.get('/api/status', (req, res) => {
   res.json({
     configured: true,
     builtin: true,
-    mode: LLM_API_KEY ? 'model' : 'keyless'
+    live: Boolean(liveSpeaker),
+    telegram: notifier.enabled,
+    mode: LLM_API_KEY ? 'model' : 'live'
   });
+});
+
+// A visit ping from the page. The owner asked to hear about every arrival, so the
+// page reports one and the notifier throttles it per browser session. It always
+// answers 200: a notification is never worth an error on the visitor's screen.
+app.post('/api/visit', (req, res) => {
+  const { page, from, device, session } = req.body || {};
+  notifier.visit({ page, from, device, session }).catch(() => {});
+  res.json({ ok: true, telegram: notifier.enabled });
+});
+
+// The same visit ping, sent by the static site instead of the owner's browser.
+// GitHub Pages cannot run this server, so the page posts to a relay the owner
+// controls; nothing secret is exposed by accepting the ping.
+app.post('/api/notify', (req, res) => {
+  const { type } = req.body || {};
+  const body = req.body || {};
+  const work = type === 'staff' ? notifier.staff(body) : type === 'visit' ? notifier.visit(body) : notifier.sheet(body);
+  work.catch(() => {});
+  res.json({ ok: true, telegram: notifier.enabled });
 });
 
 // Always-available join link, so the site can show it without waiting for AI.
@@ -277,7 +332,11 @@ app.post('/api/guide', async (req, res) => {
 app.post('/api/interview', async (req, res) => {
   const { messages = [], lang = 'ru', application = {} } = req.body || {};
   try {
-    res.json(await answerInterview({ messages, lang, application, publish: publishFromSheet }));
+    res.json(await answerInterview({
+      messages, lang, application,
+      publish: publishFromSheet,
+      notify: (info) => notifier.sheet(info)
+    }));
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
@@ -286,7 +345,7 @@ app.post('/api/interview', async (req, res) => {
 app.post('/api/staff', async (req, res) => {
   const { messages = [], lang = 'ru', application = {} } = req.body || {};
   try {
-    res.json(await answerStaff({ messages, lang, application }));
+    res.json(await answerStaff({ messages, lang, application, notify: (info) => notifier.staff(info) }));
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

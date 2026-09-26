@@ -342,8 +342,56 @@ async function boot() {
   wireLang();
   wireArticles();
   showAiStatus();
+  reportVisit();
   await loadArticles();
   openFromHash();
+}
+
+// The owner asked to hear about arrivals. On our server the ping goes through
+// /api/visit; on static hosting there is no server, so the bundled notifier sends
+// it to Telegram itself. It is deliberately fire-and-forget: a notification is
+// never allowed to delay or break the page, and one ping per session is enough.
+function reportVisit() {
+  const payload = {
+    page: (location.hash || '#home').replace('#', ''),
+    from: document.referrer || '',
+    device: navigator.userAgent.slice(0, 120),
+    session: sessionKey()
+  };
+  // Static hosting answers /api with the site's own 404 page, which is a response,
+  // not a rejection. Only a 2xx counts as "our server took it"; anything else
+  // means there is no server here and the bundled notifier sends it instead.
+  sendVisit(payload).then((handled) => {
+    if (handled) return;
+    const chat = localChat();
+    if (chat && typeof chat.notifyVisit === 'function') chat.notifyVisit(payload).catch(() => {});
+  });
+}
+
+async function sendVisit(payload) {
+  try {
+    const res = await fetch('/api/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// A per-tab id, so reloads in the same tab do not look like a new visitor while a
+// genuinely new visitor does.
+function sessionKey() {
+  try {
+    let key = sessionStorage.getItem('dr_visit');
+    if (!key) {
+      key = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      sessionStorage.setItem('dr_visit', key);
+    }
+    return key;
+  } catch { return 'anon'; }
 }
 
 // The chats now always have an answer: the built-in engine needs no key. The notice

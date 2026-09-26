@@ -22,3 +22,11 @@ services:
         value: main
       - key: BLOG_SYNC_MINUTES
         value: "60"
+      # Owner notifications. Both are prompted for by the host, because the bot
+      # token is a secret and must not be committed. Leaving them unset keeps the
+      # site silent; the chats work either way. The free live-speech endpoint
+      # needs no variable at all.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false

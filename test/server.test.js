@@ -239,7 +239,8 @@ test('status endpoint reports configuration state', async () => {
   const data = await res.json();
   assert.equal(data.configured, true, 'the built-in engine is always available');
   assert.equal(data.builtin, true);
-  assert.ok(['keyless', 'builtin'].includes(data.mode), 'no key set, so the built-in engine or its keyless upgrade answers');
+  assert.ok(['model', 'live', 'keyless', 'builtin'].includes(data.mode), 'no key set, so the built-in engine or its live upgrade answers');
+  assert.equal(typeof data.telegram, 'boolean', 'the page is told whether owner notifications are on');
 });
 
 test('knowledge context includes the GM plot template', () => {
@@ -309,7 +310,7 @@ test('the end command is recognised in both languages', () => {
 
 test('each assistant ends with its own hand-off wording', () => {
   const interview = finaleText('interview', 'ru', { approved: true });
-  assert.match(interview, /Кидайте анкету персонажа в анкетницу в тг-чате/);
+  assert.match(interview, /Анкета уже у владельца/);
   assert.match(interview, /ОДОБРЕНО/);
   assert.match(interview, /@Omega_Gribcha/);
   assert.match(interview, /ты принят/, 'an approved sheet still routes custom races through the owner');
@@ -326,7 +327,7 @@ test('each assistant ends with its own hand-off wording', () => {
 test('ending early gives the hand-off but never claims approval', () => {
   const interview = finaleText('interview', 'ru');
   assert.doesNotMatch(interview, /ОДОБРЕНО/, 'a cut-short check must not be called approved');
-  assert.match(interview, /Кидайте анкету персонажа в анкетницу/, 'the sheet destination is still useful');
+  assert.match(interview, /Анкета уже у владельца/, 'the sheet destination is still useful');
 
   const staff = finaleText('staff', 'ru');
   assert.doesNotMatch(staff, /РЕКОМЕНДОВАН/, 'a cut-short interview must not be called recommended');

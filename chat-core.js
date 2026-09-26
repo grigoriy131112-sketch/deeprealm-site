@@ -17,6 +17,12 @@ let sheetDetector = () => null;
 export function setSheetDetector(fn) { sheetDetector = typeof fn === "function" ? fn : () => null; }
 export function getKnowledge() { return knowledge; }
 
+// The sheet detector is injected (server uses publish.js, the browser uses its own
+// markers), so it is exposed here for the notifier to label a forwarded sheet.
+export function detectSheet(messages, application = {}) {
+  try { return sheetDetector(messages, application); } catch { return null; }
+}
+
 // Compact, structured context injected into every model prompt.
 export function buildKnowledgeContext(lang) {
   return [
@@ -173,8 +179,8 @@ export function handoffText(type, lang, { approved = false, published = null } =
   if (type === 'interview') {
     const note = publishNote(lang, published, owner);
     return lang === 'en'
-      ? `Send the character sheet to the application desk in the Telegram chat:\n${chat}${note}`
-      : `Кидайте анкету персонажа в анкетницу в тг-чате:\n${chat}${note}`;
+      ? `Your sheet is already with the owner. Join the chat while you wait:\n${chat}${note}`
+      : `Анкета уже у владельца. А пока можешь зайти в чат:\n${chat}${note}`;
   }
   if (type === 'staff') {
     return lang === 'en'
@@ -184,6 +190,34 @@ export function handoffText(type, lang, { approved = false, published = null } =
   return lang === 'en'
     ? `The chat link stays here, so you can join whenever you like:\n${chat}`
     : `Ссылка на чат остаётся здесь, по ней можно перейти в любой момент:\n${chat}`;
+}
+
+// A human-readable heading for a forwarded sheet: the character name or the sheet
+// title if the draft holds one, otherwise the kind, so the owner can tell two
+// applications apart in the chat.
+export function applicationTitle(application = {}, kind = '') {
+  const app = application && typeof application === 'object' ? application : {};
+  for (const key of ['Имя', 'Название', 'Название расы', 'Название класса', 'name', 'title']) {
+    const value = app[key];
+    if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 80);
+  }
+  return { character: 'Персонаж', race: 'Раса', class: 'Класс', story: 'Сюжет' }[kind] || 'Анкета';
+}
+
+// The questions a staff candidate answered, paired with their answers, in the
+// order the branch asks them. The owner asked for the answers the person actually
+// gave, so only those are returned - an unanswered scripted question is left out
+// instead of being padded with a placeholder.
+export function staffAnswerPairs(history, application = {}, lang = 'ru') {
+  const role = detectRole(Array.isArray(history) ? history : []) || findRole(application.branch || '');
+  const questions = (role && role.questions) || [];
+  const answers = (Array.isArray(history) ? history : [])
+    .filter((m) => m.role !== 'assistant')
+    .slice(1)
+    .filter((m) => !looksLikeQuestion(String(m.content || '')))
+    .map((m) => String(m.content || '').trim())
+    .filter(Boolean);
+  return answers.map((a, i) => ({ q: questions[i] || `${lang === 'en' ? 'Question' : 'Вопрос'} ${i + 1}`, a }));
 }
 
 // The owner requires every assistant reply to end with this word. It is appended
@@ -208,6 +242,32 @@ export function publishNote(lang, published, owner) {
   return lang === 'en'
     ? `\n\nYour article is already on the site: ${kind} "${published.title}". See the Articles section.`
     : `\n\nСтатья уже на сайте: ${kind} «${published.title}». Смотри раздел «Статьи».`;
+}
+
+// What the player is told once the sheet has been forwarded to the owner. The
+// owner asked for this closing line, so it is fixed text rather than left to the
+// model. A failed delivery says so plainly with the owner's contact, because
+// silently pretending it was sent would lose the application.
+export function sentToOwnerText(type, lang, { delivered = true } = {}) {
+  const owner = knowledge.chat.owner;
+  if (type === 'staff') {
+    if (!delivered) {
+      return lang === 'en'
+        ? `✅ All checked. I could not reach the owner automatically — write to ${owner} so your answers are not lost.`
+        : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — напиши ему сам ${owner}, чтобы ответы не потерялись.`;
+    }
+    return lang === 'en'
+      ? '✅ All checked. All your answers have been sent to the owner.'
+      : '✅ Всё одобрено. Все ответы отправлены владельцу.';
+  }
+  if (!delivered) {
+    return lang === 'en'
+      ? `✅ All checked. I could not reach the owner automatically — send the sheet to ${owner} so it is not lost.`
+      : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — скинь анкету ему сам ${owner}, чтобы она не потерялась.`;
+  }
+  return lang === 'en'
+    ? '✅ All checked. Your sheet has been sent to the owner.'
+    : '✅ Всё одобрено. Анкета отправлена владельцу.';
 }
 
 // `approved` marks a completed check. Ending early still gives the hand-off, but
