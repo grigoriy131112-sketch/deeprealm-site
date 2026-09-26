@@ -221,3 +221,26 @@ permission is missing. Probe that way before starting any long operation.
   matched on slug and one article overwrote the other, so a reader could not
   reach it. `upsert` now matches on title and derives a free slug when one is
   taken. Do not go back to matching on slug first.
+
+## Permanent hosting: GitHub Pages (decided 2026-09-25)
+
+- The site is permanently hosted on GitHub Pages, source `main` / `/docs`, at
+  https://grigoriy131112-sketch.github.io/deeprealm-site/. It survives sandbox
+  death and needs no sign-in step from the owner.
+- `docs/` is generated: run `npm run build-pages` after changing anything in
+  `public/` or `data/`, then commit. Pages serves `docs/404.html` for unknown
+  URLs, which is why the bare "404 page not found" text is gone.
+- The sandbox preview links (`work-*.prod-runtime.all-hands.dev`) are NOT the
+  site. They return 502 the moment the sandbox sleeps. Never send them to the
+  owner; always give the Pages URL above.
+- The chats run in two places: the server owns the AI key and publishing; the
+  browser bundle (`docs/chat-browser.js`, built by `scripts/build-chat-browser.js`)
+  runs the same rules against a keyless endpoint when no server answers. A static
+  host replying to `/api` with its own 404 page counts as "no server here".
+- The chats read the knowledge file in its stored shape, so the build publishes
+  `docs/data/knowledge.raw.json` next to the reshaped `knowledge.json`. Both are
+  needed: the page renders from the reshaped one, the chats answer from the raw
+  one.
+- The public fallback endpoint rejects a `system` role with a 502, so
+  `flattenSystem` folds the rules into a user message. It is also unreliable
+  (seen returning `ENOSPC`); it is a stopgap, not a substitute for `LLM_API_KEY`.
