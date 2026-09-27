@@ -19,6 +19,7 @@ function scaffold() {
   fs.mkdirSync(path.join(repo, 'data'), { recursive: true });
   fs.mkdirSync(path.join(repo, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(repo, 'public'), { recursive: true });
+  fs.mkdirSync(path.join(repo, 'deploy/cloudflare'), { recursive: true });
 
   // The bare repo stands in for GitHub: it is a real remote to push into.
   git(base, 'init', '--bare', bare);
@@ -31,6 +32,9 @@ function scaffold() {
   // copied because build-pages.js publishes every file in it.
   fs.cpSync(path.join(process.cwd(), 'public'), path.join(repo, 'public'), { recursive: true });
   fs.copyFileSync(path.join(process.cwd(), 'scripts/build-pages.js'), path.join(repo, 'scripts/build-pages.js'));
+  // build-pages.js ships the Worker source next to the copy page, so the fixture
+  // needs it as well.
+  fs.copyFileSync(path.join(process.cwd(), 'deploy/cloudflare/worker.js'), path.join(repo, 'deploy/cloudflare/worker.js'));
   fs.copyFileSync(path.join(process.cwd(), 'knowledge-view.js'), path.join(repo, 'knowledge-view.js'));
   // build-pages.js imports the view from the parent of scripts/.
   fs.copyFileSync(path.join(process.cwd(), 'data/knowledge.json'), path.join(repo, 'data/knowledge.json'));

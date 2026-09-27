@@ -50,7 +50,7 @@ function scaffold() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'dr-e2e-'));
   const repo = path.join(base, 'site');
   const bare = path.join(base, 'remote.git');
-  for (const dir of ['public', 'scripts', 'data']) fs.mkdirSync(path.join(repo, dir), { recursive: true });
+  for (const dir of ['public', 'scripts', 'data', 'deploy']) fs.mkdirSync(path.join(repo, dir), { recursive: true });
 
   git(base, 'init', '--bare', bare);
   git(repo, 'init', '-b', 'main');
@@ -66,6 +66,8 @@ function scaffold() {
     fs.copyFileSync(path.join(src, f), path.join(repo, f));
   }
   fs.cpSync(path.join(src, 'scripts'), path.join(repo, 'scripts'), { recursive: true });
+  // build-pages.js ships the Worker source, so it must exist in the fixture too.
+  fs.cpSync(path.join(src, 'deploy'), path.join(repo, 'deploy'), { recursive: true });
   fs.copyFileSync(path.join(src, 'data/knowledge.json'), path.join(repo, 'data/knowledge.json'));
   fs.writeFileSync(path.join(repo, 'data/articles.json'), JSON.stringify({ source: '', imported_at: null, articles: [] }));
 

@@ -53,7 +53,10 @@
 </details>
 
 <script>
-const WORKER_URL = new URL('worker.js', location.href).href;
+const WORKER_URLS = [
+  new URL('worker.js', location.href).href,
+  'https://raw.githubusercontent.com/grigoriy131112-sketch/deeprealm-site/main/deploy/cloudflare/worker.js'
+];
 const TOKEN_STORE = 'deeprealm.token';
 const status = document.getElementById('status');
 const need = document.getElementById('need');
@@ -107,9 +110,21 @@ async function copyText(text, box) {
 }
 
 async function code() {
-  const res = await fetch(WORKER_URL, { cache: 'no-store' });
-  if (!res.ok) throw new Error('код не загрузился: ' + res.status);
-  const source = await res.text();
+  let source = '';
+  let lastError = '';
+  for (const url of WORKER_URLS) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) { lastError = 'код не загрузился: ' + res.status; continue; }
+      const text = await res.text();
+      if (!text.includes("const DEFAULT_TOKEN = '';")) { lastError = 'получен не тот файл'; continue; }
+      source = text;
+      break;
+    } catch (e) {
+      lastError = e.message;
+    }
+  }
+  if (!source) throw new Error(lastError || 'код не загрузился');
   const t = refresh();
   if (!t) return source;
   const filled = source.replace("const DEFAULT_TOKEN = '';", "const DEFAULT_TOKEN = '" + t + "';");
