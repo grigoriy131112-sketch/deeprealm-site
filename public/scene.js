@@ -111,6 +111,27 @@
     g.fillStyle = back;
     g.fillRect(0, 0, W, H);
 
+    // Faint violet nebula streaks high in the sky: depth without a per-frame
+    // cost, since the whole sky is baked once per resize.
+    const neb = seeded(555);
+    for (let i = 0; i < 7; i++) {
+      const nx = neb() * W;
+      const ny = H * (0.04 + neb() * 0.34);
+      const nr = Math.min(W, H) * (0.18 + neb() * 0.3);
+      const ng = g.createRadialGradient(nx, ny, 0, nx, ny, nr);
+      const purple = neb() < 0.5 ? '#4a2a6b' : '#6b2a4a';
+      ng.addColorStop(0, rgba(purple, 0.1));
+      ng.addColorStop(0.6, rgba(purple, 0.04));
+      ng.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = ng;
+      g.save();
+      g.translate(nx, ny);
+      g.scale(1.6, 0.5);
+      g.translate(-nx, -ny);
+      g.fillRect(nx - nr * 1.7, ny - nr, nr * 3.4, nr * 2);
+      g.restore();
+    }
+
     const mx = W * 0.78, my = H * 0.17;
     const mr = Math.max(24, Math.min(Math.min(W, H) * 0.055, 62));
     const halo = g.createRadialGradient(mx, my, mr * 0.6, mx, my, mr * 10);
@@ -181,6 +202,21 @@
     const STONE = '#0a0710';
     const STONE_DARK = '#07050c';
 
+    // A dim rear wall and two far turrets: depth behind the keep without a
+    // single extra per-frame draw. They read as the castle proper, not the gate.
+    g.fillStyle = '#060409';
+    g.fillRect(cx - 3.7 * u, baseY - 3.5 * u, 7.4 * u, 3.5 * u);
+    for (const bx of [-3.2, 3.2]) {
+      const bw = 0.42 * u;
+      g.fillRect(cx + bx * u - bw / 2, baseY - 4.2 * u, bw, 4.2 * u);
+      g.beginPath();
+      g.moveTo(cx + bx * u - bw, baseY - 4.2 * u);
+      g.lineTo(cx + bx * u, baseY - 4.8 * u);
+      g.lineTo(cx + bx * u + bw, baseY - 4.2 * u);
+      g.closePath();
+      g.fill();
+    }
+
     for (const t of towers) {
       const x = cx + t.x * u;
       const w = t.w * u;
@@ -205,6 +241,38 @@
       g.strokeStyle = rgba(C.gold, 0.3);
       g.lineWidth = 1;
       g.stroke();
+
+      // A warm edge along the moonlit side, so the black tower keeps an outline
+      // even where it is far from the gate glow.
+      g.beginPath();
+      g.moveTo(x + w * 0.92, top - crenH);
+      g.lineTo(x, top - crenH - roofH);
+      g.strokeStyle = rgba(C.goldBright, 0.22);
+      g.lineWidth = 1;
+      g.stroke();
+
+      // A spire and a hanging banner: the classic dark-fantasy silhouette.
+      const poleTop = top - crenH - roofH - 0.5 * u;
+      g.strokeStyle = rgba(C.gold, 0.5);
+      g.beginPath();
+      g.moveTo(x, top - crenH - roofH);
+      g.lineTo(x, poleTop);
+      g.stroke();
+      g.beginPath();
+      g.arc(x, poleTop, 0.08 * u, 0, TAU);
+      g.fillStyle = rgba(C.goldBright, 0.7);
+      g.fill();
+
+      const flagW = w * 0.52, flagH = 0.62 * u;
+      const flagFx = x < cx ? 1 : -1;
+      g.beginPath();
+      g.moveTo(x, poleTop + 0.06 * u);
+      g.lineTo(x + flagFx * flagW * 0.16, poleTop + 0.06 * u + flagH * 0.5);
+      g.lineTo(x + flagFx * flagW, poleTop + 0.06 * u + flagH);
+      g.lineTo(x + flagFx * flagW, poleTop + 0.06 * u);
+      g.closePath();
+      g.fillStyle = rgba(t.x === 0 ? C.blood : C.gold, 0.5);
+      g.fill();
     }
 
     g.fillStyle = STONE_DARK;
@@ -229,13 +297,60 @@
     g.fillStyle = doorGlow;
     g.fillRect(cx - 2.6 * u, baseY - 2.6 * u, 5.2 * u, 2.6 * u);
 
+    // A torch-lit bridge leaves the gate and crosses the drop, with a lit post
+    // at the far end. It is what makes the castle feel inhabited at night.
+    const span = 4.4 * u, deck = 0.2 * u;
+    g.beginPath();
+    g.moveTo(cx - gateW * 0.55, baseY);
+    g.lineTo(cx + gateW * 0.55, baseY);
+    g.lineTo(cx + span * 0.55, baseY + deck);
+    g.lineTo(cx - span * 0.55, baseY + deck);
+    g.closePath();
+    g.fillStyle = '#0b0810';
+    g.fill();
+    g.strokeStyle = rgba(C.gold, 0.28);
+    g.lineWidth = 1;
+    g.stroke();
+
+    for (const px of [-span * 0.5, -span * 0.18, span * 0.18, span * 0.5]) {
+      g.beginPath();
+      g.moveTo(cx + px, baseY - 0.5 * u);
+      g.lineTo(cx + px, baseY + deck);
+      g.strokeStyle = rgba(C.gold, 0.24);
+      g.lineWidth = u * 0.06;
+      g.stroke();
+    }
+
+    const torchX = cx - span * 0.5;
+    const torchGlow = g.createRadialGradient(torchX, baseY - 0.5 * u, 0, torchX, baseY - 0.5 * u, 1.5 * u);
+    torchGlow.addColorStop(0, rgba(C.goldBright, 0.42));
+    torchGlow.addColorStop(0.5, rgba(C.gold, 0.16));
+    torchGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = torchGlow;
+    g.fillRect(torchX - 1.5 * u, baseY - 2.0 * u, 3.0 * u, 2.6 * u);
+    g.beginPath();
+    g.arc(torchX, baseY - 0.5 * u, 0.1 * u, 0, TAU);
+    g.fillStyle = rgba(C.goldBright, 0.8);
+    g.fill();
+
+    // Parapets along the wall top, so the front wall is not a plain slab.
+    for (let i = -2; i <= 2; i++) {
+      const mx = cx + i * 1.0 * u;
+      g.fillStyle = STONE_DARK;
+      g.fillRect(mx - 0.2 * u, wallTop - 0.5 * u, 0.4 * u, 0.5 * u);
+    }
+
     lights.length = 0;
     const pick = seeded(4242);
     const spots = [
       [-2.55, 3.9], [-2.55, 2.6], [-1.45, 2.9], [-1.45, 1.7],
       [0, 4.5], [0, 3.3], [0, 2.1], [1.45, 2.9], [1.45, 1.7],
-      [2.55, 3.9], [2.55, 2.6], [-2.2, 1.9], [2.2, 1.9], [-0.9, 2.2], [0.9, 2.2]
+      [2.55, 3.9], [2.55, 2.6], [-2.2, 1.9], [2.2, 1.9], [-0.9, 2.2], [0.9, 2.2],
+      [-3.2, 3.6], [3.2, 3.6], [-3.2, 2.5], [3.2, 2.5], [-1.05, 3.4], [1.05, 3.4]
     ];
+    // The bridge torch flickers with the rest, so the light moves and not just
+    // the baked glow under it.
+    lights.push({ x: cx - span * 0.5, y: baseY - 0.5 * u, r: 0.12 * u, phase: 1.7, rate: 1.6 });
     for (const [tx, th] of spots) {
       if (pick() < 0.42) continue;
       lights.push({
@@ -247,6 +362,61 @@
       });
     }
     return { gateY: baseY - gateH * 0.5, top: Math.min(...towerTop) };
+  }
+
+  // A leafless tree, drawn from a seeded recursion. Every branch is a stroke, so
+  // it costs nothing per frame: the whole terrain layer is baked once.
+  function deadTree(g, x, baseY, size, lean, color) {
+    const r = seeded(Math.round(x * 13 + size * 7 + 1) || 1);
+    const tr = (bx, by, ang, len, w, depth) => {
+      if (depth > 4 || len < 1.2) return;
+      const ex = bx + Math.cos(ang) * len;
+      const ey = by + Math.sin(ang) * len;
+      g.beginPath();
+      g.moveTo(bx, by);
+      g.lineTo(ex, ey);
+      g.strokeStyle = color;
+      g.lineWidth = w;
+      g.lineCap = 'round';
+      g.stroke();
+      const kids = depth >= 3 ? 1 : 2;
+      for (let i = 0; i < kids; i++) {
+        const spread = (i === 0 ? -1 : 1) * (0.32 + r() * 0.5);
+        tr(ex, ey, ang + spread, len * (0.6 + r() * 0.16), Math.max(0.5, w * 0.68), depth + 1);
+      }
+    };
+    tr(x, baseY, -Math.PI / 2 + lean, size, Math.max(1, size * 0.11), 0);
+  }
+
+  // A distant winged silhouette that crosses the sky very slowly. It is one
+  // shape per frame, so it stays cheap; the wings flap in place of the parallax.
+  function dragon(g, x, y, s, flap, color) {
+    const h = s * (0.45 + 0.55 * flap);
+    g.fillStyle = color;
+    for (const dir of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(x, y - s * 0.05);
+      g.quadraticCurveTo(x + dir * s * 0.75, y - h, x + dir * s * 1.6, y - h * 0.15);
+      g.quadraticCurveTo(x + dir * s * 0.85, y + h * 0.2, x + dir * s * 0.15, y + s * 0.1);
+      g.closePath();
+      g.fill();
+    }
+    g.beginPath();
+    g.ellipse(x, y, s * 0.52, s * 0.16, 0, 0, TAU);
+    g.fill();
+    g.beginPath();
+    g.moveTo(x + s * 0.45, y - s * 0.04);
+    g.lineTo(x + s * 0.98, y - s * 0.2);
+    g.lineTo(x + s * 0.4, y + s * 0.1);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.moveTo(x - s * 0.5, y);
+    g.quadraticCurveTo(x - s * 1.1, y + s * 0.16, x - s * 1.5, y - s * 0.02);
+    g.lineTo(x - s * 1.5, y + s * 0.06);
+    g.quadraticCurveTo(x - s * 1.05, y + s * 0.28, x - s * 0.5, y + s * 0.12);
+    g.closePath();
+    g.fill();
   }
 
   function makeTerrain() {
@@ -269,6 +439,13 @@
     g.closePath();
     g.fillStyle = '#0b0810';
     g.fill();
+
+    // Bare wind-bent trees on the near slope. They are thin, but they are what
+    // gives the empty cliff a scale and an edge.
+    deadTree(g, cx - 5.1 * u, baseY + 0.35 * u, u * 1.7, -0.22, '#07050b');
+    deadTree(g, cx - 4.5 * u, baseY + 0.75 * u, u * 1.15, -0.3, '#08060d');
+    deadTree(g, W * 0.07, H * 1.16, u * 2.1, 0.28, '#040308');
+    deadTree(g, W * 0.015, H * 1.2, u * 1.5, 0.34, '#030206');
 
     ridge(g, H * 1.0, H * 0.03, 4.1, '#08060c');
     ridge(g, H * 1.06, H * 0.032, 1.2, '#050409');
@@ -366,6 +543,13 @@
       ctx.fillStyle = `rgba(255,250,235,${a})`;
       ctx.fill();
     }
+
+    // A slow silhouette crossing the high sky, behind the keep's skyline so it
+    // reads as distance. One shape per frame, drawn after the stars.
+    const dragonX = ((t * 0.0055 + W * 0.35) % (W + 260)) - 130;
+    const dragonY = H * 0.14 + Math.sin(t * 0.0004) * H * 0.02;
+    dragon(ctx, dragonX, dragonY, Math.max(7, Math.min(W, H) * 0.019),
+      Math.sin(t * 0.0016), 'rgba(6,5,10,0.8)');
 
     // The keep and its cliff move least: it is the far landmark.
     ctx.drawImage(terrainLayer, -shiftX * 6, -shiftY * 4 + scrollDrift * 0.02, W, H + EXTRA);

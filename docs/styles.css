@@ -394,3 +394,164 @@ footer.site { border-top: 1px solid var(--line); color: var(--ink-dim); font-siz
   word-break: break-word;
 }
 .article-body p.gap { height: 8px; margin: 0; }
+
+/* --- dark-fantasy additions ---------------------------------------------- */
+/* Everything below only adds layering and ornament. Colours, fonts, sizes and
+   the page structure are untouched, so the existing look stays. Each block is
+   decorative: removing it leaves the site as it was. */
+
+/* Drifting fog between the painted scene and the content. It sits on z-index 1,
+   where .scene-veil already lives, and never covers a card. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(48% 32% at 22% 78%, rgba(120, 112, 150, 0.08), transparent 70%),
+    radial-gradient(42% 28% at 72% 86%, rgba(138, 31, 43, 0.07), transparent 72%),
+    radial-gradient(60% 36% at 48% 96%, rgba(90, 84, 120, 0.07), transparent 74%);
+  filter: blur(6px);
+  animation: fog-drift 46s ease-in-out infinite alternate;
+}
+@keyframes fog-drift {
+  0%   { transform: translate3d(-2.5%, 0, 0) scale(1); }
+  50%  { transform: translate3d(1.5%, -1.5%, 0) scale(1.04); }
+  100% { transform: translate3d(2.5%, 0, 0) scale(1); }
+}
+
+/* A very light film grain, so the flat panels read as painted canvas. Kept at
+   low opacity; it is static, so it costs nothing per frame. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='140' height='140' filter='url(%23g)'/></svg>");
+}
+
+::selection { background: rgba(138, 31, 43, 0.55); color: #f6efe2; }
+
+/* Thin ember-lit scrollbar, so the chat panes match the night. */
+* { scrollbar-width: thin; scrollbar-color: rgba(201, 162, 75, 0.35) transparent; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(201, 162, 75, 0.5), rgba(138, 31, 43, 0.45));
+  border-radius: 6px;
+}
+
+/* A rune ornament under each page heading, like a ruled line in a grimoire. */
+.page > h2 {
+  position: relative;
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+}
+.page > h2::after {
+  content: "✦";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  font-size: 11px;
+  color: var(--gold);
+  opacity: 0.75;
+  letter-spacing: 0.5em;
+  text-shadow: -14px 0 0 rgba(201, 162, 75, 0.45), 14px 0 0 rgba(201, 162, 75, 0.45);
+}
+.page > h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 6px;
+  width: min(420px, 62%);
+  height: 1px;
+  background: linear-gradient(90deg, rgba(201, 162, 75, 0.5), rgba(138, 31, 43, 0.28) 55%, transparent);
+}
+
+/* Cards catch a faint inner glow on hover; the layout does not move. */
+.card { transition: border-color 0.3s, box-shadow 0.3s; }
+.card:hover {
+  border-color: rgba(201, 162, 75, 0.42);
+  box-shadow: var(--shadow), 0 0 24px rgba(201, 162, 75, 0.12) inset;
+}
+
+/* Small corner marks, as if each card were a framed plate. */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border-top: 1px solid rgba(201, 162, 75, 0.4);
+  border-right: 1px solid rgba(201, 162, 75, 0.4);
+  border-top-right-radius: 4px;
+  pointer-events: none;
+}
+
+/* Lists get a small arcane marker instead of a plain dot. */
+.rule-section li::marker,
+.card li::marker { color: var(--gold); }
+
+/* A slow halo behind the header, so it feels lit rather than flat. */
+header.site::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 75, 0.55) 50%, transparent);
+  pointer-events: none;
+}
+
+/* The active tab gains a slow-burning underline. */
+nav.tabs button { position: relative; transition: color 0.2s, border-color 0.2s, background 0.2s; }
+nav.tabs button.active::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: 2px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
+  animation: tab-ember 3.4s ease-in-out infinite;
+}
+@keyframes tab-ember {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
+/* Section headings inside cards get the same thin rule as pages, quieter. */
+.card > h3 {
+  position: relative;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.card > h3::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 72px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(201, 162, 75, 0.45), transparent);
+}
+
+/* Chat bubbles pick up a faint rim, so they sit on the scene like lit stone. */
+.msg.assistant { box-shadow: 0 0 0 1px rgba(201, 162, 75, 0.06) inset; }
+.msg.user { box-shadow: 0 0 0 1px rgba(201, 162, 75, 0.08) inset; }
+
+/* Buttons keep a soft ember at rest, brighter on hover. */
+.btn:hover { box-shadow: 0 0 22px rgba(201, 162, 75, 0.22); }
+.btn.primary:hover { box-shadow: 0 0 24px rgba(184, 51, 63, 0.4); }
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+  nav.tabs button.active::after { animation: none; }
+  body::after { opacity: 0.03; }
+}
