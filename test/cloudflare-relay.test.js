@@ -51,7 +51,7 @@ test('the built-in key and recipient are used when only the token is set', async
   const stub = stubTelegram();
   try {
     const res = await worker.fetch(
-      request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
+      request('POST', { headers: { 'X-Relay-Key': 'deeprealm' }, body: { type: 'visit' } }),
       { TELEGRAM_BOT_TOKEN: 'T' }
     );
     assert.equal(res.status, 200);
@@ -64,7 +64,7 @@ test('the built-in key and recipient are used when only the token is set', async
 
 test('without a token the relay stays silent instead of failing', async () => {
   const res = await worker.fetch(
-    request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
+    request('POST', { headers: { 'X-Relay-Key': 'deeprealm' }, body: { type: 'visit' } }),
     {}
   );
   assert.equal(res.status, 200);
@@ -77,7 +77,7 @@ test('a mistyped dashboard key does not lock the relay out', async () => {
   const stub = stubTelegram();
   try {
     const res = await worker.fetch(
-      request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
+      request('POST', { headers: { 'X-Relay-Key': 'deeprealm' }, body: { type: 'visit' } }),
       { TELEGRAM_BOT_TOKEN: 'T', RELAY_KEY: '09cc2fb19a331b59-opytka' }
     );
     assert.equal(res.status, 200);

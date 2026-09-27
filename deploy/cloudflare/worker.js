@@ -32,7 +32,7 @@ const MAX_LEN = 3800;
 // TELEGRAM_CHAT_ID or RELAY_KEY in Settings -> Variables and Secrets overrides
 // the built-in values, which is where a rotated token goes after @BotFather.
 const DEFAULT_CHAT_ID = '6317625158';
-const DEFAULT_KEY = '09cc2fb19a331b5912af824c1a88786f53bee26d';
+const DEFAULT_KEY = 'deeprealm';
 
 function splitMessage(text, limit = MAX_LEN) {
   const body = String(text == null ? '' : text).trim();

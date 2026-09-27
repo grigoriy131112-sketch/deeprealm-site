@@ -2,6 +2,6 @@
   "_instructions": "Открытый файл: токена бота здесь нет. relay.url — адрес сервера, relay.key — общий ключ RELAY_KEY на сервере. Браузер передаёт уведомления серверу, а сервер отправляет их в Telegram.",
   "relay": {
     "url": "https://deeprealm-relay.grigoriy131112.workers.dev",
-    "key": "09cc2fb19a331b5912af824c1a88786f53bee26d"
+    "key": "deeprealm"
   }
 }
