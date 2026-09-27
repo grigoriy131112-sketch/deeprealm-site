@@ -29,7 +29,7 @@ function stubTelegram() {
   };
 }
 
-const ENV = { TELEGRAM_BOT_TOKEN: 'T', TELEGRAM_CHAT_ID: '6317625158', RELAY_KEY: 'K' };
+const ENV = { TELEGRAM_BOT_TOKEN: '123456789:AAExampleTokenForTestsOnly1234567', TELEGRAM_CHAT_ID: '6317625158', RELAY_KEY: 'K' };
 
 test('the relay rejects an unknown path and method', async () => {
   const notFound = await worker.fetch(request('POST', { path: '/other', body: {} }), ENV);
