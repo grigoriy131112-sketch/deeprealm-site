@@ -385,3 +385,65 @@ test('finishing a staff interview returns the hand-off without calling the model
   assert.match(data.reply, /Напиши ему, что я тебя проверил/);
 });
 
+
+test('the static-site relay refuses a request without the key', async () => {
+  const previous = process.env.RELAY_KEY;
+  process.env.RELAY_KEY = 'secret-key';
+  const server = app.listen(0);
+  const port = server.address().port;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'visit', session: 's', page: 'home' })
+    });
+    assert.equal(res.status, 401, 'a wrong key never reaches the bot');
+  } finally {
+    server.close();
+    if (previous === undefined) delete process.env.RELAY_KEY; else process.env.RELAY_KEY = previous;
+  }
+});
+
+test('the static-site relay is closed when no key is configured', async () => {
+  const previous = process.env.RELAY_KEY;
+  delete process.env.RELAY_KEY;
+  const server = app.listen(0);
+  const port = server.address().port;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Relay-Key': 'anything' },
+      body: JSON.stringify({ type: 'visit', session: 's' })
+    });
+    assert.equal(res.status, 401, 'an unconfigured relay must not be an open relay');
+  } finally {
+    server.close();
+    if (previous === undefined) delete process.env.RELAY_KEY; else process.env.RELAY_KEY = previous;
+  }
+});
+
+test('the static-site relay accepts the right key and answers the preflight', async () => {
+  const previous = process.env.RELAY_KEY;
+  process.env.RELAY_KEY = 'secret-key';
+  const server = app.listen(0);
+  const port = server.address().port;
+  try {
+    const preflight = await fetch(`http://127.0.0.1:${port}/api/notify`, { method: 'OPTIONS' });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get('access-control-allow-origin'), '*', 'the Pages page is on another origin');
+
+    const res = await fetch(`http://127.0.0.1:${port}/api/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Relay-Key': 'secret-key' },
+      body: JSON.stringify({ type: 'visit', session: 's', page: 'home' })
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.ok, true);
+    // Telegram is not configured in tests, so the relay reports it rather than failing.
+    assert.equal(typeof data.telegram, 'boolean');
+  } finally {
+    server.close();
+    if (previous === undefined) delete process.env.RELAY_KEY; else process.env.RELAY_KEY = previous;
+  }
+});

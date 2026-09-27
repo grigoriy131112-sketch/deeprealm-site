@@ -50,6 +50,10 @@ const articleStore = createArticleStore(ARTICLES_PATH, {
 setEngineArticles(articleStore.all());
 
 const PORT = process.env.PORT || 3000;
+// Shared secret for the static-site relay (`/api/notify`). Without it the relay
+// refuses every request, so the bot token stays server-side. Read per request so a
+// value loaded from `.env` after module load is still honoured.
+const relayKey = () => String(process.env.RELAY_KEY || '').trim();
 
 // The bot token is a secret, so it is normally set in the host's environment. A
 // checked-in file is also accepted, which is what makes the static build work:
@@ -243,7 +247,9 @@ async function callFreeModel(messages, options = {}) {
   }
 }
 
-setFreeModelCaller((messages, options) => callFreeModel(messages, options));
+// Tests must not reach the free endpoint either: it is routinely down, which made
+// the suite answer from a different layer on different runs.
+if (process.env.NODE_ENV !== 'test') setFreeModelCaller((messages, options) => callFreeModel(messages, options));
 
 // The live-speech layer and the owner notifier. Both are optional: with no bot
 // token the notifications report `skipped`, and with a dead free endpoint the
@@ -254,7 +260,10 @@ const notifier = createNotifier({
 });
 if (!notifier.enabled) console.log('[telegram] уведомления выключены: нет TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID');
 
-const liveSpeaker = createLiveSpeaker({
+// The live-speech layer is disabled in tests: the suite must answer
+// deterministically from the engine and never depend on an external endpoint
+// that is up one run and down the next.
+const liveSpeaker = process.env.NODE_ENV === 'test' ? null : createLiveSpeaker({
   env: process.env,
   baseUrl: process.env.LIVE_LLM_BASE_URL,
   model: process.env.LIVE_LLM_MODEL,
@@ -283,12 +292,44 @@ app.post('/api/visit', (req, res) => {
   res.json({ ok: true, telegram: notifier.enabled });
 });
 
-// The same visit ping, sent by the static site instead of the owner's browser.
-// GitHub Pages cannot run this server, so the page posts to a relay the owner
-// controls; nothing secret is exposed by accepting the ping.
+// The static site (GitHub Pages) cannot run this server, so it posts its
+// notifications here and the server relays them to Telegram. That is what keeps
+// the bot token private: it never leaves the server, only the relay key does, and
+// the relay key alone cannot be used to reach the bot directly.
+//
+// CORS is required because the page lives on a different origin. The route is
+// write-only and rate-limited, so a wrong key learns nothing beyond "no".
+app.use('/api/notify', (req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, X-Relay-Key');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// A crude per-IP brake: enough to stop a script from using the relay as a spam
+// cannon, without pulling in a dependency.
+const relayHits = new Map();
+function relayAllowed(ip) {
+  const now = Date.now();
+  const hits = (relayHits.get(ip) || []).filter((t) => now - t < 60000);
+  hits.push(now);
+  relayHits.set(ip, hits);
+  if (relayHits.size > 1000) relayHits.clear();
+  return hits.length <= 30;
+}
+
 app.post('/api/notify', (req, res) => {
-  const { type } = req.body || {};
-  const body = req.body || {};
+  const key = String(req.get('x-relay-key') || (req.body && req.body.key) || '').trim();
+  // With no key configured the relay is closed, so accidentally deploying without
+  // one cannot turn the endpoint into an open relay.
+  const expected = relayKey();
+  if (!expected || key !== expected) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  if (!relayAllowed(req.ip || 'unknown')) return res.status(429).json({ ok: false, error: 'too_many' });
+
+  const body = { ...(req.body || {}) };
+  delete body.key;
+  const type = body.type;
   const work = type === 'staff' ? notifier.staff(body) : type === 'visit' ? notifier.visit(body) : notifier.sheet(body);
   work.catch(() => {});
   res.json({ ok: true, telegram: notifier.enabled });

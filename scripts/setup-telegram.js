@@ -16,8 +16,21 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FILE = path.join(root, 'data', 'telegram.json');
+const ENV_FILE = path.join(root, '.env');
 const API = 'https://api.telegram.org';
+
+// Upsert into .env so an existing bot token is replaced rather than duplicated.
+function writeEnv(values) {
+  const current = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : '';
+  const lines = current.split('\n').filter((l) => l.trim() !== '');
+  const kept = lines.filter((l) => !Object.prototype.hasOwnProperty.call(values, l.split('=')[0].trim()));
+  for (const [key, value] of Object.entries(values)) {
+    if (value === '') continue;
+    kept.push(`${key}=${value}`);
+  }
+  fs.writeFileSync(ENV_FILE, `${kept.join('\n')}\n`, { mode: 0o600 });
+  try { fs.chmodSync(ENV_FILE, 0o600); } catch { /* not fatal on every filesystem */ }
+}
 
 function parseArgs(argv) {
   const out = { token: '', to: '' };
@@ -74,13 +87,12 @@ async function main() {
     console.log(`Нашёл получателя: ${chatIds.join(', ')}`);
   }
 
-  const config = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : {};
-  config.token = token;
-  config.chatId = chatIds[0];
-  if (chatIds.length > 1) config.chatIds = chatIds.slice(1);
-  else delete config.chatIds;
-  fs.writeFileSync(FILE, `${JSON.stringify(config, null, 2)}\n`);
-  console.log(`Записал в ${path.relative(root, FILE)}`);
+  writeEnv({
+    TELEGRAM_BOT_TOKEN: token,
+    TELEGRAM_CHAT_ID: chatIds[0],
+    TELEGRAM_CHAT_IDS: chatIds.slice(1).join(',')
+  });
+  console.log(`Записал в ${path.relative(root, ENV_FILE)} (файл в .gitignore, в GitHub не попадёт)`);
 
   const sent = await fetch(`${API}/bot${token}/sendMessage`, {
     method: 'POST',

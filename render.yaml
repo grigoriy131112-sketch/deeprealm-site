@@ -31,3 +31,8 @@ services:
       - key: TELEGRAM_CHAT_ID
       - key: TELEGRAM_CHAT_IDS
         sync: false
+      # The static site (GitHub Pages) relays its notifications through this
+      # server so the bot token never reaches the browser. The value goes in the
+      # public docs/data/telegram.json as relay.key.
+      - key: RELAY_KEY
+        sync: false

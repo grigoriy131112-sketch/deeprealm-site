@@ -4,15 +4,15 @@
 // Interviewer approves. Everything goes to a bot the owner owns, so nothing is
 // sent anywhere else and no third-party service sees the players' data.
 //
-// The bot token is a secret, so it is never committed: it comes from the
-// environment or from `data/telegram.json`, which ships empty. Until the owner
-// fills it in, every call is a no-op that reports `skipped`, so the site works
-// and the chats never wait on a missing notification.
+// The bot token is a secret, so it is never committed: on the server it comes from
+// `.env` / the environment. Until the owner sets it, every call is a no-op that
+// reports `skipped`, so the site works and the chats never wait on a missing
+// notification.
 //
-// This file is bundled into the browser too, where notifications are sent
-// directly to Telegram. That is what makes them work on GitHub Pages, which
-// cannot run a server; the token is public there, which is why the owner should
-// use a dedicated bot.
+// This file is bundled into the browser too, but the browser never sees the token:
+// on GitHub Pages there is no server, so the page posts to the owner's server at
+// /api/notify and the server relays to Telegram. That keeps the bot private while
+// the static site still reaches the owner.
 
 const API_ROOT = 'https://api.telegram.org';
 

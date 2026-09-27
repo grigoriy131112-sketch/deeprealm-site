@@ -248,8 +248,10 @@ permission is missing. Probe that way before starting any long operation.
   one request runs at a time, so a broken endpoint costs one timeout and nothing
   after it. The same rule applies to the free `FREE_LLM_*` path (5 minute breaker).
 - `telegram.js` sends owner notifications. With no token it is a no-op that
-  reports `skipped`; it must never throw into a chat. The bot token lives in
-  `data/telegram.json` (empty by default) or in `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`.
+  reports `skipped`; it must never throw into a chat. On the server the bot token
+  lives in `.env` / `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` and never in a
+  tracked file. `data/telegram.json` (also copied to `docs/`) is public and holds
+  only `relay.url`/`relay.key`.
 - Notifications cover three things the owner asked for: every site visit
   (`/api/visit`, throttled per browser session), every approved character/race/
   class sheet, and every answer a staff candidate gave (paired question → answer).
@@ -257,10 +259,12 @@ permission is missing. Probe that way before starting any long operation.
   no longer sends the player to an application desk. The closing line comes from
   `sentToOwnerText`: it says the sheet was sent, or names the owner when delivery
   failed. Never claim delivery that did not happen.
-- On GitHub Pages the page cannot reach a server, so `chat-browser.js` sends the
-  notifications to Telegram directly and reads `docs/data/telegram.json`. That
-  token is public there - use a dedicated bot. `scripts/build-pages.js` copies the
-  file but treats it as optional, because a checkout without it must still build.
+- On GitHub Pages there is no server, so the page cannot hold the bot token. It
+  posts to the owner's server at `POST /api/notify` with the `X-Relay-Key` header,
+  and the server forwards to Telegram. The relay key is useless without the
+  server, so the bot stays private. With no `RELAY_KEY` set the route answers 401
+  - it must never become an open relay. `scripts/build-pages.js` treats
+  `data/telegram.json` as optional, because a checkout without it must still build.
 - `public/app.js` treats only a 2xx `/api/visit` as "our server handled it";
   static hosting answers `/api` with its own 404 page, which is a response, not a
   rejection, and would otherwise silently swallow the visit ping.
@@ -288,6 +292,29 @@ permission is missing. Probe that way before starting any long operation.
   `flattenSystem` folds the rules into a user message. It is also unreliable
   (seen returning `ENOSPC`); it is a stopgap, not a substitute for `LLM_API_KEY`.
 
+## Owner notifications without exposing the bot (2026-09-27)
+
+- The site is served from `docs/` by GitHub Pages, which is static: it cannot hold
+  the bot token and must not, because `docs/` is a public repository folder. The
+  earlier "token in `docs/data/telegram.json`" design was therefore unsafe and was
+  replaced.
+- The safe design: the page posts to the owner's server at `POST /api/notify`,
+  which relays to Telegram. `data/telegram.json` (and its `docs/` copy) carries
+  only `relay.url` + `relay.key`. The key is useless without the server, so the
+  bot stays private. `scripts/set-relay.js <server-url>` writes that file and
+  verifies the link by sending a real notification.
+- `/api/notify` reads `RELAY_KEY` **per request** and answers 401 when it is unset
+  or wrong: a deploy without the variable must never become an open relay. It
+  carries CORS (`*`) plus a 30/min per-IP brake, because the Pages origin is not
+  the server origin. Tests in `test/server.test.js` pin all three cases.
+- Secrets live only in `.env` (gitignored) / host env vars:
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_CHAT_IDS`, `RELAY_KEY`.
+  `scripts/setup-telegram.js` writes them to `.env`, never to a tracked file.
+- NOTE: `deeprealm-site.onrender.com` currently answers 404 on every path, so no
+  server is live in production. Until a server is deployed with `RELAY_KEY`, the
+  Pages site has no owner notifications, and the chats work only in the browser.
+  The sandbox cannot keep a server running, so this needs the owner's host.
+
 ## Interview loops and story sheets (fixed 2026-09-26)
 
 - Three separate bugs made the interviewers loop forever, all in `chat-core.js`
@@ -309,6 +336,11 @@ permission is missing. Probe that way before starting any long operation.
 - An approved plot is forwarded to the owner but never published as an article:
   `publishFromSheet` returns `null` for `story`. `detectSheetKind` must be wired
   via `setSheetDetector` in any test that approves a sheet.
-- `telegram.js` accepts several recipients: `chatIds` in `data/telegram.json` or
-  `TELEGRAM_CHAT_IDS` next to the primary `chatId`. `scripts/setup-telegram.js`
-  reads the id from the bot own `getUpdates`, so @userinfobot is not needed.
+- `telegram.js` accepts several recipients: `TELEGRAM_CHAT_IDS` next to the
+  primary `TELEGRAM_CHAT_ID`. `scripts/setup-telegram.js` reads the id from the
+  bot's own `getUpdates` (so @userinfobot is not needed) and writes the token and
+  ids into `.env`, never into a tracked file. `scripts/set-relay.js` then points
+  the public site at the server.
+- The suite must not touch the network: with `NODE_ENV=test` the live-speech and
+  free-endpoint layers are not wired, because the public endpoint is up on one run
+  and down on the next, which made `source` flip between `live` and `local`.

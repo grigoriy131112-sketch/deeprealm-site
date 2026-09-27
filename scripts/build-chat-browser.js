@@ -111,31 +111,56 @@ ${parts.join('\n\n')}
   });
   if (speaker) setLiveCaller(function (messages, options) { return speaker(messages, options); });
 
-  // The owner notifier. On static hosting there is no server to relay through, so
-  // the page sends to Telegram directly; the token lives in data/telegram.json,
-  // which ships empty. Until the owner fills it in every call is a no-op.
-  var notifier = createNotifier({});
+  // The owner notifier on static hosting.
+  //
+  // GitHub Pages cannot run a server, so the page cannot hold the bot token. It
+  // posts instead to the owner's own server at /api/notify, which relays the
+  // message to Telegram. Only the relay key travels to the browser, and that key
+  // is useless without the server, so the bot stays private. With no relay
+  // configured every call is a no-op and the site simply has no notifications.
+  var relay = null;
   var notifyReady = false;
 
+  function relayBase() {
+    if (typeof relay === 'object' && relay && relay.base) return relay.base;
+    return '';
+  }
+
   function loadTelegram() {
-    if (notifyReady) return Promise.resolve(notifier);
+    if (notifyReady) return Promise.resolve(relay);
     notifyReady = true;
     return fetch('data/telegram.json')
       .then(function (res) { return res.ok ? res.json() : null; })
       .catch(function () { return null; })
       .then(function (file) {
-        if (file) notifier = createNotifier({ config: telegramConfig({}, file) });
+        var cfg = (file && file.relay) || null;
+        var base = cfg && cfg.url ? String(cfg.url) : '';
+        while (base.length && base.charAt(base.length - 1) === '/') base = base.slice(0, -1);
+        if (cfg && base && cfg.key) relay = { base: base, key: String(cfg.key) };
         setNotifier(function (info) {
-          return notifier.sheet(info);
+          return sendRelay('sheet', info);
         });
-        return notifier;
+        return relay;
       });
+  }
+
+  function sendRelay(type, info) {
+    if (!relay) return Promise.resolve({ ok: false, skipped: true, reason: 'not_configured' });
+    return fetch(relayBase() + '/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Relay-Key': relay.key },
+      body: JSON.stringify(Object.assign({}, info || {}, { type: type }))
+    }).then(function (res) {
+      return res.ok ? { ok: true } : { ok: false, error: 'relay ' + res.status };
+    }).catch(function (err) {
+      return { ok: false, error: String(err && err.message || err) };
+    });
   }
 
   // One ping per browser session, so an open tab reloading does not spam the owner.
   function notifyVisit(info) {
-    return loadTelegram().then(function (n) {
-      return n.visit(info || {});
+    return loadTelegram().then(function () {
+      return sendRelay('visit', info || {});
     });
   }
 
