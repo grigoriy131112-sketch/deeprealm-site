@@ -139,8 +139,9 @@ tokenButton.onclick = () => {
 document.getElementById('copy').onclick = async () => {
   say('Готовлю код…');
   try {
+    const t = token();
     const text = await code();
-    const hasToken = text.includes("const DEFAULT_TOKEN = '" + token() + "'");
+    const hasToken = Boolean(t) && text.includes("const DEFAULT_TOKEN = '" + t + "'");
     await copyText(text, document.getElementById('fallback'));
     say(hasToken
       ? 'Готово! Код с токеном скопирован. Вставьте его в Cloudflare.'
