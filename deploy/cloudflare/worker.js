@@ -34,14 +34,24 @@ const MAX_LEN = 3800;
 const DEFAULT_CHAT_ID = '6317625158';
 const DEFAULT_KEY = 'deeprealm';
 
-// A variable typed by hand on a tablet can carry a stray space or the wrong case,
-// so the token is accepted under a few spellings rather than one exact name.
+// A variable typed by hand on a tablet can carry a stray space, the wrong case or
+// a different name, so the token is recognised by its value shape as well as by a
+// few common names. Without this a correctly pasted token could sit unused simply
+// because its variable was called something else.
+const TOKEN_SHAPE = /\d{6,}:[A-Za-z0-9_-]{30,}/;
+const TOKEN_NAMES = new Set(['TELEGRAM_BOT_TOKEN', 'TELEGRAM_TOKEN', 'BOT_TOKEN', 'TOKEN']);
+
 function findToken(env) {
-  const wanted = new Set(['TELEGRAM_BOT_TOKEN', 'TELEGRAM_TOKEN', 'BOT_TOKEN', 'TOKEN']);
-  for (const [key, value] of Object.entries(env || {})) {
-    if (!wanted.has(String(key).trim().toUpperCase())) continue;
+  const entries = Object.entries(env || {});
+  for (const [key, value] of entries) {
+    if (TOKEN_NAMES.has(String(key).trim().toUpperCase())) {
+      const token = String(value || '').trim();
+      if (token) return token;
+    }
+  }
+  for (const [, value] of entries) {
     const token = String(value || '').trim();
-    if (token) return token;
+    if (TOKEN_SHAPE.test(token)) return token;
   }
   return '';
 }

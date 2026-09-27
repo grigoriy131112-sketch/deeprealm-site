@@ -126,6 +126,19 @@ test('the token is found under a differently spelled variable name', async () =>
   }
 });
 
+test('the token is found by its shape even under an unexpected name', async () => {
+  const stub = stubTelegram();
+  try {
+    const res = await worker.fetch(
+      request('POST', { headers: { 'X-Relay-Key': 'deeprealm' }, body: { type: 'visit' } }),
+      { TELEGRAM_X: '123456789:AAExampleTokenForTestsOnly1234567' }
+    );
+    assert.equal((await res.json()).telegram, true);
+  } finally {
+    stub.restore();
+  }
+});
+
 test('the public worker file never contains the bot token', async () => {
   // The repository is public, so a committed token would let anyone send messages
   // as the bot. This guards against it being pasted back in later.
