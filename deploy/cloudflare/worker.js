@@ -23,14 +23,14 @@ const API_ROOT = 'https://api.telegram.org';
 // Telegram allows about 4096 characters per message. Long sheets are split.
 const MAX_LEN = 3800;
 
-// The recipient and the shared key are baked in so only one thing has to be set
-// in the dashboard: the bot token. The token is deliberately NOT here, because
-// this repository is public and a committed token could be used by anyone to send
-// messages as the bot. The key is safe to publish: it only gates the relay, and
-// the same value already ships in data/telegram.json that the browser reads.
-// Setting TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID or RELAY_KEY in
-// Settings -> Variables and Secrets overrides these built-in values, which is
-// where the token goes after being rotated in @BotFather.
+// The recipient and the shared key have working built-in defaults, so the only
+// thing that ever has to be set in the dashboard is the bot token. A dashboard
+// RELAY_KEY is also accepted alongside the built-in one, so a mistyped value
+// there cannot lock the relay out. The bot token is deliberately NOT here,
+// because this repository is public and a committed token could be used by
+// anyone to send messages as the bot. Setting TELEGRAM_BOT_TOKEN,
+// TELEGRAM_CHAT_ID or RELAY_KEY in Settings -> Variables and Secrets overrides
+// the built-in values, which is where a rotated token goes after @BotFather.
 const DEFAULT_CHAT_ID = '6317625158';
 const DEFAULT_KEY = '09cc2fb19a331b5912af824c1a88786f53bee26d';
 
@@ -131,9 +131,9 @@ export default {
     // one cannot turn the Worker into an open relay.
     // Keyed by default so the code works as soon as it is pasted. Setting
     // RELAY_KEY in the dashboard overrides it.
-    const expected = String(env.RELAY_KEY || DEFAULT_KEY).trim();
+    const expected = [DEFAULT_KEY, String(env.RELAY_KEY || '').trim()].filter(Boolean);
     const given = String(request.headers.get('X-Relay-Key') || body.key || '').trim();
-    if (!expected || given !== expected) return json({ ok: false, error: 'unauthorized' }, 401);
+    if (!given || !expected.includes(given)) return json({ ok: false, error: 'unauthorized' }, 401);
 
     const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
     const to = parseChatIds([(env.TELEGRAM_CHAT_IDS || ''), env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID]);

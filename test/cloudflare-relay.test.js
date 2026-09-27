@@ -71,7 +71,23 @@ test('without a token the relay stays silent instead of failing', async () => {
   assert.deepEqual(await res.json(), { ok: true, telegram: false });
 });
 
-test('a variable in the dashboard overrides the built-in value', async () => {
+test('a mistyped dashboard key does not lock the relay out', async () => {
+  // The built-in key stays valid, so an error while copying the value into the
+  // dashboard cannot stop notifications.
+  const stub = stubTelegram();
+  try {
+    const res = await worker.fetch(
+      request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
+      { TELEGRAM_BOT_TOKEN: 'T', RELAY_KEY: '09cc2fb19a331b59-opytka' }
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).telegram, true);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a dashboard key is accepted as well', async () => {
   const stub = stubTelegram();
   try {
     const res = await worker.fetch(
@@ -85,10 +101,10 @@ test('a variable in the dashboard overrides the built-in value', async () => {
   }
 });
 
-test('an override key makes the built-in key stop working', async () => {
+test('an unrelated key is still refused', async () => {
   const res = await worker.fetch(
-    request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
-    { RELAY_KEY: 'a-different-key' }
+    request('POST', { headers: { 'X-Relay-Key': 'something-else' }, body: { type: 'visit' } }),
+    { TELEGRAM_BOT_TOKEN: 'T' }
   );
   assert.equal(res.status, 401);
 });
