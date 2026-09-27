@@ -34,6 +34,18 @@ const MAX_LEN = 3800;
 const DEFAULT_CHAT_ID = '6317625158';
 const DEFAULT_KEY = 'deeprealm';
 
+// A variable typed by hand on a tablet can carry a stray space or the wrong case,
+// so the token is accepted under a few spellings rather than one exact name.
+function findToken(env) {
+  const wanted = new Set(['TELEGRAM_BOT_TOKEN', 'TELEGRAM_TOKEN', 'BOT_TOKEN', 'TOKEN']);
+  for (const [key, value] of Object.entries(env || {})) {
+    if (!wanted.has(String(key).trim().toUpperCase())) continue;
+    const token = String(value || '').trim();
+    if (token) return token;
+  }
+  return '';
+}
+
 function splitMessage(text, limit = MAX_LEN) {
   const body = String(text == null ? '' : text).trim();
   if (!body) return [];
@@ -135,7 +147,7 @@ export default {
     const given = String(request.headers.get('X-Relay-Key') || body.key || '').trim();
     if (!given || !expected.includes(given)) return json({ ok: false, error: 'unauthorized' }, 401);
 
-    const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
+    const token = findToken(env);
     const to = parseChatIds([(env.TELEGRAM_CHAT_IDS || ''), env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID]);
     if (!token || !to.length) return json({ ok: true, telegram: false });
 

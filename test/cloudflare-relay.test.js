@@ -109,6 +109,23 @@ test('an unrelated key is still refused', async () => {
   assert.equal(res.status, 401);
 });
 
+test('the token is found under a differently spelled variable name', async () => {
+  // Variables are typed by hand, so accept common spellings instead of one exact
+  // name. This is what stops a working setup from silently sending nothing.
+  for (const name of ['TELEGRAM_BOT_TOKEN', 'Telegram_Bot_Token', 'BOT_TOKEN', 'TOKEN']) {
+    const stub = stubTelegram();
+    try {
+      const res = await worker.fetch(
+        request('POST', { headers: { 'X-Relay-Key': 'deeprealm' }, body: { type: 'visit' } }),
+        { [name]: 'T' }
+      );
+      assert.equal((await res.json()).telegram, true, `a token stored as ${name} was not used`);
+    } finally {
+      stub.restore();
+    }
+  }
+});
+
 test('the public worker file never contains the bot token', async () => {
   // The repository is public, so a committed token would let anyone send messages
   // as the bot. This guards against it being pasted back in later.
