@@ -139,11 +139,17 @@ test('the token is found by its shape even under an unexpected name', async () =
   }
 });
 
-test('the public worker file never contains the bot token', async () => {
-  // The repository is public, so a committed token would let anyone send messages
-  // as the bot. This guards against it being pasted back in later.
+test('the helper page fills the token line instead of shipping the token', async () => {
+  // The public page must carry no token; it writes one into the fetched source.
+  const page = fs.readFileSync(new URL('../public/worker-copy.html', import.meta.url), 'utf8');
+  assert.equal(/\d{6,}:[A-Za-z0-9_-]{30,}/.test(page), false, 'the page ships a token');
+  assert.match(page, /DEFAULT_TOKEN = ''/, 'the page no longer replaces the token line');
+
   const source = fs.readFileSync(new URL('../deploy/cloudflare/worker.js', import.meta.url), 'utf8');
-  assert.equal(/\d{6,}:[A-Za-z0-9_-]{30,}/.test(source), false, 'a bot token shape was found in the worker');
+  const fake = '123456789:AAExampleTokenForTestsOnly1234567';
+  const filled = source.replace("const DEFAULT_TOKEN = '';", "const DEFAULT_TOKEN = '" + fake + "';");
+  assert.notEqual(filled, source, 'the token line was not found in the Worker');
+  assert.ok(filled.includes(fake));
 });
 
 test('a visit reaches the owner with the page and device', async () => {

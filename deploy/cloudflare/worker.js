@@ -34,6 +34,11 @@ const MAX_LEN = 3800;
 const DEFAULT_CHAT_ID = '6317625158';
 const DEFAULT_KEY = 'deeprealm';
 
+// Left empty in the repository on purpose. The copy helper page fills this line in
+// when the owner asks it to, so the token travels into the Worker together with
+// the code and never has to be typed into a dashboard field.
+const DEFAULT_TOKEN = '';
+
 // A variable typed by hand on a tablet can carry a stray space, the wrong case or
 // a different name, so the token is recognised by its value shape as well as by a
 // few common names. Without this a correctly pasted token could sit unused simply
@@ -53,7 +58,7 @@ function findToken(env) {
     const token = String(value || '').trim();
     if (TOKEN_SHAPE.test(token)) return token;
   }
-  return '';
+  return DEFAULT_TOKEN;
 }
 
 function splitMessage(text, limit = MAX_LEN) {
