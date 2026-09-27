@@ -236,6 +236,32 @@ test('a sent message stays visible when nothing can answer', async () => {
 
 // The whole point of shipping the rules to the browser: with no server at all the
 // chat still answers, so a sleeping host is invisible to a visitor.
+// The free model takes ten to twenty-five seconds, so its wording lands on the
+// message that is already on screen instead of being awaited and dropped.
+test('the live wording replaces the shown answer when it arrives', async () => {
+  const shaped = knowledgeView(KNOWLEDGE);
+  const fetchImpl = async (url) => {
+    const u = String(url);
+    if (u.includes('pollinations.ai')) {
+      await sleep(30);
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Привет, путник, я живой ответ.' } }] }) };
+    }
+    if (u.includes('/api/')) throw new TypeError('Failed to fetch');
+    if (u.includes('data/articles.json')) return { ok: true, status: 200, json: async () => ARTICLES };
+    if (u.includes('data/knowledge.raw.json')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
+    if (u.includes('data/knowledge.json')) return { ok: true, status: 200, json: async () => shaped };
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  const win = await boot({}, { fetch: fetchImpl });
+  await send(win, 'guide');
+
+  const log = win.document.getElementById('guideLog');
+  assert.ok(!/живой ответ/.test(log.textContent), 'the instant answer is shown first');
+  await sleep(120);
+  assert.match(log.textContent, /живой ответ/, 'the live wording takes its place');
+  assert.match(log.textContent, /конец/, 'the replaced text keeps the closing word');
+});
+
 test('with no server the chat answers in the browser', async () => {
   const win = await boot({}, { fetch: browserOnlyFetch() });
   await send(win, 'guide');
