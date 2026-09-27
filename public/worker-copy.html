@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deeprealm — код для Cloudflare</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 20px; background: #12141a; color: #e8e8ef;
+         font: 17px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p { color: #b9bcc9; margin: 0 0 18px; }
+  button { display: block; width: 100%; padding: 20px; font-size: 20px; font-weight: 700;
+           border: 0; border-radius: 14px; background: #6c5ce7; color: #fff; }
+  button:active { background: #5a4bd1; }
+  #status { margin-top: 16px; font-size: 17px; min-height: 1.5em; }
+  .ok { color: #4ade80; }
+  .bad { color: #f87171; }
+  ol { color: #b9bcc9; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  textarea { width: 100%; height: 120px; margin-top: 16px; border-radius: 10px;
+             background: #1c1f28; color: #cfd3e0; border: 1px solid #2d313d;
+             font: 12px/1.4 ui-monospace, monospace; }
+  details { margin-top: 20px; }
+  summary { color: #9aa0b4; }
+</style>
+</head>
+<body>
+<h1>Код для Cloudflare</h1>
+<p>Нажмите кнопку — код скопируется вместе с токеном бота. Останется вставить его в Cloudflare.</p>
+
+<p id="need" class="bad"></p>
+<button id="token">Скопировать только токен</button>
+<button id="copy" style="margin-top:12px">Скопировать код с токеном</button>
+<div id="status"></div>
+
+<details>
+  <summary>Что делать дальше</summary>
+  <ol>
+    <li>Откройте dash.cloudflare.com → Compute (Workers) → <b>deeprealm-relay</b>.</li>
+    <li>Нажмите «Редактировать код» (Edit code).</li>
+    <li>Выделите всё и удалите.</li>
+    <li>Вставьте скопированный код (долгое нажатие → «Вставить»).</li>
+    <li>Нажмите «Развернуть» (Deploy).</li>
+  </ol>
+  <p>Переменные после этого не нужны — всё уже внутри кода.</p>
+</details>
+
+<details>
+  <summary>Если кнопка не сработала</summary>
+  <p>Скопируйте текст вручную из поля ниже.</p>
+  <textarea id="fallback" readonly></textarea>
+</details>
+
+<script>
+const WORKER_URL = 'https://raw.githubusercontent.com/grigoriy131112-sketch/deeprealm-site/main/deploy/cloudflare/worker.js';
+const TOKEN_STORE = 'deeprealm.token';
+const status = document.getElementById('status');
+const need = document.getElementById('need');
+const tokenButton = document.getElementById('token');
+
+function say(text, cls) {
+  status.textContent = text;
+  status.className = cls || '';
+}
+
+// The token is never published with the page. It is typed or pasted once here and
+// kept in this browser only, so the public site carries no bot secret.
+function token() {
+  return (localStorage.getItem(TOKEN_STORE) || '').trim();
+}
+
+function askToken() {
+  const entered = prompt('Вставьте токен бота от @BotFather:', token());
+  if (entered === null) return '';
+  const value = entered.trim();
+  localStorage.setItem(TOKEN_STORE, value);
+  refresh();
+  return value;
+}
+
+function refresh() {
+  const t = token();
+  if (t) {
+    need.textContent = '';
+    tokenButton.textContent = 'Токен сохранён. Изменить токен';
+  } else {
+    need.textContent = 'Сначала укажите токен бота — без него код будет без токена.';
+    tokenButton.textContent = 'Указать токен';
+  }
+  return t;
+}
+
+async function copyText(text, box) {
+  box.value = text;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    box.removeAttribute('readonly');
+    box.focus();
+    box.select();
+    document.execCommand('copy');
+    box.setAttribute('readonly', '');
+    return true;
+  }
+}
+
+async function code() {
+  const res = await fetch(WORKER_URL, { cache: 'no-store' });
+  if (!res.ok) throw new Error('код не загрузился: ' + res.status);
+  const source = await res.text();
+  const t = refresh();
+  if (!t) return source;
+  const filled = source.replace("const DEFAULT_TOKEN = '';", "const DEFAULT_TOKEN = '" + t + "';");
+  if (filled === source) throw new Error('в коде не нашлось место для токена');
+  return filled;
+}
+
+tokenButton.onclick = () => {
+  if (askToken()) say('Токен сохранён в этом браузере.', 'ok');
+};
+
+document.getElementById('copy').onclick = async () => {
+  say('Готовлю код…');
+  try {
+    const text = await code();
+    const hasToken = text.includes("const DEFAULT_TOKEN = '" + token() + "'");
+    await copyText(text, document.getElementById('fallback'));
+    say(hasToken
+      ? 'Готово! Код с токеном скопирован. Вставьте его в Cloudflare.'
+      : 'Скопировано без токена. Нажмите «Указать токен» и повторите.', hasToken ? 'ok' : 'bad');
+  } catch (err) {
+    say('Ошибка: ' + err.message, 'bad');
+  }
+};
+
+refresh();
+</script>
+</body>
+</html>
