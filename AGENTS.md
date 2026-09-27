@@ -98,6 +98,31 @@ changing it:
   as a silhouette. Keep them dark and let the warm glow behind the keep (drawn
   in `makeSky`) supply the edge.
 
+### Dark-fantasy layer (added 2026-09-27)
+
+This was a request to make the site more dark fantasy by *adding*, never by
+changing what was there. Keep that rule: the additions must be removable
+without restoring any old value.
+
+- `scene.js`: the keep gained a rear wall, far turrets, moonlit rim light on the
+  roofs, spires with hanging banners, parapets, more lit windows, and a
+  torch-lit bridge from the gate. The sky gained baked violet nebula streaks.
+  The terrain gained bare wind-bent trees (`deadTree`, a seeded recursion). A
+  distant winged silhouette (`dragon`) crosses the sky. All of it is baked into
+  `skyLayer`/`terrainLayer` except the dragon, which is one shape per frame.
+- `styles.css`: the block after `.article-body p.gap` is the whole addition.
+  It carries drifting fog (`body::before`), a light film grain (`body::after`),
+  rune rules under `.page > h2` and `.card > h3`, card corner marks and an
+  inner glow, arcane list markers, an ember-lit scrollbar/selection, and a
+  slow-burning active-tab underline. Colours, fonts and sizes are unchanged.
+- The fog and grain go on `body::before`/`body::after` at `z-index: 1`: same
+  plane as `.scene-veil`, still under content at `2`. Do not raise them.
+- Both new CSS animations are disabled under `prefers-reduced-motion`. In the
+  canvas, `still` draws a single frame, so the dragon holds at its t=0 position
+  there rather than crossing; that matches how the rest of the scene behaves.
+- The dragon sits between the stars and `terrainLayer`, so the keep and trees
+  occlude it and it reads as distance rather than as a foreground object.
+
 ## Publishing to GitHub
 
 The sandbox token is a GitHub App installation token. Its permission set is
