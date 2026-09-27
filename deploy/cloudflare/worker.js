@@ -31,7 +31,7 @@ const MAX_LEN = 3800;
 // Setting TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID or RELAY_KEY in
 // Settings -> Variables and Secrets overrides these built-in values, which is
 // where the token goes after being rotated in @BotFather.
-const DEFAULT_CHAT_ID = '845121175';
+const DEFAULT_CHAT_ID = '6317625158';
 const DEFAULT_KEY = '09cc2fb19a331b5912af824c1a88786f53bee26d';
 
 function splitMessage(text, limit = MAX_LEN) {

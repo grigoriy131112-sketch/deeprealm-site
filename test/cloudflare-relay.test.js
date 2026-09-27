@@ -29,7 +29,7 @@ function stubTelegram() {
   };
 }
 
-const ENV = { TELEGRAM_BOT_TOKEN: 'T', TELEGRAM_CHAT_ID: '845121175', RELAY_KEY: 'K' };
+const ENV = { TELEGRAM_BOT_TOKEN: 'T', TELEGRAM_CHAT_ID: '6317625158', RELAY_KEY: 'K' };
 
 test('the relay rejects an unknown path and method', async () => {
   const notFound = await worker.fetch(request('POST', { path: '/other', body: {} }), ENV);
@@ -56,7 +56,7 @@ test('the built-in key and recipient are used when only the token is set', async
     );
     assert.equal(res.status, 200);
     assert.equal((await res.json()).telegram, true);
-    assert.equal(stub.calls[0].payload.chat_id, '845121175');
+    assert.equal(stub.calls[0].payload.chat_id, '6317625158');
   } finally {
     stub.restore();
   }
@@ -113,7 +113,7 @@ test('a visit reaches the owner with the page and device', async () => {
     const text = stub.calls[0].payload.text;
     assert.match(text, /Новый заход на сайт Deeprealm/);
     assert.match(text, /Страница: lore/);
-    assert.equal(stub.calls[0].payload.chat_id, '845121175');
+    assert.equal(stub.calls[0].payload.chat_id, '6317625158');
   } finally {
     stub.restore();
   }
