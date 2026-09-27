@@ -963,6 +963,25 @@ function wireChats() {
   });
 }
 
+// The live rewrite needs ten to twenty-five seconds, so the engine's answer is put
+// on screen at once and quietly replaced by the livelier wording when it arrives.
+// Only the last assistant message is touched: a player who typed ahead must not see
+// an older reply change under their eyes.
+function attachLive(type, promise) {
+  if (!promise) return;
+  const convo = activeConvo(type);
+  const index = convo.messages.length - 1;
+  if (index < 0 || convo.messages[index].role !== 'assistant') return;
+  const node = el(CHAT_UI[type].log).lastElementChild;
+  Promise.resolve(promise).then((text) => {
+    if (!text || convo.messages[index].role !== 'assistant') return;
+    convo.messages[index].content = text;
+    saveStore();
+    const body = node && node.querySelector('.msg-body');
+    if (body) body.textContent = text;
+  }).catch(() => {});
+}
+
 async function sendGuide(text) {
   text = String(text || '').trim();
   if (!text) return;
@@ -970,8 +989,9 @@ async function sendGuide(text) {
   addMessage('guide', 'user', text);
   const convo = activeConvo('guide');
   const pending = pushMsg('guideLog', 'system', t('chat.thinking'));
+  let live = null;
   try {
-    const data = await askChat('guide', { messages: convo.messages, lang: state.lang });
+    const data = await askChat('guide', { messages: convo.messages, lang: state.lang, onLive: (p) => { live = p; } });
     pending.remove();
     if (data.unconfigured) {
       // Keep the typed message: deleting it made the chat look like nothing was
@@ -980,6 +1000,7 @@ async function sendGuide(text) {
       return;
     }
     addMessage('guide', 'assistant', data.reply);
+    attachLive('guide', live);
   } catch (err) {
     pending.remove();
     pushMsg('guideLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());
@@ -994,14 +1015,16 @@ async function sendInterview(text) {
   const convo = activeConvo('interview');
   maybeSaveApplication(text);
   const pending = pushMsg('interviewLog', 'system', t('chat.thinkingApp'));
+  let live = null;
   try {
-    const data = await askChat('interview', { messages: convo.messages, lang: state.lang, application: convo.application });
+    const data = await askChat('interview', { messages: convo.messages, lang: state.lang, application: convo.application, onLive: (p) => { live = p; } });
     pending.remove();
     if (data.unconfigured) {
       pushMsg('interviewLog', 'system', t('chat.notConfigured'));
       return;
     }
     addMessage('interview', 'assistant', data.reply);
+    attachLive('interview', live);
     // A newly approved race or class lands in the article store; refresh the list so
     // it shows up without a page reload.
     if (data.published) await loadArticles();
@@ -1032,14 +1055,16 @@ async function sendStaff(text) {
     if (note) { convo.application[`note_${Date.now()}`] = note; saveStore(); }
   }
   const pending = pushMsg('staffLog', 'system', t('chat.thinkingApp'));
+  let live = null;
   try {
-    const data = await askChat('staff', { messages: convo.messages, lang: state.lang, application: convo.application });
+    const data = await askChat('staff', { messages: convo.messages, lang: state.lang, application: convo.application, onLive: (p) => { live = p; } });
     pending.remove();
     if (data.unconfigured) {
       pushMsg('staffLog', 'system', t('chat.notConfigured'));
       return;
     }
     addMessage('staff', 'assistant', data.reply);
+    attachLive('staff', live);
     if (data && data.application) { convo.application = data.application; saveStore(); }
   } catch (err) {
     pending.remove();

@@ -226,7 +226,7 @@ async function callFreeModel(messages, options = {}) {
 
   const controller = new AbortController();
   // A dead endpoint must not delay the built-in answer waiting behind it.
-  const timer = setTimeout(() => controller.abort(), 4000);
+  const timer = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(FREE_BASE_URL, {
       method: 'POST',

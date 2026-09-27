@@ -67,7 +67,7 @@ export function createLiveSpeaker(options = {}) {
 
   if (!fetchImpl) return null;
 
-  async function request(messages, temperature) {
+  async function request(messages, temperature, timeoutOverride) {
     // The public endpoint rejects a "system" role, so the rules are folded into
     // the first user turn, which it accepts.
     const rules = [];
@@ -78,8 +78,11 @@ export function createLiveSpeaker(options = {}) {
     }
     const payload = rules.length ? [{ role: 'user', content: rules.join('\n\n') }, ...rest] : rest;
 
+    // The endpoint answers in ten to twenty-five seconds, so a caller that shows
+    // the engine's answer first can afford to wait longer than the default.
+    const limit = Number(timeoutOverride) > 0 ? Number(timeoutOverride) : timeoutMs;
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    const timer = controller ? setTimeout(() => controller.abort(), limit) : null;
     try {
       const res = await fetchImpl(baseUrl, {
         method: 'POST',
@@ -105,7 +108,7 @@ export function createLiveSpeaker(options = {}) {
     // One request at a time, and a request already running is shared, so a burst
     // of messages cannot multiply the load on a free endpoint.
     if (inflight) return inflight;
-    inflight = request(messages, options2.temperature)
+    inflight = request(messages, options2.temperature, options2.timeoutMs)
       .finally(() => { inflight = null; });
     return inflight;
   };

@@ -1082,7 +1082,7 @@ function createLiveSpeaker(options = {}) {
 
   if (!fetchImpl) return null;
 
-  async function request(messages, temperature) {
+  async function request(messages, temperature, timeoutOverride) {
     // The public endpoint rejects a "system" role, so the rules are folded into
     // the first user turn, which it accepts.
     const rules = [];
@@ -1093,8 +1093,11 @@ function createLiveSpeaker(options = {}) {
     }
     const payload = rules.length ? [{ role: 'user', content: rules.join('\n\n') }, ...rest] : rest;
 
+    // The endpoint answers in ten to twenty-five seconds, so a caller that shows
+    // the engine's answer first can afford to wait longer than the default.
+    const limit = Number(timeoutOverride) > 0 ? Number(timeoutOverride) : timeoutMs;
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    const timer = controller ? setTimeout(() => controller.abort(), limit) : null;
     try {
       const res = await fetchImpl(baseUrl, {
         method: 'POST',
@@ -1120,7 +1123,7 @@ function createLiveSpeaker(options = {}) {
     // One request at a time, and a request already running is shared, so a burst
     // of messages cannot multiply the load on a free endpoint.
     if (inflight) return inflight;
-    inflight = request(messages, options2.temperature)
+    inflight = request(messages, options2.temperature, options2.timeoutMs)
       .finally(() => { inflight = null; });
     return inflight;
   };
@@ -1339,6 +1342,30 @@ function callModel(messages, options) {
 // take the chats down. A working model still wins, because its wording is better;
 // every failure below simply falls through to the built-in answer.
 async function askModelOrLocal(promptMessages, localAnswer, options = {}) {
+  // The free endpoint needs ten to twenty-five seconds. A caller that can patch its
+  // own message gets the engine's answer at once, and the model's own wording - not
+  // just the livelier rewrite - is what arrives in the background.
+  if (typeof options.onLive === 'function') {
+    const local = localAnswer();
+    const better = (async () => {
+      if (freeCaller && options.keyless) {
+        try {
+          const reply = await freeCaller(promptMessages, options);
+          if (reply && String(reply).trim()) return stripMarkdown(withEnd(reply));
+        } catch { /* the free public endpoint is often down: fall through */ }
+      }
+      if (!(liveCaller && options.live)) return '';
+      const spoken = await liveCaller(liveMessages(promptMessages, local, options), {
+        temperature: 0.8,
+        timeoutMs: options.liveTimeoutMs || 30000
+      });
+      // The patch replaces the message text directly, so it must carry the closing
+      // word itself: the caller's own withEnd only touches what it returns first.
+      return spoken && keepsEssentials(withEnd(spoken), withEnd(local)) ? stripMarkdown(withEnd(spoken)) : '';
+    })();
+    options.onLive(better.catch(() => ''));
+    return { reply: local, by: 'local', livePending: true };
+  }
   if (modelCaller) {
     try {
       const reply = await callModel(promptMessages, options);
@@ -1357,7 +1384,10 @@ async function askModelOrLocal(promptMessages, localAnswer, options = {}) {
   // discarded and the exact engine text is used instead.
   if (liveCaller && options.live) {
     try {
-      const spoken = await liveCaller(liveMessages(promptMessages, local, options), { temperature: 0.8 });
+      const spoken = await liveCaller(liveMessages(promptMessages, local, options), {
+        temperature: 0.8,
+        timeoutMs: options.liveTimeoutMs
+      });
       if (spoken && keepsEssentials(withEnd(spoken), withEnd(local))) return { reply: stripMarkdown(spoken), by: 'live' };
     } catch { /* the free endpoint is unreliable: the engine's own text stands */ }
   }
@@ -1398,18 +1428,18 @@ function needsModel({ messages = [] } = {}) {
   return !isEndCommand(lastUserText(toHistory(messages, 30)));
 }
 
-async function answerGuide({ messages = [], lang = 'ru' } = {}) {
+async function answerGuide({ messages = [], lang = 'ru', onLive = null } = {}) {
   const history = toHistory(messages, 20);
   // Ending the dialogue needs no model, so it works with no key and no network.
   if (isEndCommand(lastUserText(history))) return { reply: withEnd(finaleText('guide', lang)), finale: true };
-  const { reply, by } = await askModelOrLocal([
+  const { reply, by, livePending } = await askModelOrLocal([
     { role: 'system', content: GUIDE_SYSTEM(lang) },
     ...history.map(asRole)
-  ], () => localGuide({ messages: history, lang }), { keyless: true, live: true, role: 'guide' });
-  return { reply: withEnd(reply), source: by };
+  ], () => localGuide({ messages: history, lang }), { keyless: true, live: true, role: 'guide', onLive });
+  return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-async function answerInterview({ messages = [], lang = 'ru', application = {}, publish = null, notify = null } = {}) {
+async function answerInterview({ messages = [], lang = 'ru', application = {}, publish = null, notify = null, onLive = null } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
@@ -1418,11 +1448,19 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, p
   if (isEndCommand(lastUserText(history))) {
     return { reply: withEnd(finaleText('interview', lang)), application: appState, finale: true };
   }
-  const { reply: raw, by } = await askModelOrLocal([
+  // The live wording arrives after the engine's answer, and the fixed hand-off is
+  // attached outside the engine, so the rewrite is decorated the same way here as
+  // the answer the player sees first.
+  let decorate = (body) => withEnd(body);
+  const { reply: raw, by, livePending } = await askModelOrLocal([
     { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
     { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(appState)}` },
     ...history.map(asRole)
-  ], () => localInterview({ messages: history, lang, application: appState }), { live: true, role: 'interview' });
+  ], () => localInterview({ messages: history, lang, application: appState }), {
+    live: true,
+    role: 'interview',
+    onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
+  });
   const clean = raw;
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.
@@ -1452,12 +1490,14 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, p
   // silent failure.
   const closing = approved ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
   const handoff = handoffText('interview', lang, { approved, published, kind: sheetKind });
+  decorate = (body) => withEnd(approved ? `${body}\n\n${closing}\n\n${handoff}` : body);
   return {
-    reply: withEnd(approved ? `${clean}\n\n${closing}\n\n${handoff}` : clean),
+    reply: decorate(clean),
     application: appState,
     published,
     delivered,
     source: by,
+    livePending: Boolean(livePending),
     finale: approved
   };
 }
@@ -1480,7 +1520,7 @@ function sheetText(history, application) {
   ].filter(Boolean).join('\n\n');
 }
 
-async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null } = {}) {
+async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   const send = typeof notify === 'function' ? notify : notifierFn;
@@ -1505,8 +1545,8 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
       const { reply, by } = await askModelOrLocal([
         { role: 'system', content: `${STAFF_SYSTEM(lang)}\n\nКандидат задал уточняющий вопрос до выбора направления. Ответь на него коротко и дружелюбно, опираясь на факт ниже, затем задай вопрос о направлении.\nФАКТ: ${faq.a}` },
         ...history.map(asRole)
-      ], () => local(), { temperature: 0.3, live: true, role: 'staff' });
-      return { reply: withEnd(reply), application: appState, role: null, done: false, source: by };
+      ], () => local(), { temperature: 0.3, live: true, role: 'staff', onLive });
+      return { reply: withEnd(reply), application: appState, role: null, done: false, source: by, livePending: Boolean(livePending) };
     }
     return { reply: withEnd(turn.question), application: appState, role: null, done: false };
   }
@@ -1551,17 +1591,18 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
       : `ЗАДАНИЕ: коротко отреагируй на ответ кандидата и задай РОВНО ОДИН следующий вопрос: "${turn.question}". Больше ничего не добавляй.`
   ].filter(Boolean).join('\n');
 
-  const { reply, by } = await askModelOrLocal([
+  const { reply, by, livePending } = await askModelOrLocal([
     { role: 'system', content: `${STAFF_SYSTEM(lang)}\n\nТЕКУЩЕЕ ЗАДАНИЕ:\n${focus}\n\nЗапрещённые темы ещё раз: Discord, VK, Roll20, Foundry, настольные системы, возраст, город, часовой пояс, контакты, гранты.` },
     { role: 'user', content: `ЧЕРНОВАЯ ЗАЯВКА (JSON): ${JSON.stringify({ ...appState, branch: role.key })}` },
     ...history.map(asRole)
-  ], () => local(), { temperature: 0.2, live: true, role: 'staff' });
+  ], () => local(), { temperature: 0.2, live: true, role: 'staff', onLive });
   return {
     reply: withEnd(reply),
     application: { ...appState, branch: role.key },
     role: role.key,
     done,
-    source: by
+    source: by,
+    livePending: Boolean(livePending)
   };
 }
 

@@ -11,7 +11,7 @@ import {
   sentToOwnerText, applicationTitle, staffAnswerPairs, setKnowledge, findRole,
   STAFF_MAX_QUESTIONS, setSheetDetector
 } from '../chat-core.js';
-import { setNotifier, answerInterview, answerStaff } from '../chat-answers.js';
+import { setNotifier, answerInterview, answerStaff, setLiveCaller, answerGuide } from '../chat-answers.js';
 import { localInterview } from '../ai-engine.js';
 import { detectSheetKind } from '../publish.js';
 
@@ -184,6 +184,48 @@ test('the live speaker returns the model text on success', async () => {
   const fetchImpl = fakeFetch({ choices: [{ message: { content: 'Живой ответ' } }] });
   const speak = createLiveSpeaker({ fetchImpl, timeoutMs: 50 });
   assert.equal(await speak([{ role: 'user', content: 'привет' }]), 'Живой ответ');
+});
+
+// The free endpoint needs ten to twenty-five seconds, so the caller is allowed to
+// wait longer than the default without changing the default itself.
+test('the live speaker accepts a per-call timeout', async () => {
+  let seen = 0;
+  const slow = async (url, init) => {
+    seen += 1;
+    const signal = init && init.signal;
+    if (signal && signal.aborted) throw new Error('aborted too early');
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(resolve, 30);
+      if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(new Error('aborted')); });
+    });
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'Живой ответ' } }] }) };
+  };
+  const speak = createLiveSpeaker({ fetchImpl: slow, timeoutMs: 5, cooldownMs: 60000 });
+  assert.equal(await speak([{ role: 'user', content: 'привет' }], { timeoutMs: 200 }), 'Живой ответ');
+  assert.equal(seen, 1);
+});
+
+// The chat must not sit on "thinking" for twenty seconds and then throw the rewrite
+// away. With an onLive hook the engine's answer is returned at once and the livelier
+// wording is handed back separately.
+test('the guide answers at once and hands the live rewrite to the caller', async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  setLiveCaller(async () => { await gate; return 'Живой ответ конец'; });
+  try {
+    let pending = null;
+    const out = await answerGuide({
+      messages: [{ role: 'user', content: 'Какие есть расы?' }],
+      onLive: (p) => { pending = p; }
+    });
+    assert.ok(out.reply && out.reply.length > 0, 'the engine answers without waiting');
+    assert.equal(out.livePending, true, 'the caller is told a rewrite is on the way');
+    assert.ok(pending, 'the rewrite is handed to the caller');
+    release();
+    assert.match(await pending, /Живой ответ/, 'the rewrite is delivered later');
+  } finally {
+    setLiveCaller(null);
+  }
 });
 
 test('owner-delivery text tells the truth when sending fails', () => {
