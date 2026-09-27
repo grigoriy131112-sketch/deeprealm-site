@@ -4,6 +4,7 @@
 // refused unless the shared key matches.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import worker from '../deploy/cloudflare/worker.js';
 
 function request(method, { path = '/api/notify', headers = {}, body } = {}) {
@@ -46,21 +47,57 @@ test('a missing or wrong key is refused', async () => {
   assert.equal(wrong.status, 401);
 });
 
-test('an unset RELAY_KEY closes the relay rather than opening it', async () => {
+test('the built-in key and recipient are used when only the token is set', async () => {
+  const stub = stubTelegram();
+  try {
+    const res = await worker.fetch(
+      request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
+      { TELEGRAM_BOT_TOKEN: 'T' }
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).telegram, true);
+    assert.equal(stub.calls[0].payload.chat_id, '845121175');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('without a token the relay stays silent instead of failing', async () => {
   const res = await worker.fetch(
-    request('POST', { headers: { 'X-Relay-Key': 'K' }, body: { type: 'visit' } }),
-    { TELEGRAM_BOT_TOKEN: 'T', TELEGRAM_CHAT_ID: '845121175' }
+    request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
+    {}
+  );
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, telegram: false });
+});
+
+test('a variable in the dashboard overrides the built-in value', async () => {
+  const stub = stubTelegram();
+  try {
+    const res = await worker.fetch(
+      request('POST', { headers: { 'X-Relay-Key': 'my-own-key' }, body: { type: 'visit' } }),
+      { TELEGRAM_BOT_TOKEN: 'T', RELAY_KEY: 'my-own-key', TELEGRAM_CHAT_ID: '999' }
+    );
+    assert.equal(res.status, 200);
+    assert.equal(stub.calls[0].payload.chat_id, '999');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('an override key makes the built-in key stop working', async () => {
+  const res = await worker.fetch(
+    request('POST', { headers: { 'X-Relay-Key': '09cc2fb19a331b5912af824c1a88786f53bee26d' }, body: { type: 'visit' } }),
+    { RELAY_KEY: 'a-different-key' }
   );
   assert.equal(res.status, 401);
 });
 
-test('with no token configured the relay reports success but stays silent', async () => {
-  const res = await worker.fetch(
-    request('POST', { headers: { 'X-Relay-Key': 'K' }, body: { type: 'visit' } }),
-    { RELAY_KEY: 'K' }
-  );
-  assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { ok: true, telegram: false });
+test('the public worker file never contains the bot token', async () => {
+  // The repository is public, so a committed token would let anyone send messages
+  // as the bot. This guards against it being pasted back in later.
+  const source = fs.readFileSync(new URL('../deploy/cloudflare/worker.js', import.meta.url), 'utf8');
+  assert.equal(/\d{6,}:[A-Za-z0-9_-]{30,}/.test(source), false, 'a bot token shape was found in the worker');
 });
 
 test('a visit reaches the owner with the page and device', async () => {

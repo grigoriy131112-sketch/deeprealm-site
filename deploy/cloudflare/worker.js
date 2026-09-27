@@ -9,12 +9,11 @@
 // have a card to put on a host that asks for one: the Cloudflare Workers free
 // plan needs no credit card and, unlike a free Render instance, does not sleep.
 //
-// Deploy it from the Cloudflare dashboard as a single Worker, then set three
-// variables in Settings -> Variables and Secrets:
-//   TELEGRAM_BOT_TOKEN  - from @BotFather
-//   TELEGRAM_CHAT_ID    - the recipient, from @userinfobot
-//   RELAY_KEY           - any long random string, also written to
-//                         data/telegram.json as relay.key
+// Deploy it from the Cloudflare dashboard as a single Worker named
+// `deeprealm-relay` and paste this file as its code. Nothing else has to be
+// configured except the bot token: add one variable, TELEGRAM_BOT_TOKEN, in
+// Settings -> Variables and Secrets. The recipient and the shared key already
+// have working defaults below.
 //
 // The message formatting mirrors telegram.js on purpose, so the same
 // notifications arrive whether the relay runs here or on the Node server.
@@ -23,6 +22,17 @@ const API_ROOT = 'https://api.telegram.org';
 
 // Telegram allows about 4096 characters per message. Long sheets are split.
 const MAX_LEN = 3800;
+
+// The recipient and the shared key are baked in so only one thing has to be set
+// in the dashboard: the bot token. The token is deliberately NOT here, because
+// this repository is public and a committed token could be used by anyone to send
+// messages as the bot. The key is safe to publish: it only gates the relay, and
+// the same value already ships in data/telegram.json that the browser reads.
+// Setting TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID or RELAY_KEY in
+// Settings -> Variables and Secrets overrides these built-in values, which is
+// where the token goes after being rotated in @BotFather.
+const DEFAULT_CHAT_ID = '845121175';
+const DEFAULT_KEY = '09cc2fb19a331b5912af824c1a88786f53bee26d';
 
 function splitMessage(text, limit = MAX_LEN) {
   const body = String(text == null ? '' : text).trim();
@@ -119,12 +129,14 @@ export default {
 
     // With no key configured the relay is closed, so an accidental deploy without
     // one cannot turn the Worker into an open relay.
-    const expected = String(env.RELAY_KEY || '').trim();
+    // Keyed by default so the code works as soon as it is pasted. Setting
+    // RELAY_KEY in the dashboard overrides it.
+    const expected = String(env.RELAY_KEY || DEFAULT_KEY).trim();
     const given = String(request.headers.get('X-Relay-Key') || body.key || '').trim();
     if (!expected || given !== expected) return json({ ok: false, error: 'unauthorized' }, 401);
 
     const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
-    const to = parseChatIds([(env.TELEGRAM_CHAT_IDS || ''), env.TELEGRAM_CHAT_ID]);
+    const to = parseChatIds([(env.TELEGRAM_CHAT_IDS || ''), env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID]);
     if (!token || !to.length) return json({ ok: true, telegram: false });
 
     const type = body.type;
