@@ -13,7 +13,13 @@
   button { display: block; width: 100%; padding: 20px; font-size: 20px; font-weight: 700;
            border: 0; border-radius: 14px; background: #6c5ce7; color: #fff; }
   button:active { background: #5a4bd1; }
-  #status { margin-top: 16px; font-size: 17px; min-height: 1.5em; }
+  button.plain { margin-top: 14px; padding: 14px; font-size: 16px; font-weight: 500;
+                 background: #23262f; color: #cfd3e0; }
+  input { width: 100%; box-sizing: border-box; padding: 18px; font-size: 17px;
+          border-radius: 12px; border: 1px solid #343846; background: #1c1f28;
+          color: #e8e8ef; }
+  .hint { color: #b9bcc9; font-size: 15px; min-height: 1.4em; margin: 8px 0 14px; }
+  #status { margin-top: 12px; font-size: 17px; min-height: 1.5em; }
   .ok { color: #4ade80; }
   .bad { color: #f87171; }
   ol { color: #b9bcc9; padding-left: 22px; }
@@ -27,12 +33,18 @@
 </head>
 <body>
 <h1>Код для Cloudflare</h1>
-<p>Нажмите кнопку — код скопируется вместе с токеном бота. Останется вставить его в Cloudflare.</p>
+<p>Вставьте токен бота в поле, нажмите «Скопировать код» — и вставьте код в Cloudflare.</p>
 
+<input id="token" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+       placeholder="Токен бота от @BotFather">
+<p id="tokenState" class="hint"></p>
+
+<button id="copy">Скопировать код</button>
 <p id="need" class="bad"></p>
-<button id="token">Скопировать только токен</button>
-<button id="copy" style="margin-top:12px">Скопировать код с токеном</button>
 <div id="status"></div>
+
+<button id="check" class="plain">Проверить, что всё дошло</button>
+<div id="checkState" class="hint"></div>
 
 <details>
   <summary>Что делать дальше</summary>
@@ -57,42 +69,43 @@ const WORKER_URLS = [
   new URL('worker.js', location.href).href,
   'https://raw.githubusercontent.com/grigoriy131112-sketch/deeprealm-site/main/deploy/cloudflare/worker.js'
 ];
+const RELAY = 'https://deeprealm-relay.grigoriy131112.workers.dev';
 const TOKEN_STORE = 'deeprealm.token';
+const TOKEN_SHAPE = /^\d{6,}:[A-Za-z0-9_-]{30,}$/;
 const status = document.getElementById('status');
 const need = document.getElementById('need');
-const tokenButton = document.getElementById('token');
+const checkState = document.getElementById('checkState');
+const tokenField = document.getElementById('token');
+const tokenState = document.getElementById('tokenState');
 
-function say(text, cls) {
-  status.textContent = text;
-  status.className = cls || '';
+function say(el, text, cls) {
+  el.textContent = text;
+  el.className = cls || el.className.replace(/\b(ok|bad)\b/g, '').trim();
 }
 
-// The token is never published with the page. It is typed or pasted once here and
-// kept in this browser only, so the public site carries no bot secret.
-function token() {
-  return (localStorage.getItem(TOKEN_STORE) || '').trim();
+// The token is not part of the published page. It is pasted here once and kept in
+// this browser only, so the public site carries no bot secret.
+tokenField.value = localStorage.getItem(TOKEN_STORE) || '';
+
+function saveToken() {
+  localStorage.setItem(TOKEN_STORE, tokenField.value.trim());
 }
 
-function askToken() {
-  const entered = prompt('Вставьте токен бота от @BotFather:', token());
-  if (entered === null) return '';
-  const value = entered.trim();
-  localStorage.setItem(TOKEN_STORE, value);
-  refresh();
-  return value;
+function currentToken() {
+  return tokenField.value.trim();
 }
 
-function refresh() {
-  const t = token();
-  if (t) {
-    need.textContent = '';
-    tokenButton.textContent = 'Токен сохранён. Изменить токен';
-  } else {
-    need.textContent = 'Сначала укажите токен бота — без него код будет без токена.';
-    tokenButton.textContent = 'Указать токен';
-  }
-  return t;
+function describeToken() {
+  const t = currentToken();
+  if (!t) return 'Токен пока не указан.';
+  if (!TOKEN_SHAPE.test(t)) return 'Это не похоже на токен. Он длинный, вида 1234567890:AA…';
+  return 'Токен принят.';
 }
+
+tokenField.addEventListener('input', () => {
+  saveToken();
+  say(tokenState, describeToken());
+});
 
 async function copyText(text, box) {
   box.value = text;
@@ -125,33 +138,54 @@ async function code() {
     }
   }
   if (!source) throw new Error(lastError || 'код не загрузился');
-  const t = refresh();
+  const t = currentToken();
   if (!t) return source;
   const filled = source.replace("const DEFAULT_TOKEN = '';", "const DEFAULT_TOKEN = '" + t + "';");
   if (filled === source) throw new Error('в коде не нашлось место для токена');
   return filled;
 }
 
-tokenButton.onclick = () => {
-  if (askToken()) say('Токен сохранён в этом браузере.', 'ok');
-};
-
 document.getElementById('copy').onclick = async () => {
-  say('Готовлю код…');
+  saveToken();
+  say(tokenState, describeToken());
+  say(status, 'Готовлю код…');
   try {
-    const t = token();
+    const t = currentToken();
     const text = await code();
-    const hasToken = Boolean(t) && text.includes("const DEFAULT_TOKEN = '" + t + "'");
+    const hasToken = Boolean(t) && TOKEN_SHAPE.test(t) && text.includes("const DEFAULT_TOKEN = '" + t + "'");
     await copyText(text, document.getElementById('fallback'));
-    say(hasToken
-      ? 'Готово! Код с токеном скопирован. Вставьте его в Cloudflare.'
-      : 'Скопировано без токена. Нажмите «Указать токен» и повторите.', hasToken ? 'ok' : 'bad');
+    if (!t) {
+      say(need, 'Сначала вставьте токен в поле выше — иначе код будет без токена.', 'bad');
+      say(status, 'Скопировано без токена.', 'bad');
+    } else if (!TOKEN_SHAPE.test(t)) {
+      say(need, 'Токен выглядит неполным. Вставьте его целиком, от цифр до конца.', 'bad');
+      say(status, 'Скопировано с неполным токеном.', 'bad');
+    } else {
+      say(need, '');
+      say(status, 'Готово! Код с токеном скопирован. Вставьте его в Cloudflare.', 'ok');
+    }
   } catch (err) {
-    say('Ошибка: ' + err.message, 'bad');
+    say(status, 'Ошибка: ' + err.message, 'bad');
   }
 };
 
-refresh();
+document.getElementById('check').onclick = async () => {
+  say(checkState, 'Проверяю…');
+  try {
+    const res = await fetch(RELAY + '/api/version', { cache: 'no-store' });
+    const data = await res.json();
+    if (!data.ok) throw new Error('сервер ответил ошибкой');
+    if (data.hasToken) {
+      say(checkState, 'Всё дошло: сервер видит токен, получатель ' + data.chatId + '.', 'ok');
+    } else {
+      say(checkState, 'Сервер пока не видит токен. Значит новый код ещё не развёрнут.', 'bad');
+    }
+  } catch (err) {
+    say(checkState, 'Не удалось проверить: ' + err.message, 'bad');
+  }
+};
+
+say(tokenState, describeToken());
 </script>
 </body>
 </html>

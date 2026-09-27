@@ -141,6 +141,22 @@ function json(body, status = 200) {
 
 export default {
   async fetch(request, env) {
+    if (request.method === 'GET') {
+      const url = new URL(request.url);
+      if (url.pathname === '/api/version') {
+        // A read-only summary for the owner: enough to tell whether a token was
+        // picked up, without ever echoing the token itself.
+        return json({
+          ok: true,
+          rev: 6,
+          hasToken: Boolean(findToken(env)),
+          chatId: parseChatIds([(env.TELEGRAM_CHAT_IDS || ''), env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID])[0] || null,
+          keyAccepted: DEFAULT_KEY
+        });
+      }
+      return json({ ok: false, error: 'not_found' }, 404);
+    }
+
     if (request.method === 'OPTIONS') return json({ ok: true });
     if (request.method !== 'POST') return json({ ok: false, error: 'method' }, 405);
 
