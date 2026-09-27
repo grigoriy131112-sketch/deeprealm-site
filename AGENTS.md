@@ -344,3 +344,25 @@ permission is missing. Probe that way before starting any long operation.
 - The suite must not touch the network: with `NODE_ENV=test` the live-speech and
   free-endpoint layers are not wired, because the public endpoint is up on one run
   and down on the next, which made `source` flip between `live` and `local`.
+
+## GitHub write access: use the right app (2026-09-27)
+
+- Writes failed for many rounds with `403 Resource not accessible by integration`
+  while `permissions.push` on the repo read `true`. The cause was never the repo:
+  it was the app.
+- `openhands-dev` ("OpenHands Dev", owner `hieptl`, external_url
+  `http://localhost:3001`) is somebody's local test app. GitHub shows
+  "This App does not require access to your repositories" for it and there is no
+  switch to turn on. Installing it can never grant write access.
+- The real one is **`openhands-ai`** ("OpenHands AI", owner `All-Hands-AI`,
+  external_url `https://app.all-hands.dev`) with `contents: write`,
+  `pull_requests: write`, `workflows: write`. Install link:
+  `https://github.com/apps/openhands-ai/installations/new`, pick "Only select
+  repositories" and tick `deeprealm-site`.
+- After that install, write access starts working immediately on the existing
+  token - no new conversation needed. Confirm with a throwaway PUT to
+  `/repos/{owner}/{repo}/contents/<file>` and expect 201 (then delete it); a
+  `403 Resource not accessible by integration` means the wrong app is installed.
+- Install tokens expire after 8 hours, so a push failing later may just be expiry.
+- `scripts/setup-telegram.js` writes to `.env` (gitignored), never to
+  `data/telegram.json`: that file is public and a bot token there is a leak.
