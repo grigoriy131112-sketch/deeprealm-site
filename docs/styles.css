@@ -550,8 +550,97 @@ nav.tabs button.active::after {
 .btn:hover { box-shadow: 0 0 22px rgba(201, 162, 75, 0.22); }
 .btn.primary:hover { box-shadow: 0 0 24px rgba(184, 51, 63, 0.4); }
 
+/* --- the doorway between rooms ------------------------------------------- */
+/* Walking from one section to another passes through a dark arched doorway:
+   two stone leaves close over the page, the room changes underneath, and they
+   part again. It covers the swap instead of sliding the whole page, which is
+   cheap and reads instantly. Nothing here shows until .open is added. */
+
+.doorway {
+  position: fixed;
+  inset: 0;
+  z-index: 15;          /* under header (20), over the scene and content */
+  pointer-events: none;
+  visibility: hidden;
+}
+.doorway-leaves {
+  position: absolute;
+  inset: 0;
+  display: block;
+  opacity: 0;
+}
+/* The two leaves are the two pseudo-elements, so no extra nodes are needed. */
+.doorway-leaves::before,
+.doorway-leaves::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 51%;
+  background:
+    /* iron bands across the leaves */
+    linear-gradient(180deg,
+      transparent 0 12%, rgba(201, 162, 75, 0.14) 12% 13%,
+      transparent 13% 50%, rgba(201, 162, 75, 0.14) 50% 51%,
+      transparent 51% 88%, rgba(201, 162, 75, 0.14) 88% 89%, transparent 89%),
+    /* vertical plank seams */
+    repeating-linear-gradient(90deg, #0a0710 0 26px, #120d18 26px 28px),
+    linear-gradient(180deg, #0a0710 0%, #120d18 40%, #0a0710 100%);
+  box-shadow: 0 0 80px rgba(0, 0, 0, 0.95) inset;
+  transform: scaleX(0);
+}
+.doorway-leaves::before {
+  left: 0;
+  transform-origin: left center;
+  border-right: 1px solid rgba(201, 162, 75, 0.28);
+}
+.doorway-leaves::after {
+  right: 0;
+  transform-origin: right center;
+  border-left: 1px solid rgba(201, 162, 75, 0.28);
+}
+
+/* A lit arch between the leaves, so the doorway reads as an opening even while
+   the stone is shut. */
+.doorway-arch {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, rgba(230, 200, 119, 0.7) 30%, rgba(230, 200, 119, 0.7) 70%, transparent);
+  opacity: 0;
+  box-shadow: 0 0 26px rgba(230, 200, 119, 0.45);
+}
+.doorway-runes {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-title);
+  font-size: 22px;
+  letter-spacing: 0.5em;
+  color: var(--gold-bright);
+  opacity: 0;
+  text-shadow: 0 0 22px rgba(201, 162, 75, 0.5);
+}
+
+.doorway.open { visibility: visible; }
+.doorway.open .doorway-leaves { opacity: 1; }
+.doorway.open .doorway-leaves::before,
+.doorway.open .doorway-leaves::after { transform: scaleX(1); transition: transform 0.3s ease-in; }
+.doorway.open .doorway-arch { opacity: 0.9; transition: opacity 0.25s ease-in; }
+.doorway.open .doorway-runes { opacity: 0.9; transition: opacity 0.3s ease-in 0.05s; }
+
+/* Opening: the leaves draw back and the lit arch fades last, like a door left
+   ajar. Fast enough that reading is never waiting on it. */
+.doorway.parting .doorway-leaves::before,
+.doorway.parting .doorway-leaves::after { transform: scaleX(0); transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1); }
+.doorway.parting .doorway-arch { opacity: 0; transition: opacity 0.3s ease-out 0.1s; }
+.doorway.parting .doorway-runes { opacity: 0; transition: opacity 0.2s ease-out; }
+.doorway.parting { visibility: visible; }
+
 @media (prefers-reduced-motion: reduce) {
-  body::before { animation: none; }
-  nav.tabs button.active::after { animation: none; }
-  body::after { opacity: 0.03; }
+  .doorway { display: none; }
 }

@@ -123,6 +123,50 @@ without restoring any old value.
 - The dragon sits between the stars and `terrainLayer`, so the keep and trees
   occlude it and it reads as distance rather than as a foreground object.
 
+### Rooms inside the keep (added 2026-09-27)
+
+The background is no longer one painting. `scene.js` now holds a registry of
+rooms and the page picks one per section, so walking the site walks the castle.
+Keep this in mind before touching the scene:
+
+- The original courtyard drawing is unchanged; only its structure moved. Its
+  builders are `courtyardSky` / `keep` / `courtyardTerrain` / `courtyard`, and a
+  diff of the courtyard render against the old single-scene build showed 0.04%
+  of pixels differing, all of it noise in the embers.
+- Four rooms: `courtyard`, `library`, `guild`, `throne`. Every one is a plain
+  function returning
+  `{ sky, terrain, lights, puffs, embers, twinklers, gateX, skyF, terrF, dragon }`.
+  Add a room by writing that function and listing it in `ROOMS` and `BUILDERS`.
+- `window.DeeprealmScene` is the only interface: `setRoom(name)`, `getRoom()`,
+  `rooms`. `app.js` owns the page -> room map (`ROOM_FOR_PAGE`) and calls
+  `setRoom`. An unknown name falls back to the courtyard, so a typo cannot
+  blank the background.
+- Rooms are baked lazily on first visit and the rest are prepared while idle.
+  `MAX_CACHED` is 3 and the least recently used room is evicted; each room is two
+  full-size layers, so caching all four would quadruple the old memory. Never
+  drop the room currently in view.
+- Per-frame work is still only: twinkle, the dragon (courtyard only), light
+  flicker, mist, embers and the vignette blit. Everything architectural is baked
+  once per resize. A room must not add per-frame drawing of its own.
+- Baked layers are cheap: measured at 5-16 ms per room at 1280x900, so a room
+  being built on entry is hidden behind the doorway.
+
+The doorway itself is in `index.html` (`#doorway`), `styles.css`
+(`.doorway...`) and `app.js` (`enterRoom`). It closes over the page, the room
+swaps underneath, then it parts - so a room change is never seen mid-frame.
+- It is `position: fixed` at `z-index: 15`, under the header (`20`) and over the
+  content (`2`), with `pointer-events: none` so it never eats a click.
+- The two leaves are `::before`/`::after`, so no extra nodes; the runes and the
+  lit arch are the two spans.
+- Only `showPage` starts a transition. The first page takes its room directly
+  (no door over a page the visitor has not left) and a re-render that stays in
+  the same room, such as a language switch, is skipped. Check both if you change
+  `showPage`.
+- Under `prefers-reduced-motion` the overlay is `display: none` and the room
+  changes instantly; the still frame is redrawn in `setRoom`.
+- Timings: leaves close in 330 ms, the swap happens 120 ms later, the leaves
+  part over 460 ms (`DOOR_CLOSE_MS`, `DOOR_HOLD_MS` in `app.js`).
+
 ## Publishing to GitHub
 
 The sandbox token is a GitHub App installation token. Its permission set is

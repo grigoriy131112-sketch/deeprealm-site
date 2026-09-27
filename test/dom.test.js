@@ -58,6 +58,17 @@ async function boot(state = {}, opts = {}) {
   // jsdom does not implement scrolling; real browsers do, so it is stubbed here
   // rather than guarded in the app.
   window.Element.prototype.scrollIntoView = () => {};
+  // scene.js needs a 2D canvas, which jsdom does not have, so navigation tests
+  // install a stand-in that just records the rooms the page asked for.
+  if (opts.scene) {
+    const calls = [];
+    window.DeeprealmScene = {
+      setRoom: (name) => { calls.push(name); },
+      getRoom: () => (calls.length ? calls[calls.length - 1] : 'courtyard'),
+      rooms: ['courtyard', 'library', 'guild', 'throne'],
+      calls
+    };
+  }
   // The real page loads the chat bundle before app.js; the tests must do the same,
   // otherwise the browser fallback would look missing. `opts.noChatBundle` simulates
   // a page that somehow shipped without it, which is the only case left where the
@@ -395,5 +406,73 @@ test('an article opens on static hosting using the bundled text', async () => {
   assert.equal(view.hidden, false, 'the article view must open');
   assert.match(view.querySelector('h3').textContent, new RegExp(expected.title.slice(0, 12)));
   assert.ok(view.querySelectorAll('.article-body p').length > 0, 'the body must be rendered from the file');
+});
+
+// The background changes room by room as the visitor walks through the site.
+test('each section of the site asks the scene for its room', async () => {
+  const win = await boot({}, { scene: true });
+  await sleep(40);
+
+  // The section the page opens on is taken directly: no doorway over a page the
+  // visitor has not left yet.
+  assert.deepEqual(win.DeeprealmScene.calls, ['courtyard'], 'the home page is the courtyard');
+
+  const expected = {
+    lore: 'library',
+    articles: 'library',
+    races: 'guild',
+    classes: 'guild',
+    levelpass: 'guild',
+    rules: 'throne',
+    admin: 'throne',
+    application: 'throne',
+    guide: 'throne',
+    home: 'courtyard'
+  };
+  for (const [page, room] of Object.entries(expected)) {
+    const btn = [...win.document.querySelectorAll('#tabs button')].find((b) => b.dataset.page === page);
+    assert.ok(btn, 'there is a tab for ' + page);
+    btn.click();
+    await sleep(520);
+    assert.equal(win.DeeprealmScene.calls.at(-1), room, page + ' must be read in the ' + room);
+    assert.equal(win.document.querySelector('.page.active').dataset.page, page);
+  }
+});
+
+test('a language switch does not re-enter the room or flash the doorway', async () => {
+  const win = await boot({}, { scene: true });
+  await sleep(40);
+  const btn = [...win.document.querySelectorAll('#tabs button')].find((b) => b.dataset.page === 'rules');
+  btn.click();
+  await sleep(520);
+  const before = win.DeeprealmScene.calls.length;
+
+  const lang = win.document.getElementById('langSelect');
+  win.localStorage.setItem('dr_lang', 'en');
+  lang.value = 'en';
+  lang.dispatchEvent(new win.Event('change'));
+  await sleep(60);
+
+  assert.equal(win.DeeprealmScene.calls.length, before, 'staying in the same room must not rebuild or replay the door');
+});
+
+test('the doorway overlay covers the room change and is cleaned up afterwards', async () => {
+  const win = await boot({}, { scene: true });
+  await sleep(40);
+  const doorway = win.document.getElementById('doorway');
+  assert.ok(doorway, 'the page must carry the doorway element');
+  assert.equal(doorway.classList.contains('open'), false, 'the door starts shut and hidden');
+
+  const btn = [...win.document.querySelectorAll('#tabs button')].find((b) => b.dataset.page === 'lore');
+  btn.click();
+  assert.ok(doorway.classList.contains('open'), 'the leaves close as soon as the walk starts');
+
+  // The swap happens while the screen is covered, then the leaves draw back and
+  // the overlay is cleared so it never traps a click or a screen reader.
+  await sleep(520);
+  assert.equal(win.DeeprealmScene.calls.at(-1), 'library');
+  await sleep(500);
+  assert.equal(doorway.classList.contains('open'), false);
+  assert.equal(doorway.classList.contains('parting'), false, 'no class is left behind');
 });
 

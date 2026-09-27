@@ -454,9 +454,71 @@ function buildTabs() {
   });
 }
 
+// Which room of the keep each section is read in. The background changes as a
+// visitor walks through the site, and a section with no entry stays in the
+// courtyard. The names must match window.DeeprealmScene.rooms.
+const ROOM_FOR_PAGE = {
+  home: 'courtyard',
+  lore: 'library',
+  articles: 'library',
+  races: 'guild',
+  classes: 'guild',
+  levelpass: 'guild',
+  rules: 'throne',
+  admin: 'throne',
+  application: 'throne',
+  guide: 'throne'
+};
+
+// The doorway between rooms. The leaves close, the room swaps underneath, then
+// they part. The swap happens while the screen is covered, so the change is
+// never seen mid-frame. Under prefers-reduced-motion there is no overlay at all
+// and the room simply changes; that is handled in CSS, so this only decides when.
+const DOOR_CLOSE_MS = 330;
+const DOOR_HOLD_MS = 120;
+let doorTimer = 0;
+let firstPage = true;
+
+function sceneFor(page) {
+  return (window.DeeprealmScene && ROOM_FOR_PAGE[page]) || null;
+}
+
+function enterRoom(page) {
+  const room = sceneFor(page);
+  if (!room || !window.DeeprealmScene) return;
+  // A language switch re-renders and calls showPage again with the same section;
+  // there is no room change, so the doorway must not flash.
+  if (window.DeeprealmScene.getRoom && window.DeeprealmScene.getRoom() === room && !firstPage) return;
+  // The first page is where the visitor already is, so the scene just takes that
+  // room directly - opening the page behind closing doors would be odd.
+  if (firstPage) {
+    firstPage = false;
+    window.DeeprealmScene.setRoom(room);
+    return;
+  }
+  const doorway = el('doorway');
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!doorway || reduced) {
+    window.DeeprealmScene.setRoom(room);
+    return;
+  }
+  clearTimeout(doorTimer);
+  doorway.classList.remove('parting');
+  doorway.classList.add('open');
+  doorTimer = setTimeout(() => {
+    window.DeeprealmScene.setRoom(room);
+    doorway.classList.remove('open');
+    doorway.classList.add('parting');
+    doorTimer = setTimeout(() => {
+      doorway.classList.remove('open', 'parting');
+    }, 460);
+  }, DOOR_CLOSE_MS + DOOR_HOLD_MS);
+}
+
 function showPage(page) {
   document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.dataset.page === page));
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
+  enterRoom(page);
   location.hash = page;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
