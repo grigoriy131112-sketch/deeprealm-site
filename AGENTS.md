@@ -366,3 +366,15 @@ permission is missing. Probe that way before starting any long operation.
 - Install tokens expire after 8 hours, so a push failing later may just be expiry.
 - `scripts/setup-telegram.js` writes to `.env` (gitignored), never to
   `data/telegram.json`: that file is public and a bot token there is a leak.
+- The relay config in `data/telegram.json` (and its `docs/` twin) is public and
+  is set with `node scripts/set-relay.js <url>`; the URL and key must match the
+  host's `RELAY_KEY`. Both copies have to agree or the static site silently
+  stops notifying.
+- The keep-awake pinger must live in `.github/workflows/`, not `deploy/`: GitHub
+  runs nothing outside that directory, so the `deploy/` copy is inert, while the
+  token lacks `workflows` scope for the REST API. The address is hardcoded in the
+  file with a `vars.SITE_URL ||` override, because the app token also cannot
+  create repository variables (403).
+- Owner's live config: bot `@deeprealbot`, chat id `845121175`, server
+  `https://deeprealm-site.onrender.com` (Render, Docker, needs `TELEGRAM_BOT_TOKEN`,
+  `TELEGRAM_CHAT_ID`, `RELAY_KEY`).
