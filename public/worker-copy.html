@@ -43,7 +43,13 @@
 <p id="need" class="bad"></p>
 <div id="status"></div>
 
-<button id="check" class="plain">Проверить, что всё дошло</button>
+<details>
+  <summary>Адрес сервера (менять не нужно)</summary>
+  <p>Если проверка не находит сервер, сверьте адрес со страницей своего Worker в Cloudflare.</p>
+  <input id="relay" type="text" inputmode="url" autocomplete="off" spellcheck="false">
+</details>
+
+<button id="check" class="plain">Проверить и прислать тест в Телеграм</button>
 <div id="checkState" class="hint"></div>
 
 <details>
@@ -69,7 +75,8 @@ const WORKER_URLS = [
   new URL('worker.js', location.href).href,
   'https://raw.githubusercontent.com/grigoriy131112-sketch/deeprealm-site/main/deploy/cloudflare/worker.js'
 ];
-const RELAY = 'https://deeprealm-relay.grigoriy131112.workers.dev';
+const RELAY_STORE = 'deeprealm.relay';
+const DEFAULT_RELAY = 'https://deeprealm-relay.grigoriy131112.workers.dev';
 const TOKEN_STORE = 'deeprealm.token';
 const TOKEN_SHAPE = /^\d{6,}:[A-Za-z0-9_-]{30,}$/;
 const status = document.getElementById('status');
@@ -77,6 +84,7 @@ const need = document.getElementById('need');
 const checkState = document.getElementById('checkState');
 const tokenField = document.getElementById('token');
 const tokenState = document.getElementById('tokenState');
+const relayField = document.getElementById('relay');
 
 function say(el, text, cls) {
   el.textContent = text;
@@ -86,6 +94,11 @@ function say(el, text, cls) {
 // The token is not part of the published page. It is pasted here once and kept in
 // this browser only, so the public site carries no bot secret.
 tokenField.value = localStorage.getItem(TOKEN_STORE) || '';
+relayField.value = localStorage.getItem(RELAY_STORE) || DEFAULT_RELAY;
+
+function relayBase() {
+  return (relayField.value.trim() || DEFAULT_RELAY).replace(/\/+$/, '');
+}
 
 function saveToken() {
   localStorage.setItem(TOKEN_STORE, tokenField.value.trim());
@@ -105,6 +118,10 @@ function describeToken() {
 tokenField.addEventListener('input', () => {
   saveToken();
   say(tokenState, describeToken());
+});
+
+relayField.addEventListener('input', () => {
+  localStorage.setItem(RELAY_STORE, relayField.value.trim());
 });
 
 async function copyText(text, box) {
@@ -170,18 +187,47 @@ document.getElementById('copy').onclick = async () => {
 };
 
 document.getElementById('check').onclick = async () => {
-  say(checkState, 'Проверяю…');
+  const base = relayBase();
+  say(checkState, 'Проверяю ' + base + ' …');
+  let data;
   try {
-    const res = await fetch(RELAY + '/api/version', { cache: 'no-store' });
-    const data = await res.json();
-    if (!data.ok) throw new Error('сервер ответил ошибкой');
-    if (data.hasToken) {
-      say(checkState, 'Всё дошло: сервер видит токен, получатель ' + data.chatId + '.', 'ok');
-    } else {
-      say(checkState, 'Сервер пока не видит токен. Значит новый код ещё не развёрнут.', 'bad');
+    const res = await fetch(base + '/api/version', { cache: 'no-store' });
+    data = await res.json().catch(() => null);
+    if (!res.ok || !data) {
+      // An older Worker does not know this path, so it is still the previous code.
+      say(checkState, 'Сервер ответил по-старому (код ' + res.status + '). '
+        + 'Значит новый код ещё не развёрнут — вставьте его в Cloudflare и нажмите «Развернуть».', 'bad');
+      return;
     }
   } catch (err) {
-    say(checkState, 'Не удалось проверить: ' + err.message, 'bad');
+    say(checkState, 'Сервер не ответил: ' + err.message
+      + '. Проверьте адрес выше — он должен совпадать с адресом вашего Worker.', 'bad');
+    return;
+  }
+
+  if (!data.hasToken) {
+    say(checkState, 'Новый код уже на сервере, но токен до него не дошёл. '
+      + 'Скопируйте код с токеном ещё раз и разверните заново.', 'bad');
+    return;
+  }
+
+  say(checkState, 'Сервер видит токен. Отправляю тест в Телеграм…');
+  try {
+    const res = await fetch(base + '/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Relay-Key': 'deeprealm' },
+      body: JSON.stringify({ type: 'visit', page: 'проверка с планшета владельца', device: navigator.userAgent.slice(0, 90) })
+    });
+    const sent = await res.json().catch(() => null);
+    if (sent && sent.telegram) {
+      say(checkState, 'Всё работает! Тестовое сообщение отправлено в Телеграм. '
+        + 'Если его нет — откройте бота и нажмите «Start».', 'ok');
+    } else {
+      say(checkState, 'Токен есть, но Телеграм отказал. Проверьте, что бот не заблокирован '
+        + 'и вы написали ему /start.', 'bad');
+    }
+  } catch (err) {
+    say(checkState, 'Токен на месте, но отправить не вышло: ' + err.message, 'bad');
   }
 };
 
