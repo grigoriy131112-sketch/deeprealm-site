@@ -34,10 +34,24 @@ const ENV = { TELEGRAM_BOT_TOKEN: 'T', TELEGRAM_CHAT_ID: '6317625158', RELAY_KEY
 test('the relay rejects an unknown path and method', async () => {
   const notFound = await worker.fetch(request('POST', { path: '/other', body: {} }), ENV);
   assert.equal(notFound.status, 404);
+  // A GET is only answered on the version path, so a GET to the notify path is a
+  // not-found rather than a wrong-method.
   const method = await worker.fetch(request('GET', { path: '/api/notify' }), ENV);
-  assert.equal(method.status, 405);
+  assert.equal(method.status, 404);
   const preflight = await worker.fetch(request('OPTIONS'), ENV);
   assert.equal(preflight.status, 200);
+});
+
+test('the version path reports whether a token arrived, without printing it', async () => {
+  const withToken = await worker.fetch(request('GET', { path: '/api/version' }), ENV);
+  assert.equal(withToken.status, 200);
+  const seen = await withToken.json();
+  assert.equal(seen.hasToken, true);
+  assert.equal(seen.chatId, '6317625158');
+  assert.equal(JSON.stringify(seen).includes(ENV.TELEGRAM_BOT_TOKEN), false, 'the version reply must not leak the token');
+
+  const without = await worker.fetch(request('GET', { path: '/api/version' }), {});
+  assert.equal((await without.json()).hasToken, false);
 });
 
 test('a missing or wrong key is refused', async () => {
