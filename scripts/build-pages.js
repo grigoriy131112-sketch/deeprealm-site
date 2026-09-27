@@ -20,6 +20,10 @@ const files = [
   ['public/chat-browser.js', 'chat-browser.js'],
   ['public/favicon.svg', 'favicon.svg'],
   ['public/404.html', '404.html'],
+  ['public/worker-copy.html', 'worker-copy.html'],
+  // Served next to the copy page so it is fetched from the same site, which
+  // avoids a stale CDN copy standing in the way of a fresh token.
+  ['deploy/cloudflare/worker.js', 'worker.js'],
   ['data/articles.json', 'data/articles.json'],
   // Optional: when the owner has not configured the bot yet the file may be
   // absent, and the site simply has no notifications.
