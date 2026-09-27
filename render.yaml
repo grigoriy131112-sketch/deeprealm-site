@@ -29,6 +29,7 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_CHAT_ID
+        sync: false
       - key: TELEGRAM_CHAT_IDS
         sync: false
       # The static site (GitHub Pages) relays its notifications through this
