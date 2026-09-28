@@ -365,6 +365,15 @@ permission is missing. Probe that way before starting any long operation.
 - `docs/` is generated: run `npm run build-pages` after changing anything in
   `public/` or `data/`, then commit. Pages serves `docs/404.html` for unknown
   URLs, which is why the bare "404 page not found" text is gone.
+- A local commit changes nothing for the owner until it is pushed: Pages only
+  deploys what is on `main`. After committing, `git push origin main`, then wait
+  for `GET /repos/:owner/:repo/pages/builds/latest` to report `built` before
+  saying a change is live. The owner has twice reported "nothing changed" while
+  the fix was only in the sandbox.
+- `origin` carries an embedded token that goes stale and makes `git push` hang on
+  a password prompt. Push with the fresh secret instead, never interactively:
+  `GIT_TERMINAL_PROMPT=0 git push https://x-access-token:$GITHUB_TOKEN@github.com/... main`,
+  and refresh the stored URL with `git remote set-url origin` when it expires.
 - The sandbox preview links (`work-*.prod-runtime.all-hands.dev`) are NOT the
   site. They return 502 the moment the sandbox sleeps. Never send them to the
   owner; always give the Pages URL above.
