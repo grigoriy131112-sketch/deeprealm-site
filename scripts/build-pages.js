@@ -24,7 +24,6 @@ const files = [
   // Served next to the copy page so it is fetched from the same site, which
   // avoids a stale CDN copy standing in the way of a fresh token.
   ['deploy/cloudflare/worker.js', 'worker.js'],
-  ['data/articles.json', 'data/articles.json'],
   // Optional: when the owner has not configured the bot yet the file may be
   // absent, and the site simply has no notifications.
   ['data/telegram.json', 'data/telegram.json', { optional: true }]
@@ -56,5 +55,4 @@ fs.writeFileSync(path.join(out, 'data/knowledge.raw.json'), JSON.stringify(raw, 
 // Pages serves static files only; a config file avoids Jekyll touching anything.
 fs.writeFileSync(path.join(out, '.nojekyll'), '');
 
-const articles = JSON.parse(fs.readFileSync(path.join(out, 'data/articles.json'), 'utf8')).articles || [];
-console.log(`docs/ ready: ${files.length} files, ${articles.length} articles`);
+console.log(`docs/ ready: ${files.length} files`);

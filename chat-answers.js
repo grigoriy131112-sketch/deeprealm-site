@@ -1,6 +1,6 @@
 // The three chat handlers live here rather than in the server, so the browser can
-// run the very same rules when no server is reachable. Only the model call and
-// the article publishing are injected, because those differ per environment.
+// run the very same rules when no server is reachable. Only the model call is
+// injected, because that differs per environment.
 import {
   withEnd, stripMarkdown, finaleText, isEndCommand, approvedWithSheet, handoffText,
   sentToOwnerText, applicationTitle, staffAnswerPairs, detectSheet,
@@ -134,7 +134,7 @@ export async function answerGuide({ messages = [], lang = 'ru', onLive = null } 
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-export async function answerInterview({ messages = [], lang = 'ru', application = {}, publish = null, notify = null, onLive = null } = {}) {
+export async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
@@ -160,16 +160,10 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.
   const approved = approvedWithSheet(clean, history, appState);
-  let published = null;
   let delivered = false;
   let sheetKind = null;
   if (approved) {
-    // The article publish and the owner notification are independent: a failed
-    // notification must not undo a published race, and vice versa.
     sheetKind = detectSheet(history, appState);
-    if (typeof publish === 'function') {
-      published = await publish({ messages: history, lang, application: appState }).catch(() => null);
-    }
     if (typeof send === 'function') {
       const result = await send({
         kind: sheetKind,
@@ -184,12 +178,11 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // says so and repeats the owner's contact, so an application is never lost to a
   // silent failure.
   const closing = approved ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
-  const handoff = handoffText('interview', lang, { approved, published, kind: sheetKind });
+  const handoff = handoffText('interview', lang, { approved, kind: sheetKind });
   decorate = (body) => withEnd(approved ? `${body}\n\n${closing}\n\n${handoff}` : body);
   return {
     reply: decorate(clean),
     application: appState,
-    published,
     delivered,
     source: by,
     livePending: Boolean(livePending),

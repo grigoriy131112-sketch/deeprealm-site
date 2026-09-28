@@ -2,10 +2,10 @@
 //
 // This engine answers the Guide, the character Interviewer and the Staff
 // interviewer with no API key and no network at all: it reads the knowledge base
-// and the article store directly, retrieves the relevant part and phrases a
-// natural answer. A model key is therefore optional - when one is present it only
-// upgrades the wording, and when it is missing (or the key expires, or the daily
-// quota runs out) the chats keep answering exactly as before.
+// and the player races/classes read from the blog, retrieves the relevant part
+// and phrases a natural answer. A model key is therefore optional - when one is
+// present it only upgrades the wording, and when it is missing (or the key expires,
+// or the daily quota runs out) the chats keep answering exactly as before.
 //
 // The file is bundled into the browser too, so static hosting gets the same AI.
 

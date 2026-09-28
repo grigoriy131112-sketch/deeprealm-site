@@ -18,7 +18,7 @@ const strip = (code) => code
   .replace(/^export\s*\{[^}]*\};?\s*$/gm, '')
   .replace(/^export\s+(async\s+function|function|const|let|class)\s+/gm, '$1 ');
 
-const parts = ['chat-core.js', 'ai-engine.js', 'ai-maker.js', 'telegram.js', 'chat-answers.js'].map((name) => {
+const parts = ['chat-core.js', 'ai-engine.js', 'ai-maker.js', 'telegram.js', 'blog-reader.js', 'chat-answers.js'].map((name) => {
   const file = path.join(root, name);
   if (!fs.existsSync(file)) throw new Error(`missing source: ${name}`);
   return `// ---- ${name} ----\n${strip(fs.readFileSync(file, 'utf8'))}`;
@@ -88,9 +88,9 @@ ${parts.join('\n\n')}
 
   setModelCaller(callModel);
 
-  // Without a server there is no article builder, so a sheet is recognised by its
+  // Without a server there is no sheet detector, so a sheet is recognised by its
   // own markers. That is enough to approve and hand off; the owner gets the sheet
-  // itself, and publishing an article stays with them.
+  // itself, and posting it in the blog stays with them.
   function sheetKind(messages, application) {
     var text = (Array.isArray(messages) ? messages.map(function (m) { return String(m && m.content || ''); }).join('\\n') : '') + '\\n' + JSON.stringify(application || {});
     var race = [/самоназвание/i, /особые приметы/i, /уязвимост/i, /форма правления/i, /социальная структура/i];
@@ -176,7 +176,17 @@ ${parts.join('\n\n')}
     answerInterview: answerInterview,
     answerStaff: answerStaff,
     needsModel: needsModel,
-    withEnd: withEnd
+    withEnd: withEnd,
+    // The blog reader, so the page can refresh the player races and classes from
+    // the blog itself. Exposed here because this is the only script the page
+    // loads that is built from modules.
+    blog: {
+      readIndex: readIndex,
+      readPost: readPost,
+      mergeEntries: mergeEntries,
+      createJsonpLoader: createJsonpLoader,
+      blogPath: blogPath
+    }
   };
 })();
 `;

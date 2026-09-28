@@ -3,19 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { syncPlayerContent, defaultSources } from './blog-sync.js';
-import { createArticleStore } from './article-store.js';
-import { detectSheetKind, buildArticle } from './publish.js';
+import { detectSheetKind } from './publish.js';
 import { knowledgeView } from './knowledge-view.js';
-import { createGithubPublisher } from './github-publish.js';
-import { createApiPublisher } from './github-publish-api.js';
-import { hydrateArticles } from './article-hydrate.js';
 import {
   buildKnowledgeContext, buildStaffContext, staffTurn, stripMarkdown, matchActivityFaq,
   finaleText, isEndCommand, approvedWithSheet, withEnd, handoffText,
   GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM, setKnowledge, setSheetDetector
 } from './chat-core.js';
 import { answerGuide, answerInterview, answerStaff, setModelCaller, setFreeModelCaller, setLiveCaller, needsModel } from './chat-answers.js';
-import { setEngineArticles } from './ai-engine.js';
 import { createLiveSpeaker } from './ai-maker.js';
 import { createNotifier, telegramConfig } from './telegram.js';
 
@@ -39,16 +34,6 @@ const reloadKnowledge = () => {
 setKnowledge(knowledge);
 setSheetDetector(detectSheetKind);
 
-// Articles live beside the knowledge file. The path stays overridable so tests can
-// point at a temporary copy instead of the real data.
-const ARTICLES_PATH = process.env.ARTICLES_PATH || path.join(__dirname, 'data', 'articles.json');
-const articleStore = createArticleStore(ARTICLES_PATH, {
-  seedPath: process.env.ARTICLES_SEED || path.join(__dirname, 'data', 'articles.json')
-});
-// The built-in AI answers questions about races and classes too, so it reads the
-// article store as well as the knowledge base.
-setEngineArticles(articleStore.all());
-
 const PORT = process.env.PORT || 3000;
 // Shared secret for the static-site relay (`/api/notify`). Without it the relay
 // refuses every request, so the bot token stays server-side. Read per request so a
@@ -70,37 +55,9 @@ function readTelegramFile() {
   }
 }
 
-// Approved sheets are written to disk immediately, but the published site is
-// served from the repository, so the same article is also pushed there. Without
-// this step an approved race or class would only exist on the server that
-// happened to handle the request.
-//
-// Two transports exist because the environments differ. In the deployed
-// container there is no git binary and no `.git`, so the article is sent through
-// the GitHub Contents API. In a working checkout, git is used so the change also
-// lands in the local tree.
-const sitePublisher = process.env.GITHUB_REPO
-  ? createApiPublisher({
-      root: __dirname,
-      repo: process.env.GITHUB_REPO,
-      token: process.env.GITHUB_TOKEN || '',
-      branch: process.env.SITE_BRANCH || 'main',
-      enabled: process.env.SITE_AUTOPUBLISH !== 'off',
-      log: (m) => console.log(`[site] ${m}`)
-    })
-  : createGithubPublisher({
-      // The checkout that is committed and pushed. Overridable so a test can
-      // point at a throwaway repository instead of the real project.
-      root: process.env.SITE_REPO_ROOT || __dirname,
-      token: process.env.GITHUB_TOKEN || '',
-      branch: process.env.SITE_BRANCH || 'main',
-      // Off in tests: the suite must never commit to a real repository. A test
-      // that needs publishing on sets SITE_AUTOPUBLISH=on explicitly.
-      enabled: process.env.SITE_AUTOPUBLISH
-        ? process.env.SITE_AUTOPUBLISH !== 'off'
-        : process.env.NODE_ENV !== 'test',
-      log: (m) => console.log(`[site] ${m}`)
-    });
+// Approved sheets are handed to the owner, not published by the site. The
+// player's race or class reaches the blog only when the owner posts it there,
+// and the Races and Classes pages read that blog, so nothing here writes files.
 const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY || process.env.GEMINI_API_KEY || '';
 const LLM_BASE_URL = (process.env.LLM_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -124,42 +81,8 @@ app.get('/api/knowledge-raw', (req, res) => {
   res.json(knowledge);
 });
 
-// Article list for the site: metadata only, so the index page stays light.
-app.get('/api/articles', (req, res) => {
-  const kind = req.query.kind;
-  let list = articleStore.list();
-  if (kind) list = list.filter((a) => a.kind === kind);
-  res.json({ count: list.length, articles: list });
-});
-
-app.get('/api/articles/:slug', (req, res) => {
-  const article = articleStore.get(req.params.slug);
-  if (!article) return res.status(404).json({ error: 'not_found' });
-  res.json(article);
-});
-
-// Publishes an approved race or class sheet as a site article. Returns null when the
-// sheet is not a race/class, or when the write fails - the player still gets the
-// hand-off either way, so a review is never lost because of a publishing error.
-async function publishFromSheet({ messages, lang, application }) {
-  const kind = detectSheetKind(messages, application);
-  // A plot is the game master's material, not a wiki entry: it is forwarded to the
-  // owner and stops there, so it never shows up in the races or classes lists.
-  if (!kind || kind === 'story') return null;
-  const article = await buildArticle({ kind, messages, lang, knowledge, callLLM });
-  if (!article) return null;
-  const entry = articleStore.publish({ title: article.title, kind, text: article.text });
-  // The permanent site reads from the repository, so the new article is also
-  // committed and pushed. A failure here is reported but never blocks the
-  // player's reply: the sheet itself was already approved.
-  const synced = await sitePublisher.sync({
-    message: `Publish ${kind} "${entry.title}" from an approved sheet`
-  });
-  if (!synced.ok && synced.reason !== 'already_published') {
-    console.warn(`[site] article "${entry.title}" not pushed: ${synced.reason}${synced.detail ? ` (${synced.detail})` : ''}`);
-  }
-  return { slug: entry.slug, title: entry.title, kind: entry.kind, synced: synced.ok };
-}
+// Article endpoints are gone: the site no longer serves articles. The player
+// races and classes live on the blog and the page reads them from there.
 
 async function callLLM(messages, options = {}) {
   const models = [LLM_MODEL, ...LLM_FALLBACK_MODELS];
@@ -356,7 +279,7 @@ async function runBlogSync() {
 // A tiny health endpoint. The uptime pinger that keeps a free host awake hits
 // this instead of the app shell, so the check stays cheap.
 app.get('/healthz', (req, res) => {
-  res.json({ ok: true, articles: articleStore.list().length, llm: Boolean(LLM_API_KEY), builtin: true });
+  res.json({ ok: true, llm: Boolean(LLM_API_KEY), builtin: true });
 });
 
 app.post('/api/refresh', async (req, res) => {
@@ -377,7 +300,6 @@ app.post('/api/interview', async (req, res) => {
   try {
     res.json(await answerInterview({
       messages, lang, application,
-      publish: publishFromSheet,
       notify: (info) => notifier.sheet(info)
     }));
   } catch (err) {
@@ -418,19 +340,6 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`Deeprealm site running on http://localhost:${PORT}`);
     console.log('ИИ-чаты работают без ключа: встроенный движок отвечает всегда, а ключ лишь улучшает формулировки.');
   });
-
-  // The container starts from the image, which cannot contain articles approved
-  // after the deploy. Reading the repository back restores them, so a restart
-  // never loses a player race or class.
-  if (process.env.GITHUB_REPO) {
-    hydrateArticles({
-      repo: process.env.GITHUB_REPO,
-      token: process.env.GITHUB_TOKEN || '',
-      branch: process.env.SITE_BRANCH || 'main',
-      store: articleStore,
-      log: (m) => console.log(`[articles] ${m}`)
-    }).then((r) => { if (!r.ok) console.warn(`[articles] hydrate skipped: ${r.reason || r.detail || ''}`); });
-  }
 
   // Keep player-made races/classes in sync with the blog; the site only reads the local cache.
   const SYNC_MINUTES = Number(process.env.BLOG_SYNC_MINUTES || 60);

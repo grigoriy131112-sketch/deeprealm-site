@@ -22,9 +22,15 @@ const PAYLOAD = {
   races: {
     list: KNOWLEDGE.races.list, links: KNOWLEDGE.races.links || {},
     relations: KNOWLEDGE.races.relations, rules: KNOWLEDGE.races.race_template_rules,
-    fields: KNOWLEDGE.races.race_template_fields, playerRaces: []
+    fields: KNOWLEDGE.races.race_template_fields,
+    playerRaces: KNOWLEDGE.races.player_races || [],
+    playerBlogLink: KNOWLEDGE.races.player_blog_link || ''
   },
-  classes: { ...KNOWLEDGE.classes, playerClasses: [] },
+  classes: {
+    ...KNOWLEDGE.classes,
+    playerClasses: KNOWLEDGE.classes.player_classes || [],
+    playerBlogLink: KNOWLEDGE.classes.player_blog_link || ''
+  },
   characterTemplate: KNOWLEDGE.character_template,
   storyTemplate: KNOWLEDGE.story_template,
   entryProcess: KNOWLEDGE.entry_process,
@@ -73,6 +79,25 @@ async function boot(state = {}, opts = {}) {
   // otherwise the browser fallback would look missing. `opts.noChatBundle` simulates
   // a page that somehow shipped without it, which is the only case left where the
   // visitor has to be told that nothing can answer.
+  // The blog is read with a JSONP <script>; jsdom will not fetch one, so the tag is
+  // intercepted and answered from `opts.blog(path)` instead.
+  if (opts.blog) {
+    const head = window.document.head;
+    const origAppend = head.appendChild.bind(head);
+    head.appendChild = (node) => {
+      if (node && node.tagName === 'SCRIPT' && node.src) {
+        const cb = (node.src.match(/callback=([^&]+)/) || [])[1];
+        const path = decodeURIComponent((node.src.match(/[?&]path=([^&]+)/) || [])[1] || '');
+        setTimeout(() => {
+          const feed = opts.blog(path);
+          if (feed && cb && typeof window[cb] === 'function') window[cb](feed);
+          else if (typeof node.onerror === 'function') node.onerror();
+        }, 0);
+        return node;
+      }
+      return origAppend(node);
+    };
+  }
   if (!opts.noChatBundle) window.eval(CHAT_BROWSER_JS);
   window.eval(APP_JS);
   await sleep(30);
@@ -254,11 +279,10 @@ test('the live wording replaces the shown answer when it arrives', async () => {
   const fetchImpl = async (url) => {
     const u = String(url);
     if (u.includes('pollinations.ai')) {
-      await sleep(30);
+      await sleep(80);
       return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Привет, путник, я живой ответ.' } }] }) };
     }
     if (u.includes('/api/')) throw new TypeError('Failed to fetch');
-    if (u.includes('data/articles.json')) return { ok: true, status: 200, json: async () => ARTICLES };
     if (u.includes('data/knowledge.raw.json')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
     if (u.includes('data/knowledge.json')) return { ok: true, status: 200, json: async () => shaped };
     return { ok: false, status: 404, json: async () => ({}) };
@@ -268,7 +292,7 @@ test('the live wording replaces the shown answer when it arrives', async () => {
 
   const log = win.document.getElementById('guideLog');
   assert.ok(!/живой ответ/.test(log.textContent), 'the instant answer is shown first');
-  await sleep(120);
+  await sleep(200);
   assert.match(log.textContent, /живой ответ/, 'the live wording takes its place');
   assert.match(log.textContent, /конец/, 'the replaced text keeps the closing word');
 });
@@ -342,8 +366,6 @@ test('the AI notice stays hidden when the server has a key', async () => {
 // GitHub Pages cannot run a server, so /api answers nothing at all. The site is
 // published with its data beside the page and must load from there, otherwise
 // the permanent link would show an empty site.
-const ARTICLES = JSON.parse(fs.readFileSync(path.join(ROOT, '..', 'data', 'articles.json'), 'utf8'));
-
 function staticFetch() {
   // The build reshapes the knowledge file before publishing it, so the test
   // serves the same shaped payload the real docs/data/knowledge.json holds.
@@ -351,7 +373,6 @@ function staticFetch() {
   return async (url) => {
     const u = String(url);
     if (u.includes('/api/')) throw new TypeError('Failed to fetch');
-    if (u.includes('data/articles.json')) return { ok: true, status: 200, json: async () => ARTICLES };
     if (u.includes('data/knowledge.raw.json')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
     if (u.includes('data/knowledge.json')) return { ok: true, status: 200, json: async () => shaped };
     // A static host answers a missing file with the site's own 404 page.
@@ -374,7 +395,6 @@ function browserOnlyFetch() {
       };
     }
     if (u.includes('/api/')) throw new TypeError('Failed to fetch');
-    if (u.includes('data/articles.json')) return { ok: true, status: 200, json: async () => ARTICLES };
     if (u.includes('data/knowledge.raw.json')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
     if (u.includes('data/knowledge.json')) return { ok: true, status: 200, json: async () => shaped };
     return { ok: false, status: 404, json: async () => ({}) };
@@ -385,27 +405,34 @@ test('on static hosting the site loads from the bundled JSON, not from /api', as
   const win = await boot({}, { fetch: staticFetch() });
   await sleep(60);
 
-  const rows = win.document.querySelectorAll('#articleList .article-row');
-  assert.equal(rows.length, ARTICLES.articles.length, 'every article must be listed');
+  // The player races and classes come from the blog; without it the snapshot in
+  // the bundled knowledge file is what the pages show.
+  const races = win.document.querySelectorAll('#racesContent .player-entry, #racesContent .card p');
+  assert.ok(races.length > 0, 'the player races must be listed from the snapshot');
   assert.ok(win.document.querySelector('.page.active'), 'a page is shown');
   // No server, but the bundled rules answer, so the chats are not "off".
   assert.equal(win.document.getElementById('aiNotice').hidden, true, 'the chats are usable without a server');
 });
 
-test('an article opens on static hosting using the bundled text', async () => {
-  const win = await boot({}, { fetch: staticFetch() });
-  await sleep(60);
+// The player races and classes are read from the blog with JSONP, so a race the
+// owner publishes shows up on the page with no rebuild and no server.
+test('a race published in the blog appears on the Races page', async () => {
+  const indexHtml = '1. Расса: <a href="https://deeprealm1.blogspot.com/2026/08/new.html">Новая раса</a><br/>Создатель: @author';
+  const postHtml = '<p>Самоназвание: Новая раса</p><p>Особые приметы: светятся в темноте</p>';
+  const win = await boot({}, {
+    blog: (path) => {
+      if (path.includes('new.html')) return { feed: { entry: [{ title: { $t: 'Новая раса' }, content: { $t: postHtml } }] } };
+      if (path.includes('blog-post_304')) return { feed: { entry: [{ content: { $t: indexHtml } }] } };
+      return { feed: { entry: [{ content: { $t: '' } }] } };
+    }
+  });
+  await sleep(120);
 
-  const first = win.document.querySelector('#articleList .article-row');
-  const slug = first.dataset.slug;
-  first.click();
-  await sleep(40);
-
-  const view = win.document.getElementById('articleView');
-  const expected = ARTICLES.articles.find((a) => a.slug === slug);
-  assert.equal(view.hidden, false, 'the article view must open');
-  assert.match(view.querySelector('h3').textContent, new RegExp(expected.title.slice(0, 12)));
-  assert.ok(view.querySelectorAll('.article-body p').length > 0, 'the body must be rendered from the file');
+  // Every blog read uses one post per request, which is what keeps it cheap.
+  const races = win.document.getElementById('racesContent');
+  assert.match(races.textContent, /Новая раса/, 'the freshly published race is listed');
+  assert.ok(races.querySelector('.player-entry'), 'and it is folded into a readable card');
+  assert.match(races.textContent, /светятся в темноте/, 'its full text came from the post');
 });
 
 // The background changes room by room as the visitor walks through the site.
@@ -419,7 +446,6 @@ test('each section of the site asks the scene for its room', async () => {
 
   const expected = {
     lore: 'library',
-    articles: 'library',
     races: 'guild',
     classes: 'guild',
     levelpass: 'guild',
@@ -433,7 +459,7 @@ test('each section of the site asks the scene for its room', async () => {
     const btn = [...win.document.querySelectorAll('#tabs button')].find((b) => b.dataset.page === page);
     assert.ok(btn, 'there is a tab for ' + page);
     btn.click();
-    await sleep(520);
+    await sleep(900);
     assert.equal(win.DeeprealmScene.calls.at(-1), room, page + ' must be read in the ' + room);
     assert.equal(win.document.querySelector('.page.active').dataset.page, page);
   }
@@ -444,7 +470,7 @@ test('a language switch does not re-enter the room or flash the doorway', async 
   await sleep(40);
   const btn = [...win.document.querySelectorAll('#tabs button')].find((b) => b.dataset.page === 'rules');
   btn.click();
-  await sleep(520);
+  await sleep(900);
   const before = win.DeeprealmScene.calls.length;
 
   const lang = win.document.getElementById('langSelect');
@@ -469,9 +495,9 @@ test('the doorway overlay covers the room change and is cleaned up afterwards', 
 
   // The swap happens while the screen is covered, then the leaves draw back and
   // the overlay is cleared so it never traps a click or a screen reader.
-  await sleep(520);
+  await sleep(900);
   assert.equal(win.DeeprealmScene.calls.at(-1), 'library');
-  await sleep(500);
+  await sleep(800);
   assert.equal(doorway.classList.contains('open'), false);
   assert.equal(doorway.classList.contains('parting'), false, 'no class is left behind');
 });

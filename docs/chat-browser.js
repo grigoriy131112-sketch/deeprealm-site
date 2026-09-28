@@ -18,9 +18,9 @@
 let knowledge = {};
 function setKnowledge(next) { knowledge = next || {}; }
 
-// Deciding whether a sheet is a race or a class needs the article builder, which
-// only exists on the server. The browser registers a lighter check instead of
-// importing it, so approval still works with no server present.
+// Deciding whether a sheet is a race, a class or a plot needs the sheet detector,
+// which the server supplies from publish.js. The browser registers its own lighter
+// check instead of importing it, so approval still works with no server present.
 let sheetDetector = () => null;
 function setSheetDetector(fn) { sheetDetector = typeof fn === "function" ? fn : () => null; }
 function getKnowledge() { return knowledge; }
@@ -179,9 +179,9 @@ function findRole(key) {
 }
 
 // The hand-off wording is fixed here so the destination and the owner's username
-// are never paraphrased by the model. When the bot managed to publish the race or
-// class article itself, it says so instead of asking for the owner.
-function handoffText(type, lang, { approved = false, published = null, kind = null } = {}) {
+// are never paraphrased by the model. The site never publishes the sheet itself;
+// the owner posts it in the blog, so the wording always hands it to the owner.
+function handoffText(type, lang, { approved = false, kind = null } = {}) {
   const chat = knowledge.chat.telegram;
   const owner = knowledge.chat.owner;
   if (type === 'interview') {
@@ -192,7 +192,7 @@ function handoffText(type, lang, { approved = false, published = null, kind = nu
         ? `Your plot is with the owner. The game master will read it and get back to you.`
         : `Сюжет у владельца. ГМ прочитает его и свяжется с тобой.`;
     }
-    const note = publishNote(lang, published, owner);
+    const note = publishNote(lang, owner);
     return lang === 'en'
       ? `Your sheet is already with the owner. Join the chat while you wait:\n${chat}${note}`
       : `Анкета уже у владельца. А пока можешь зайти в чат:\n${chat}${note}`;
@@ -322,17 +322,13 @@ function withEnd(text) {
   return `${body}\n\n${END_WORD}`;
 }
 
-// What an approved player is told about their race or class article.
-function publishNote(lang, published, owner) {
-  if (!published) {
-    return lang === 'en'
-      ? `\n\nWant your own race or class? The article is published by the owner ${owner}: send the sheet and you are in.`
-      : `\n\nХочешь свою расу или класс? Статью публикует владелец ${owner}: скинь анкету, и ты принят.`;
-  }
-  const kind = published.kind === 'race' ? (lang === 'en' ? 'race' : 'раса') : (lang === 'en' ? 'class' : 'класс');
+// What an approved player is told about their race or class. The site does not
+// publish it: the owner posts it in the blog, and the Races and Classes pages
+// pick it up from there.
+function publishNote(lang, owner) {
   return lang === 'en'
-    ? `\n\nYour article is already on the site: ${kind} "${published.title}". See the Articles section.`
-    : `\n\nСтатья уже на сайте: ${kind} «${published.title}». Смотри раздел «Статьи».`;
+    ? `\n\nWant your own race or class? The owner ${owner} publishes it in the blog: send the sheet and you are in.`
+    : `\n\nХочешь свою расу или класс? Владелец ${owner} публикует их в блоге: скинь анкету, и ты принят.`;
 }
 
 // What the player is told once the sheet has been forwarded to the owner. The
@@ -499,10 +495,10 @@ function staffTurn(history, appState = {}, lang = 'ru') {
 //
 // This engine answers the Guide, the character Interviewer and the Staff
 // interviewer with no API key and no network at all: it reads the knowledge base
-// and the article store directly, retrieves the relevant part and phrases a
-// natural answer. A model key is therefore optional - when one is present it only
-// upgrades the wording, and when it is missing (or the key expires, or the daily
-// quota runs out) the chats keep answering exactly as before.
+// and the player races/classes read from the blog, retrieves the relevant part
+// and phrases a natural answer. A model key is therefore optional - when one is
+// present it only upgrades the wording, and when it is missing (or the key expires,
+// or the daily quota runs out) the chats keep answering exactly as before.
 //
 // The file is bundled into the browser too, so static hosting gets the same AI.
 
@@ -1307,10 +1303,176 @@ function createNotifier(options = {}) {
 }
 
 
+// ---- blog-reader.js ----
+// Reads the player-made races and classes straight from the Deeprealm blog.
+//
+// The blog is the owner's source of truth: a race or a class exists once it is
+// published there and listed on one of the two index pages ("Рассы игроков" and
+// "Классы игроков"). Reading those pages when the site loads is what makes a
+// newly published post appear on the Races or Classes page without a rebuild, a
+// commit or a server.
+//
+// The blog's Atom feed is the only machine-readable view of it, and it has two
+// properties this file relies on:
+//   - `path=<post path>` returns that single post, about 4 KB, instead of the
+//     whole blog at 580 KB. That is what keeps a check cheap.
+//   - `alt=json-in-script&callback=` wraps the JSON in a function call, so a
+//     browser can read the feed with a <script> tag. Blogger sends no CORS
+//     header, so JSONP is the only way a static GitHub Pages site can read it.
+//
+// Nothing here depends on Node, so the same file is bundled for the browser.
+
+const FEED = 'https://deeprealm1.blogspot.com/feeds/posts/default';
+
+// The blog post path inside a full blog URL: '/2026/08/blog-post_304.html'. The
+// feed addresses a single post by this path.
+function blogPath(url) {
+  const m = String(url || '').match(/\/(\d{4}\/\d{2}\/[^/?#]+\.html?)\b/);
+  return m ? `/${m[1]}` : '';
+}
+
+// A feed URL for one post. With `callback` the response is wrapped in a function
+// call (JSONP); without it, plain JSON for a server-side fetch.
+function feedUrl(path, callback) {
+  const base = `${FEED}?alt=${callback ? 'json-in-script' : 'json'}&max-results=1&path=${encodeURI(path)}`;
+  return callback ? `${base}&callback=${encodeURIComponent(callback)}` : base;
+}
+
+function stripTags(html, { collapse = true } = {}) {
+  const text = String(html)
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&laquo;/g, '«')
+    .replace(/&raquo;/g, '»')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&hellip;/g, '…');
+  return collapse ? text.replace(/\s+/g, ' ').trim() : text;
+}
+
+// The blog keeps one <p> per visual line, so each paragraph becomes one line and
+// the box-drawing separators in a class sheet stay where the author put them.
+function htmlToText(html) {
+  return stripTags(
+    String(html)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|h[1-6])>/gi, '\n'),
+    { collapse: false }
+  )
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// Index pages read like: "1. Класс: <a href=...>Название</a><br/>Создатель: @user".
+// The wording varies ("Расса", "Расс", "Клас"), so every spelling is accepted.
+const ENTRY_RE = /(?:Класс|Расса|Расс|Раса|Клас)\s*:(?:\s|&nbsp;)*<a\s[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:Создатель|Основател)[^@]*@([A-Za-z0-9_]+)/gi;
+
+function parseIndexEntries(html) {
+  const entries = [];
+  const seen = new Set();
+  for (const match of String(html || '').matchAll(ENTRY_RE)) {
+    const url = match[1].trim();
+    const name = stripTags(match[2]);
+    const author = '@' + match[3];
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    entries.push({ name, author, url });
+  }
+  return entries;
+}
+
+// One post, reduced to what the site shows: title, address and readable text.
+function parsePostFeed(feed) {
+  const entry = feed && feed.feed && Array.isArray(feed.feed.entry) ? feed.feed.entry[0] : null;
+  if (!entry) return null;
+  const title = stripTags(entry.title && entry.title.$t ? entry.title.$t : '');
+  const html = (entry.content && entry.content.$t) || (entry.summary && entry.summary.$t) || '';
+  const links = Array.isArray(entry.link) ? entry.link : [];
+  const url = (links.find((l) => l && l.rel === 'alternate') || {}).href || '';
+  return { title, url, text: htmlToText(html) };
+}
+
+// The live list is preferred, but a post the owner removed from the index should
+// not vanish while the snapshot still lists it, so the two are merged. Names are
+// compared case-insensitively: the blog mixes "разумный слайм" and "Разумный слайм".
+function mergeEntries(live, snapshot) {
+  const out = [];
+  const seen = new Set();
+  for (const e of [...(Array.isArray(live) ? live : []), ...(Array.isArray(snapshot) ? snapshot : [])]) {
+    const name = String((e && e.name) || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name, author: String((e && e.author) || ''), url: String((e && e.url) || '') });
+  }
+  return out;
+}
+
+// `loadJson(path)` returns the feed object for one post. It is injected so the
+// browser can pass a JSONP loader and a test a plain fetch.
+async function readIndex({ indexUrl, loadJson, log = () => {} }) {
+  const path = blogPath(indexUrl);
+  if (!path || typeof loadJson !== 'function') return { entries: [], live: false };
+  try {
+    const feed = await loadJson(path);
+    const html = (feed && feed.feed && feed.feed.entry && feed.feed.entry[0] && feed.feed.entry[0].content && feed.feed.entry[0].content.$t) || '';
+    return { entries: parseIndexEntries(html), live: true };
+  } catch (err) {
+    log(`blog index ${path} unavailable: ${(err && err.message) || err}`);
+    return { entries: [], live: false };
+  }
+}
+
+async function readPost({ url, loadJson }) {
+  const path = blogPath(url);
+  if (!path || typeof loadJson !== 'function') return null;
+  const post = parsePostFeed(await loadJson(path));
+  // A missing link is filled from the address that was asked for, so the entry
+  // still points somewhere even if the feed omitted the alternate link.
+  return post ? { ...post, url: post.url || String(url || '') } : null;
+}
+
+// The browser loader: one <script> per post, removed as soon as it answers. A
+// timeout and an onerror both reject, so a blocked or slow blog never leaves the
+// page waiting.
+function createJsonpLoader({ timeoutMs = 15000, doc = typeof document !== 'undefined' ? document : null, win = typeof window !== 'undefined' ? window : null } = {}) {
+  if (!doc || !win) return null;
+  let seq = 0;
+  return function loadJson(path) {
+    return new Promise((resolve, reject) => {
+      const name = `__drBlog${Date.now().toString(36)}${seq++}`;
+      const script = doc.createElement('script');
+      let done = false;
+      const timer = setTimeout(() => finish(new Error('blog timeout')), timeoutMs);
+      function finish(err, data) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { delete win[name]; } catch { win[name] = undefined; }
+        if (script.parentNode) script.parentNode.removeChild(script);
+        if (err) reject(err);
+        else resolve(data);
+      }
+      win[name] = (data) => finish(null, data);
+      script.onerror = () => finish(new Error('blog unreachable'));
+      script.src = feedUrl(path, name);
+      doc.head.appendChild(script);
+    });
+  };
+}
+
+
 // ---- chat-answers.js ----
 // The three chat handlers live here rather than in the server, so the browser can
-// run the very same rules when no server is reachable. Only the model call and
-// the article publishing are injected, because those differ per environment.
+// run the very same rules when no server is reachable. Only the model call is
+// injected, because that differs per environment.
 
 
 
@@ -1439,7 +1601,7 @@ async function answerGuide({ messages = [], lang = 'ru', onLive = null } = {}) {
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-async function answerInterview({ messages = [], lang = 'ru', application = {}, publish = null, notify = null, onLive = null } = {}) {
+async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
@@ -1465,16 +1627,10 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, p
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.
   const approved = approvedWithSheet(clean, history, appState);
-  let published = null;
   let delivered = false;
   let sheetKind = null;
   if (approved) {
-    // The article publish and the owner notification are independent: a failed
-    // notification must not undo a published race, and vice versa.
     sheetKind = detectSheet(history, appState);
-    if (typeof publish === 'function') {
-      published = await publish({ messages: history, lang, application: appState }).catch(() => null);
-    }
     if (typeof send === 'function') {
       const result = await send({
         kind: sheetKind,
@@ -1489,12 +1645,11 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, p
   // says so and repeats the owner's contact, so an application is never lost to a
   // silent failure.
   const closing = approved ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
-  const handoff = handoffText('interview', lang, { approved, published, kind: sheetKind });
+  const handoff = handoffText('interview', lang, { approved, kind: sheetKind });
   decorate = (body) => withEnd(approved ? `${body}\n\n${closing}\n\n${handoff}` : body);
   return {
     reply: decorate(clean),
     application: appState,
-    published,
     delivered,
     source: by,
     livePending: Boolean(livePending),
@@ -1663,9 +1818,9 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
 
   setModelCaller(callModel);
 
-  // Without a server there is no article builder, so a sheet is recognised by its
+  // Without a server there is no sheet detector, so a sheet is recognised by its
   // own markers. That is enough to approve and hand off; the owner gets the sheet
-  // itself, and publishing an article stays with them.
+  // itself, and posting it in the blog stays with them.
   function sheetKind(messages, application) {
     var text = (Array.isArray(messages) ? messages.map(function (m) { return String(m && m.content || ''); }).join('\n') : '') + '\n' + JSON.stringify(application || {});
     var race = [/самоназвание/i, /особые приметы/i, /уязвимост/i, /форма правления/i, /социальная структура/i];
@@ -1751,6 +1906,16 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
     answerInterview: answerInterview,
     answerStaff: answerStaff,
     needsModel: needsModel,
-    withEnd: withEnd
+    withEnd: withEnd,
+    // The blog reader, so the page can refresh the player races and classes from
+    // the blog itself. Exposed here because this is the only script the page
+    // loads that is built from modules.
+    blog: {
+      readIndex: readIndex,
+      readPost: readPost,
+      mergeEntries: mergeEntries,
+      createJsonpLoader: createJsonpLoader,
+      blogPath: blogPath
+    }
   };
 })();

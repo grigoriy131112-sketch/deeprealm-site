@@ -7,7 +7,6 @@
   "scripts": {
     "start": "node server.js",
     "test": "NODE_ENV=test node --test test/*.test.js",
-    "import-articles": "node scripts/import-articles.js",
     "build-chat-browser": "node scripts/build-chat-browser.js",
     "build-pages": "node scripts/build-chat-browser.js && node scripts/build-pages.js"
   },

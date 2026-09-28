@@ -87,11 +87,11 @@
     <p class="sub">Этой тропы нет на карте мира</p>
     <p>
       Вы свернули не туда: такой страницы в Deeprealm нет, либо её унесло Грохотом.
-      Вернитесь на главную — там весь лор, расы, классы и статьи.
+      Вернитесь на главную — там весь лор, расы, классы и пасс уровней.
     </p>
     <a class="button" href="/deeprealm-site/">На главную</a>
     <div class="links">
-      <a href="/deeprealm-site/#articles">Статьи</a>
+      <a href="/deeprealm-site/#lore">Лор</a>
       <a href="/deeprealm-site/#races">Расы</a>
       <a href="/deeprealm-site/#classes">Классы</a>
       <a href="https://t.me/Deeprealm5">Telegram</a>
@@ -102,7 +102,7 @@
     // before leaving the visitor on the error page.
     (function () {
       var seg = location.pathname.split('/').filter(Boolean).pop() || '';
-      var known = ['home', 'lore', 'rules', 'races', 'classes', 'articles', 'pass', 'staff', 'interview', 'guide'];
+      var known = ['home', 'lore', 'rules', 'races', 'classes', 'levelpass', 'admin', 'application', 'guide'];
       if (known.indexOf(seg) !== -1) {
         location.replace('/deeprealm-site/#' + seg);
       }

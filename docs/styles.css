@@ -340,60 +340,24 @@ footer.site { border-top: 1px solid var(--line); color: var(--ink-dim); font-siz
   .page { animation: none; }
 }
 
-/* Articles: a browsable list of every blog article plus player-made races/classes. */
-.article-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0; }
-.article-controls input[type="search"] {
-  flex: 1 1 240px;
-  padding: 10px 14px;
-  background: rgba(10, 8, 14, 0.7);
-  border: 1px solid rgba(201, 162, 75, 0.3);
-  border-radius: 8px;
-  color: inherit;
-  font: inherit;
-}
-.article-controls input[type="search"]:focus { outline: none; border-color: var(--gold); }
-#articleFilters { margin-top: 0; }
-#articleFilters .chip.active { color: var(--gold-bright); border-color: var(--gold); background: rgba(201, 162, 75, 0.12); }
-
-#articleList { display: grid; gap: 8px; margin-top: 8px; }
-.article-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 16px;
-  text-align: left;
-  background: rgba(16, 12, 22, 0.65);
-  border: 1px solid rgba(201, 162, 75, 0.18);
-  border-radius: 8px;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  transition: border-color 0.2s, transform 0.2s, background 0.2s;
-}
-.article-row:hover {
-  border-color: rgba(201, 162, 75, 0.5);
-  background: rgba(24, 18, 32, 0.8);
-  transform: translateY(-1px);
-}
-.article-title { font-family: 'Cinzel', serif; letter-spacing: 0.02em; }
-
-.article-view { margin-top: 16px; }
-.article-view h3 { margin: 12px 0 8px; }
-.article-body {
-  margin-top: 12px;
+/* Player-made races and classes, read from the blog: a folded card per entry so
+   the list stays short until a reader opens one. */
+.player-entry { margin: 0 0 8px; }
+.player-entry summary { cursor: pointer; }
+.player-entry summary:hover { color: var(--gold-bright); }
+.player-entry .article-body {
+  margin-top: 10px;
   max-height: 70vh;
   overflow-y: auto;
   padding-right: 8px;
 }
-.article-body p {
+.player-entry .article-body p {
   margin: 0 0 6px;
   font-family: 'Vollkorn', Georgia, serif;
   white-space: pre-wrap;
   word-break: break-word;
 }
-.article-body p.gap { height: 8px; margin: 0; }
+.player-entry .article-body p.gap { height: 8px; margin: 0; }
 
 /* --- dark-fantasy additions ---------------------------------------------- */
 /* Everything below only adds layering and ornament. Colours, fonts, sizes and
@@ -626,19 +590,31 @@ nav.tabs button.active::after {
   text-shadow: 0 0 22px rgba(201, 162, 75, 0.5);
 }
 
-.doorway.open { visibility: visible; }
-.doorway.open .doorway-leaves { opacity: 1; }
-.doorway.open .doorway-leaves::before,
-.doorway.open .doorway-leaves::after { transform: scaleX(1); transition: transform 0.3s ease-in; }
-.doorway.open .doorway-arch { opacity: 0.9; transition: opacity 0.25s ease-in; }
-.doorway.open .doorway-runes { opacity: 0.9; transition: opacity 0.3s ease-in 0.05s; }
+/* One easing for the whole walk: slow at both ends, unhurried through the
+   middle, so the stone glides instead of snapping. The leaves also brighten as
+   they come across, which hides the hard edge of the scale. */
+.doorway-leaves::before,
+.doorway-leaves::after { will-change: transform; }
 
-/* Opening: the leaves draw back and the lit arch fades last, like a door left
-   ajar. Fast enough that reading is never waiting on it. */
+.doorway.open { visibility: visible; }
+.doorway.open .doorway-leaves { opacity: 1; transition: opacity 0.5s ease-out; }
+.doorway.open .doorway-leaves::before,
+.doorway.open .doorway-leaves::after {
+  transform: scaleX(1);
+  transition: transform 0.6s cubic-bezier(0.45, 0, 0.25, 1);
+}
+.doorway.open .doorway-arch { opacity: 0.9; transition: opacity 0.5s ease-in 0.12s; }
+.doorway.open .doorway-runes { opacity: 0.9; transition: opacity 0.55s ease-in 0.2s; }
+
+/* Opening: the leaves draw back, the arch lingers a moment then fades, like a
+   door left ajar. Slower than the close so the room is revealed gently. */
 .doorway.parting .doorway-leaves::before,
-.doorway.parting .doorway-leaves::after { transform: scaleX(0); transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1); }
-.doorway.parting .doorway-arch { opacity: 0; transition: opacity 0.3s ease-out 0.1s; }
-.doorway.parting .doorway-runes { opacity: 0; transition: opacity 0.2s ease-out; }
+.doorway.parting .doorway-leaves::after {
+  transform: scaleX(0);
+  transition: transform 0.72s cubic-bezier(0.45, 0, 0.25, 1);
+}
+.doorway.parting .doorway-arch { opacity: 0; transition: opacity 0.6s ease-out 0.18s; }
+.doorway.parting .doorway-runes { opacity: 0; transition: opacity 0.45s ease-out; }
 .doorway.parting { visibility: visible; }
 
 @media (prefers-reduced-motion: reduce) {

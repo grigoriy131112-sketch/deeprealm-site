@@ -342,10 +342,9 @@ test('a plot is recognised and walked through its own checklist', () => {
   assert.match(second, /Главная проблема/, 'the walk continues with the next plot field');
 });
 
-test('an approved plot goes to the owner and is not published as an article', async () => {
+test('an approved plot goes to the owner and is not published by the site', async () => {
   const sent = [];
   setNotifier(async (info) => { sent.push(info); return { ok: true }; });
-  let publishCalls = 0;
   const messages = [
     { role: 'user', content: 'Хочу предложить сюжет для ГМ' },
     { role: 'assistant', content: 'Расскажи про «Название сюжета».' },
@@ -353,14 +352,13 @@ test('an approved plot goes to the owner and is not published as an article', as
     { role: 'assistant', content: 'Расскажи про «Локации».' },
     { role: 'user', content: 'проверь' }
   ];
-  const out = await answerInterview({
-    messages, lang: 'ru',
-    publish: async () => { publishCalls += 1; return null; }
-  });
+  const out = await answerInterview({ messages, lang: 'ru' });
   assert.equal(sent.length, 1, 'the owner gets the plot');
   assert.equal(sent[0].kind, 'story');
   assert.equal(sent[0].title, 'Банк призраков', 'the plot title reaches the owner');
   assert.match(out.reply, /Сюжет отправлен владельцу/);
-  assert.equal(publishCalls, 1, 'the server-side publish is asked, and it declines a plot');
+  // The site no longer publishes a race, a class or a plot itself: the owner
+  // posts them in the blog, and the pages read the blog.
+  assert.equal(out.published, undefined, 'nothing is published by the site');
   setNotifier(null);
 });

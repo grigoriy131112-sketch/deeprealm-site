@@ -10,9 +10,9 @@
 let knowledge = {};
 export function setKnowledge(next) { knowledge = next || {}; }
 
-// Deciding whether a sheet is a race or a class needs the article builder, which
-// only exists on the server. The browser registers a lighter check instead of
-// importing it, so approval still works with no server present.
+// Deciding whether a sheet is a race, a class or a plot needs the sheet detector,
+// which the server supplies from publish.js. The browser registers its own lighter
+// check instead of importing it, so approval still works with no server present.
 let sheetDetector = () => null;
 export function setSheetDetector(fn) { sheetDetector = typeof fn === "function" ? fn : () => null; }
 export function getKnowledge() { return knowledge; }
@@ -171,9 +171,9 @@ export function findRole(key) {
 }
 
 // The hand-off wording is fixed here so the destination and the owner's username
-// are never paraphrased by the model. When the bot managed to publish the race or
-// class article itself, it says so instead of asking for the owner.
-export function handoffText(type, lang, { approved = false, published = null, kind = null } = {}) {
+// are never paraphrased by the model. The site never publishes the sheet itself;
+// the owner posts it in the blog, so the wording always hands it to the owner.
+export function handoffText(type, lang, { approved = false, kind = null } = {}) {
   const chat = knowledge.chat.telegram;
   const owner = knowledge.chat.owner;
   if (type === 'interview') {
@@ -184,7 +184,7 @@ export function handoffText(type, lang, { approved = false, published = null, ki
         ? `Your plot is with the owner. The game master will read it and get back to you.`
         : `Сюжет у владельца. ГМ прочитает его и свяжется с тобой.`;
     }
-    const note = publishNote(lang, published, owner);
+    const note = publishNote(lang, owner);
     return lang === 'en'
       ? `Your sheet is already with the owner. Join the chat while you wait:\n${chat}${note}`
       : `Анкета уже у владельца. А пока можешь зайти в чат:\n${chat}${note}`;
@@ -314,17 +314,13 @@ export function withEnd(text) {
   return `${body}\n\n${END_WORD}`;
 }
 
-// What an approved player is told about their race or class article.
-export function publishNote(lang, published, owner) {
-  if (!published) {
-    return lang === 'en'
-      ? `\n\nWant your own race or class? The article is published by the owner ${owner}: send the sheet and you are in.`
-      : `\n\nХочешь свою расу или класс? Статью публикует владелец ${owner}: скинь анкету, и ты принят.`;
-  }
-  const kind = published.kind === 'race' ? (lang === 'en' ? 'race' : 'раса') : (lang === 'en' ? 'class' : 'класс');
+// What an approved player is told about their race or class. The site does not
+// publish it: the owner posts it in the blog, and the Races and Classes pages
+// pick it up from there.
+export function publishNote(lang, owner) {
   return lang === 'en'
-    ? `\n\nYour article is already on the site: ${kind} "${published.title}". See the Articles section.`
-    : `\n\nСтатья уже на сайте: ${kind} «${published.title}». Смотри раздел «Статьи».`;
+    ? `\n\nWant your own race or class? The owner ${owner} publishes it in the blog: send the sheet and you are in.`
+    : `\n\nХочешь свою расу или класс? Владелец ${owner} публикует их в блоге: скинь анкету, и ты принят.`;
 }
 
 // What the player is told once the sheet has been forwarded to the owner. The

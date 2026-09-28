@@ -2,18 +2,7 @@ const I18N = {
   ru: {
     brand: 'Deeprealm',
     tagline: 'Тёмное фэнтези-РП · мир после Единого Королевства',
-    tabs: { home: 'Главная', lore: 'Лор', rules: 'Правила', races: 'Расы', classes: 'Классы', articles: 'Статьи', levelpass: 'Пасс уровней', admin: 'Администрация', application: 'Анкетолог', guide: 'Проводник' },
-    'articles.title': 'Статьи',
-    'articles.hint': 'Все статьи мира: расы, классы, лор и правила. Новые расы и классы, одобренные анкетологом, появляются здесь автоматически.',
-    'articles.search': 'Поиск по статьям…',
-    'articles.all': 'Все',
-    'articles.race': 'Расы',
-    'articles.class': 'Классы',
-    'articles.other': 'Прочее',
-    'articles.empty': 'Ничего не найдено.',
-    'articles.count': 'Статей: {n}',
-    'articles.back': '← Назад к списку',
-    'articles.open': 'Открыть статью',
+    tabs: { home: 'Главная', lore: 'Лор', rules: 'Правила', races: 'Расы', classes: 'Классы', levelpass: 'Пасс уровней', admin: 'Администрация', application: 'Анкетолог', guide: 'Проводник' },
     'home.title': 'Добро пожаловать в Deeprealm',
     'home.lead': 'Мир, переживший гибель Спасителя, раскол Единого Королевства и Грохот. Здесь игроки создают персонажей, расы и классы, а ГМ ведёт их через мрак и свет.',
     'home.create': 'Создать персонажа',
@@ -94,18 +83,7 @@ const I18N = {
   en: {
     brand: 'Deeprealm',
     tagline: 'Dark fantasy RP · a world after the Single Kingdom',
-    tabs: { home: 'Home', lore: 'Lore', rules: 'Rules', races: 'Races', classes: 'Classes', articles: 'Articles', levelpass: 'Level pass', admin: 'Administration', application: 'Interviewer', guide: 'Guide' },
-    'articles.title': 'Articles',
-    'articles.hint': 'Every article of the world: races, classes, lore and rules. New races and classes approved by the interviewer appear here automatically.',
-    'articles.search': 'Search articles…',
-    'articles.all': 'All',
-    'articles.race': 'Races',
-    'articles.class': 'Classes',
-    'articles.other': 'Other',
-    'articles.empty': 'Nothing found.',
-    'articles.count': 'Articles: {n}',
-    'articles.back': '← Back to the list',
-    'articles.open': 'Open article',
+    tabs: { home: 'Home', lore: 'Lore', rules: 'Rules', races: 'Races', classes: 'Classes', levelpass: 'Level pass', admin: 'Administration', application: 'Interviewer', guide: 'Guide' },
     'home.title': 'Welcome to Deeprealm',
     'home.lead': 'A world that survived the death of the Savior, the fall of the Single Kingdom and the Rumble. Players create characters, races and classes while the GM leads them through shadow and light.',
     'home.create': 'Create a character',
@@ -188,89 +166,84 @@ const I18N = {
 const state = {
   lang: localStorage.getItem('dr_lang') || 'ru',
   knowledge: null,
-  articles: [],
-  articleText: new Map(),
-  articleFilter: 'all',
-  articleQuery: ''
+  // Player-made races and classes read from the blog: full texts for the Races
+  // and Classes pages, and the same records handed to the built-in AI.
+  playerRaces: [],
+  playerClasses: []
 };
 
-function renderArticles() {
-  const filters = [
-    ['all', t('articles.all')],
-    ['race', t('articles.race')],
-    ['class', t('articles.class')],
-    ['other', t('articles.other')]
-  ];
-  el('articleFilters').innerHTML = filters
-    .map(([key, label]) => `<button class="chip${state.articleFilter === key ? ' active' : ''}" data-filter="${key}">${esc(label)}</button>`)
-    .join('');
-  el('articleFilters').querySelectorAll('button').forEach((b) => {
-    b.addEventListener('click', () => { state.articleFilter = b.dataset.filter; renderArticles(); });
-  });
+// ---------- player races and classes, read from the blog ----------
 
-  const q = state.articleQuery.trim().toLowerCase();
-  const list = state.articles.filter((a) => {
-    if (state.articleFilter === 'race' && a.kind !== 'race') return false;
-    if (state.articleFilter === 'class' && a.kind !== 'class') return false;
-    if (state.articleFilter === 'other' && ['race', 'class'].includes(a.kind)) return false;
-    return !q || a.title.toLowerCase().includes(q);
-  });
+// The owner publishes a new race or class in the blog, so the Races and Classes
+// pages read the blog itself. The knowledge file carries a snapshot taken at
+// build time; it is shown first and stays if the blog cannot be reached, so the
+// pages are never empty and a freshly published post appears with no rebuild,
+// no commit and no server.
+const PLAYER_FETCH_LIMIT = 40;
 
-  const rows = list.map((a) => {
-    const tag = a.kind === 'race' ? t('articles.race') : a.kind === 'class' ? t('articles.class') : t('articles.other');
-    return `<button class="article-row" type="button" data-slug="${esc(a.slug)}">
-      <span class="article-title">${esc(a.title)}</span>
-      <span class="tag">${esc(tag)}</span>
-    </button>`;
-  }).join('');
-
-  el('articleList').innerHTML = list.length
-    ? `<p class="hint">${esc(t('articles.count').replace('{n}', String(list.length)))}</p>${rows}`
-    : `<p class="hint">${esc(t('articles.empty'))}</p>`;
-
-  el('articleList').querySelectorAll('.article-row').forEach((b) => {
-    b.addEventListener('click', () => openArticle(b.dataset.slug));
-  });
+function blogReader() {
+  const chat = localChat();
+  return (chat && chat.blog) || null;
 }
 
-async function openArticle(slug) {
-  const view = el('articleView');
-  view.hidden = false;
-  view.innerHTML = `<p class="hint">…</p>`;
-  let a = null;
-  try {
-    const res = await fetch(`/api/articles/${encodeURIComponent(slug)}`);
-    if (res.ok) a = await res.json();
-  } catch { /* static hosting has no API */ }
-  // On static hosting the full text is already in memory from the JSON file.
-  if (!a) a = state.articleText.get(slug) || null;
-  if (!a) { view.innerHTML = `<p class="hint">${esc(t('articles.empty'))}</p>`; return; }
-  // Text is kept line by line by the blog import, so each line is rendered as its own row.
-  const body = String(a.text || '').split('\n').map((line) => (line.trim() ? `<p>${esc(line)}</p>` : '<p class="gap"></p>')).join('');
-  const back = String(a.url || '');
-  view.innerHTML = `
-    <button class="btn" type="button" id="articleBack">${esc(t('articles.back'))}</button>
-    <h3>${esc(a.title)}</h3>
-    ${back ? `<p><a href="${esc(back)}" target="_blank" rel="noopener">${esc(t('articles.open'))}</a></p>` : ''}
-    <div class="article-body">${body}</div>`;
-  el('articleBack').addEventListener('click', () => { view.hidden = true; view.innerHTML = ''; });
-  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+async function loadPlayerContent() {
+  const blog = blogReader();
+  const k = state.knowledge || {};
+  const raceIndex = (k.races && k.races.playerBlogLink) || '';
+  const classIndex = (k.classes && k.classes.playerBlogLink) || '';
+  const snapshotRaces = (k.races && k.races.playerRaces) || [];
+  const snapshotClasses = (k.classes && k.classes.playerClasses) || [];
+  if (!blog || typeof blog.createJsonpLoader !== 'function' || !raceIndex || !classIndex) return;
+  const loadJson = blog.createJsonpLoader();
+  if (!loadJson) return;
+  const [raceIdx, classIdx] = await Promise.all([
+    blog.readIndex({ indexUrl: raceIndex, loadJson }),
+    blog.readIndex({ indexUrl: classIndex, loadJson })
+  ]);
+  if (!raceIdx.live && !classIdx.live) return;
+  // Live names are merged over the snapshot, so a new post shows up at once while
+  // an entry the blog dropped stays reachable.
+  state.playerRaces = blog.mergeEntries(raceIdx.entries, snapshotRaces);
+  state.playerClasses = blog.mergeEntries(classIdx.entries, snapshotClasses);
+  renderKnowledge();
+  // The full text is only needed to read a race or class, so it arrives after the
+  // names are already on the page.
+  await loadPlayerTexts(blog, loadJson);
 }
 
-async function loadArticles() {
-  if (!el('articleList')) return;
-  try {
-    const data = await readJson('/api/articles', 'data/articles.json');
-    const all = Array.isArray(data.articles) ? data.articles : [];
-    // The static file carries the full text, the API list only a summary; keep
-    // whichever list has more per-article detail.
-    state.articleText = new Map(all.filter((a) => a.text).map((a) => [a.slug, a]));
-    state.articles = all;
-  } catch {
-    state.articles = [];
-    state.articleText = new Map();
-  }
-  renderArticles();
+async function loadPlayerTexts(blog, loadJson) {
+  const jobs = [
+    ...state.playerRaces.map((entry) => ({ entry })),
+    ...state.playerClasses.map((entry) => ({ entry }))
+  ].slice(0, PLAYER_FETCH_LIMIT);
+  let cursor = 0;
+  // Three at a time: enough to be quick, few enough to stay polite to the blog.
+  const worker = async () => {
+    while (cursor < jobs.length) {
+      const { entry } = jobs[cursor++];
+      try {
+        const post = await blog.readPost({ url: entry.url, loadJson });
+        if (post) { entry.title = post.title || entry.name; entry.text = post.text || ''; }
+      } catch { /* one post that fails keeps just its name */ }
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  renderKnowledge();
+  syncPlayerArticles();
+}
+
+// The built-in AI answers questions about player races and classes, so the live
+// records are handed to it in the shape its article index expects.
+function syncPlayerArticles() {
+  const chat = localChat();
+  if (!chat || typeof chat.setEngineArticles !== 'function') return;
+  const toArticle = (kind) => (e) => (e.text
+    ? { slug: `${kind}-${e.name}`, title: e.title || e.name, kind, text: e.text }
+    : null);
+  chat.setEngineArticles([
+    ...state.playerRaces.map(toArticle('race')).filter(Boolean),
+    ...state.playerClasses.map(toArticle('class')).filter(Boolean)
+  ]);
 }
 
 // ---------- chats: persistence, multiple conversations, message actions ----------
@@ -333,6 +306,10 @@ async function boot() {
   // reshaped payload the page renders. Without it the browser could not answer on
   // its own, so it is loaded alongside - and its absence simply disables that path.
   state.rawKnowledge = await readJson('/api/knowledge-raw', 'data/knowledge.raw.json').catch(() => null);
+  // The player races and classes start from the snapshot bundled with the site, so
+  // the pages are never empty; the blog read below replaces them with the live list.
+  state.playerRaces = (state.knowledge.races && state.knowledge.races.playerRaces) || [];
+  state.playerClasses = (state.knowledge.classes && state.knowledge.classes.playerClasses) || [];
   el('langSelect').value = state.lang;
   renderStatic();
   renderKnowledge();
@@ -340,10 +317,12 @@ async function boot() {
   wireNav();
   wireChats();
   wireLang();
-  wireArticles();
   showAiStatus();
   reportVisit();
-  await loadArticles();
+  // The player races and classes are read from the blog after the page is up, so
+  // the first paint is never waiting on the network. The snapshot is shown until
+  // the live list arrives.
+  loadPlayerContent().catch(() => {});
   openFromHash();
 }
 
@@ -460,7 +439,6 @@ function buildTabs() {
 const ROOM_FOR_PAGE = {
   home: 'courtyard',
   lore: 'library',
-  articles: 'library',
   races: 'guild',
   classes: 'guild',
   levelpass: 'guild',
@@ -474,8 +452,14 @@ const ROOM_FOR_PAGE = {
 // they part. The swap happens while the screen is covered, so the change is
 // never seen mid-frame. Under prefers-reduced-motion there is no overlay at all
 // and the room simply changes; that is handled in CSS, so this only decides when.
-const DOOR_CLOSE_MS = 330;
-const DOOR_HOLD_MS = 120;
+//
+// The three timings mirror the CSS transitions: the leaves take 600ms to shut,
+// the swap waits out a short hold so the room is fully hidden, then the leaves
+// take 720ms to draw back. Keeping them in step is what makes the walk read as
+// one smooth movement rather than a flicker.
+const DOOR_CLOSE_MS = 600;
+const DOOR_HOLD_MS = 220;
+const DOOR_PART_MS = 720;
 let doorTimer = 0;
 let firstPage = true;
 
@@ -511,7 +495,7 @@ function enterRoom(page) {
     doorway.classList.add('parting');
     doorTimer = setTimeout(() => {
       doorway.classList.remove('open', 'parting');
-    }, 460);
+    }, DOOR_PART_MS);
   }, DOOR_CLOSE_MS + DOOR_HOLD_MS);
 }
 
@@ -540,18 +524,10 @@ function wireLang() {
     renderStatic();
     buildTabs();
     renderKnowledge();
-    renderArticles();
     renderChips();
     renderAllChats();
     showPage(location.hash.replace('#', '') || 'home');
   });
-}
-
-// Search runs on every keystroke; the list is local, so no request is needed.
-function wireArticles() {
-  const search = el('articleSearch');
-  if (!search) return;
-  search.addEventListener('input', () => { state.articleQuery = search.value; renderArticles(); });
 }
 
 function esc(s) {
@@ -579,7 +555,14 @@ function playerList(entries, blogLink, blogLabel, fallback = []) {
   if (!list.length) return `<p class="hint">${esc(t('player.empty'))}</p>`;
   const rows = list.map((c) => {
     const name = c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name)}</a>` : esc(c.name);
-    return `<p><strong>${name}</strong> — ${ownerLink(c.author)}</p>`;
+    const head = `<p><strong>${name}</strong> — ${ownerLink(c.author)}</p>`;
+    // A post read from the blog carries its full text; it is folded into a
+    // collapsible card so the list stays short until a reader opens one.
+    if (!c.text) return head;
+    const body = String(c.text).split('\n')
+      .map((line) => (line.trim() ? `<p>${esc(line)}</p>` : '<p class="gap"></p>')).join('');
+    return `<details class="player-entry"><summary><strong>${esc(c.name)}</strong> — ${ownerLink(c.author)}</summary>
+      <div class="article-body">${body}</div></details>`;
   }).join('');
   const all = blogLink ? `<p><a href="${esc(blogLink)}" target="_blank" rel="noopener">${esc(blogLabel)}</a></p>` : '';
   return rows + all;
@@ -628,7 +611,7 @@ function renderKnowledge() {
       ${k.races.templateLink ? `<p><a href="${esc(k.races.templateLink)}" target="_blank" rel="noopener">${esc(t('races.templateLink'))}</a></p>` : ''}
     </div>
     <div class="card"><h3>${esc(t('races.player'))}</h3>
-      ${playerList(k.races.playerRaces, k.races.playerBlogLink, k.races.playerBlogLink ? t('races.playerBlog') : '')}
+      ${playerList(state.playerRaces, k.races.playerBlogLink, k.races.playerBlogLink ? t('races.playerBlog') : '')}
     </div>
     <h3>${esc(t('races.relations'))}</h3>${relationRows}`;
 
@@ -652,7 +635,7 @@ function renderKnowledge() {
       }).join('')}
     </div>
     <div class="card"><h3>${esc(t('classes.player'))}</h3>
-      ${playerList(k.classes.playerClasses, k.classes.playerBlogLink, k.classes.playerBlogLink ? t('classes.playerBlog') : '', k.classes.player_classes || k.classes.playerClasses)}
+      ${playerList(state.playerClasses, k.classes.playerBlogLink, k.classes.playerBlogLink ? t('classes.playerBlog') : '')}
     </div>
     <div class="card"><h3>${esc(t('classes.levelPass'))}</h3>
       ${levelPassRows}
@@ -992,10 +975,9 @@ async function askBrowser(type, body) {
   // The chats read the stored shape; without it the browser cannot answer.
   if (!state.rawKnowledge) return null;
   chat.setKnowledge(state.rawKnowledge);
-  // Player-made races and classes are answered from the article store too.
-  if (typeof chat.setEngineArticles === 'function') {
-    chat.setEngineArticles(Array.from(state.articleText?.values() || []));
-  }
+  // Player races and classes read from the blog are handed to the engine, so the
+  // Guide and the Interviewer can answer questions about them.
+  syncPlayerArticles();
   if (type === 'guide') return chat.answerGuide(body);
   if (type === 'interview') return chat.answerInterview(body);
   return chat.answerStaff(body);
@@ -1087,9 +1069,6 @@ async function sendInterview(text) {
     }
     addMessage('interview', 'assistant', data.reply);
     attachLive('interview', live);
-    // A newly approved race or class lands in the article store; refresh the list so
-    // it shows up without a page reload.
-    if (data.published) await loadArticles();
   } catch (err) {
     pending.remove();
     pushMsg('interviewLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());

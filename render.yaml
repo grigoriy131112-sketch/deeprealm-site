@@ -12,14 +12,9 @@ services:
       # No AI key is required: the built-in engine (ai-engine.js) answers on its
       # own. LLM_API_KEY stays optional and can be added later in the dashboard
       # to upgrade the wording; nothing here asks for it at deploy time.
-      - key: GITHUB_TOKEN
-        sync: false
-      # With a repository set, approved articles are published through the GitHub
-      # Contents API (the container has no checkout to commit into).
-      - key: GITHUB_REPO
-        value: grigoriy131112-sketch/deeprealm-site
-      - key: SITE_BRANCH
-        value: main
+      # The site reads races and classes live from the blog in the browser, so
+      # there is no article publishing path any more and no GitHub token is
+      # needed. This only controls the optional server-side snapshot refresh.
       - key: BLOG_SYNC_MINUTES
         value: "60"
       # Owner notifications. Both are prompted for by the host, because the bot
