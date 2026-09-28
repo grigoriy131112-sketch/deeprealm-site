@@ -459,7 +459,7 @@ test('each section of the site asks the scene for its room', async () => {
     const btn = [...win.document.querySelectorAll('#tabs button')].find((b) => b.dataset.page === page);
     assert.ok(btn, 'there is a tab for ' + page);
     btn.click();
-    await sleep(900);
+    await sleep(1400);
     assert.equal(win.DeeprealmScene.calls.at(-1), room, page + ' must be read in the ' + room);
     assert.equal(win.document.querySelector('.page.active').dataset.page, page);
   }
@@ -470,7 +470,7 @@ test('a language switch does not re-enter the room or flash the doorway', async 
   await sleep(40);
   const btn = [...win.document.querySelectorAll('#tabs button')].find((b) => b.dataset.page === 'rules');
   btn.click();
-  await sleep(900);
+  await sleep(1400);
   const before = win.DeeprealmScene.calls.length;
 
   const lang = win.document.getElementById('langSelect');
@@ -495,9 +495,9 @@ test('the doorway overlay covers the room change and is cleaned up afterwards', 
 
   // The swap happens while the screen is covered, then the leaves draw back and
   // the overlay is cleared so it never traps a click or a screen reader.
-  await sleep(900);
+  await sleep(1300);
   assert.equal(win.DeeprealmScene.calls.at(-1), 'library');
-  await sleep(800);
+  await sleep(1200);
   assert.equal(doorway.classList.contains('open'), false);
   assert.equal(doorway.classList.contains('parting'), false, 'no class is left behind');
 });

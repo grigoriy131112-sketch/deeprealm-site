@@ -453,13 +453,13 @@ const ROOM_FOR_PAGE = {
 // never seen mid-frame. Under prefers-reduced-motion there is no overlay at all
 // and the room simply changes; that is handled in CSS, so this only decides when.
 //
-// The three timings mirror the CSS transitions: the leaves take 600ms to shut,
-// the swap waits out a short hold so the room is fully hidden, then the leaves
-// take 720ms to draw back. Keeping them in step is what makes the walk read as
-// one smooth movement rather than a flicker.
-const DOOR_CLOSE_MS = 600;
-const DOOR_HOLD_MS = 220;
-const DOOR_PART_MS = 720;
+// The three timings mirror the CSS transitions: the leaves take 900ms to shut,
+// the swap waits out a longer hold so the room is fully hidden, then the leaves
+// take 1050ms to draw back. Keeping them in step is what makes the walk read as
+// one smooth, unhurried movement rather than a flicker.
+const DOOR_CLOSE_MS = 900;
+const DOOR_HOLD_MS = 320;
+const DOOR_PART_MS = 1050;
 let doorTimer = 0;
 let firstPage = true;
 
@@ -467,30 +467,42 @@ function sceneFor(page) {
   return (window.DeeprealmScene && ROOM_FOR_PAGE[page]) || null;
 }
 
-function enterRoom(page) {
+function enterRoom(page, swap) {
   const room = sceneFor(page);
-  if (!room || !window.DeeprealmScene) return;
+  const apply = typeof swap === 'function' ? swap : () => {};
+  if (!room || !window.DeeprealmScene) {
+    apply();
+    return;
+  }
   // A language switch re-renders and calls showPage again with the same section;
   // there is no room change, so the doorway must not flash.
-  if (window.DeeprealmScene.getRoom && window.DeeprealmScene.getRoom() === room && !firstPage) return;
+  if (window.DeeprealmScene.getRoom && window.DeeprealmScene.getRoom() === room && !firstPage) {
+    apply();
+    return;
+  }
   // The first page is where the visitor already is, so the scene just takes that
   // room directly - opening the page behind closing doors would be odd.
   if (firstPage) {
     firstPage = false;
     window.DeeprealmScene.setRoom(room);
+    apply();
     return;
   }
   const doorway = el('doorway');
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!doorway || reduced) {
     window.DeeprealmScene.setRoom(room);
+    apply();
     return;
   }
   clearTimeout(doorTimer);
   doorway.classList.remove('parting');
   doorway.classList.add('open');
   doorTimer = setTimeout(() => {
+    // The room and the section both change here, while the leaves cover the
+    // screen, so the visitor never sees the old content swap out.
     window.DeeprealmScene.setRoom(room);
+    apply();
     doorway.classList.remove('open');
     doorway.classList.add('parting');
     doorTimer = setTimeout(() => {
@@ -500,11 +512,14 @@ function enterRoom(page) {
 }
 
 function showPage(page) {
-  document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.dataset.page === page));
+  // The tab lights up at once so the click feels answered, but the section
+  // itself is swapped by enterRoom behind the closing doors.
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.page === page));
-  enterRoom(page);
+  enterRoom(page, () => {
+    document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.dataset.page === page));
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  });
   location.hash = page;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function wireNav() {
