@@ -22,9 +22,9 @@ window.I18N = (function () {
       'credits.text': 'Ты — безымянный пожиратель, идущий сквозь шесть проклятых земель. ' +
         'Убивай тварей, собирай снаряжение, расти в силе. За каждым Владыкой — новый путь, ' +
         'за каждым кругом — злее мир.',
-      'nav.hero': 'Статистика', 'nav.inv': 'Инвентарь', 'nav.up': 'Улучшения',
+      'nav.hero': 'Статистика', 'nav.inv': 'Инвентарь', 'nav.kn': 'Знания', 'nav.up': 'Улучшения',
       'nav.shop': 'Лавка', 'nav.ach': 'Свершения',
-      'res.gold': 'золото', 'res.kills': 'убито', 'res.path': 'путь',
+      'res.gold': 'золото', 'res.kills': 'убито', 'res.path': 'путь', 'res.kp': 'знания', 'kn.title': 'Древо Знаний', 'kn.hint': 'Изучай узлы за очки знаний: они падают с тварей, Владык, новых уровней и сундуков. Узлы открываются по порядку.', 'kn.points': 'очки знаний', 'kt.echo': 'Отголосок',
       'hud.hint': 'пробел — удар · Q/W/E — заклинания · свайп по монстру',
       'hud.paused': '⏸ пауза',
       'back': 'Назад к бою',
@@ -123,9 +123,9 @@ window.I18N = (function () {
       'credits.text': 'You are a nameless devourer walking through six cursed lands. ' +
         'Slay the beasts, gather gear, grow in power. Beyond every Lord lies a new path, ' +
         'beyond every cycle a crueler world.',
-      'nav.hero': 'Stats', 'nav.inv': 'Inventory', 'nav.up': 'Upgrades',
+      'nav.hero': 'Stats', 'nav.inv': 'Inventory', 'nav.kn': 'Knowledge', 'nav.up': 'Upgrades',
       'nav.shop': 'Shop', 'nav.ach': 'Deeds',
-      'res.gold': 'gold', 'res.kills': 'slain', 'res.path': 'path',
+      'res.gold': 'gold', 'res.kills': 'slain', 'res.path': 'path', 'res.kp': 'lore', 'kn.title': 'Tree of Knowledge', 'kn.hint': 'Learn nodes with knowledge points: they drop from monsters, Lords, new levels and chests. Nodes unlock in order.', 'kn.points': 'knowledge', 'kt.echo': 'Echo',
       'hud.hint': 'space — strike · Q/W/E — spells · swipe the monster',
       'hud.paused': '⏸ paused',
       'back': 'Back to battle',
@@ -223,9 +223,9 @@ window.I18N = (function () {
       'credits.title': '关于本作',
       'credits.text': '你是无名的吞噬者，行走于六片诅咒之地。斩杀野兽，收集装备，不断变强。' +
         '每击败一位领主便是新的道路，每一次轮回世界都更加残酷。',
-      'nav.hero': '属性', 'nav.inv': '背包', 'nav.up': '强化',
+      'nav.hero': '属性', 'nav.inv': '背包', 'nav.kn': '学识', 'nav.up': '强化',
       'nav.shop': '商店', 'nav.ach': '成就',
-      'res.gold': '金币', 'res.kills': '击杀', 'res.path': '进度',
+      'res.gold': '金币', 'res.kills': '击杀', 'res.path': '进度', 'res.kp': '知识', 'kn.title': '知识之树', 'kn.hint': '用知识点学习节点：来自怪物、领主、等级与宝箱。节点按顺序解锁。', 'kn.points': '知识点', 'kt.echo': '回响',
       'hud.hint': '空格 — 攻击 · Q/W/E — 法术 · 滑动攻击怪物',
       'hud.paused': '⏸ 暂停',
       'back': '返回战斗',
@@ -322,9 +322,9 @@ window.I18N = (function () {
       'credits.text': 'Eres un devorador sin nombre que camina por seis tierras malditas. ' +
         'Mata a las bestias, reúne equipo, crece en poder. Tras cada Señor hay un nuevo camino, ' +
         'tras cada ciclo un mundo más cruel.',
-      'nav.hero': 'Atributos', 'nav.inv': 'Inventario', 'nav.up': 'Mejoras',
+      'nav.hero': 'Atributos', 'nav.inv': 'Inventario', 'nav.kn': 'Saber', 'nav.up': 'Mejoras',
       'nav.shop': 'Tienda', 'nav.ach': 'Hazañas',
-      'res.gold': 'oro', 'res.kills': 'muertos', 'res.path': 'camino',
+      'res.gold': 'oro', 'res.kills': 'muertos', 'res.path': 'camino', 'res.kp': 'saber', 'kn.title': 'Árbol del Saber', 'kn.hint': 'Aprende nodos con puntos de saber: caen de monstruos, Señores, niveles y cofres. Los nodos se abren en orden.', 'kn.points': 'saber', 'kt.echo': 'Eco',
       'hud.hint': 'espacio — golpe · Q/W/E — hechizos · desliza sobre el monstruo',
       'hud.paused': '⏸ pausa',
       'back': 'Volver al combate',
@@ -423,9 +423,9 @@ window.I18N = (function () {
       'credits.text': 'Jesteś bezimiennym pożeraczem wędrującym przez sześć przeklętych ziem. ' +
         'Zabijaj bestie, zbieraj ekwipunek, rośnij w siłę. Za każdym Władcą jest nowa droga, ' +
         'za każdym cyklem okrutniejszy świat.',
-      'nav.hero': 'Atrybuty', 'nav.inv': 'Ekwipunek', 'nav.up': 'Ulepszenia',
+      'nav.hero': 'Atrybuty', 'nav.inv': 'Ekwipunek', 'nav.kn': 'Wiedza', 'nav.up': 'Ulepszenia',
       'nav.shop': 'Sklep', 'nav.ach': 'Czyny',
-      'res.gold': 'złoto', 'res.kills': 'zabici', 'res.path': 'droga',
+      'res.gold': 'złoto', 'res.kills': 'zabici', 'res.path': 'droga', 'res.kp': 'wiedza', 'kn.title': 'Drzewo Wiedzy', 'kn.hint': 'Ucz się węzłów za punkty wiedzy: wypadają z potworów, Władców, poziomów i skrzyń. Węzły otwierają się po kolei.', 'kn.points': 'wiedza', 'kt.echo': 'Echo',
       'hud.hint': 'spacja — cios · Q/W/E — czary · przesuń po potworze',
       'hud.paused': '⏸ pauza',
       'back': 'Powrót do walki',
@@ -746,6 +746,128 @@ window.I18N = (function () {
       drain: ['Wysysanie', 'Czary leczą 3% życia. Magia zaczyna cię podtrzymywać.']
     }
   };
+  /* ---- Древо знаний: названия узлов (по веткам) и описания шагов ---- */
+  const KN_T = {
+    ru: {
+      fireball: ['Искра', 'Жар', 'Быстрый Выдох', 'Дешёвое Пламя', 'Меткий Огонь',
+        'Раскалённая Кровь', 'Сокрушительный Жар', 'Внутренний Горн', 'Пожар',
+        'Живительный Огонь', 'Пламенный Вихрь', 'Прожигание', 'Угли',
+        'Отголосок Пламени', 'Венец Пламени'],
+      frost: ['Иней', 'Стужа', 'Морозный Ветер', 'Лёгкий Холод', 'Точёный Лёд',
+        'Ледяная Кровь', 'Крушащий Холод', 'Мёрзлый Родник', 'Метель',
+        'Живительный Холод', 'Вьюга', 'Промерзание', 'Наледь',
+        'Отголосок Льда', 'Венец Льда'],
+      bolt: ['Разряд', 'Ток', 'Быстрый Импульс', 'Дешёвая Искра', 'Точная Молния',
+        'Грозовая Кровь', 'Крушащий Разряд', 'Грозовое Ядро', 'Гроза',
+        'Живительный Ток', 'Штормовой Вихрь', 'Пробой', 'Ионизация',
+        'Отголосок Бури', 'Венец Бури']
+    },
+    en: {
+      fireball: ['Spark', 'Heat', 'Quick Breath', 'Cheap Flame', 'Keen Fire',
+        'Molten Blood', 'Crushing Heat', 'Inner Forge', 'Wildfire',
+        'Living Fire', 'Flame Whirl', 'Sear', 'Embers',
+        'Flame Echo', 'Crown of Flame'],
+      frost: ['Rime', 'Chill', 'Frost Wind', 'Light Cold', 'Keen Ice',
+        'Frozen Blood', 'Crushing Cold', 'Frozen Spring', 'Blizzard',
+        'Living Cold', 'Snowstorm', 'Deep Freeze', 'Ice Crust',
+        'Frost Echo', 'Crown of Ice'],
+      bolt: ['Discharge', 'Current', 'Quick Pulse', 'Cheap Spark', 'Keen Lightning',
+        'Storm Blood', 'Crushing Bolt', 'Storm Core', 'Thunderstorm',
+        'Living Current', 'Storm Whirl', 'Breakdown', 'Ionization',
+        'Storm Echo', 'Crown of Storms']
+    },
+    zh: {
+      fireball: ['火花', '炽热', '迅捷吐息', '廉价烈焰', '精准之火',
+        '熔血', '碾碎之热', '内在熔炉', '野火',
+        '生息之火', '火焰旋风', '灼穿', '余烬',
+        '火焰回响', '烈焰之冠'],
+      frost: ['白霜', '严寒', '霜风', '轻寒', '锋锐之冰',
+        '冰血', '碾碎之寒', '冰封泉眼', '暴雪',
+        '生息之寒', '风雪', '深冻', '冰壳',
+        '寒冰回响', '寒冰之冠'],
+      bolt: ['放电', '电流', '迅捷脉冲', '廉价电光', '精准之雷',
+        '风暴之血', '碾碎之雷', '风暴核心', '雷暴',
+        '生息之流', '风暴旋风', '击穿', '电离',
+        '风暴回响', '风暴之冠']
+    },
+    es: {
+      fireball: ['Chispa', 'Calor', 'Aliento Veloz', 'Llama Barata', 'Fuego Certero',
+        'Sangre Fundida', 'Calor Aplastante', 'Forja Interior', 'Fuego Salvaje',
+        'Fuego Vivo', 'Torbellino de Llama', 'Calcinar', 'Brasas',
+        'Eco de Llama', 'Corona de Llama'],
+      frost: ['Escarcha', 'Frío', 'Viento Helado', 'Frío Leve', 'Hielo Certero',
+        'Sangre Helada', 'Frío Aplastante', 'Manantial Helado', 'Ventisca',
+        'Frío Vivo', 'Nevada', 'Congelación', 'Costra de Hielo',
+        'Eco de Escarcha', 'Corona de Hielo'],
+      bolt: ['Descarga', 'Corriente', 'Pulso Veloz', 'Chispa Barata', 'Rayo Certero',
+        'Sangre de Tormenta', 'Rayo Aplastante', 'Núcleo de Tormenta', 'Tormenta',
+        'Corriente Viva', 'Torbellino de Tormenta', 'Perforación', 'Ionización',
+        'Eco de Tormenta', 'Corona de Tormentas']
+    },
+    pl: {
+      fireball: ['Iskra', 'Żar', 'Szybki Oddech', 'Tania Flama', 'Celny Ogień',
+        'Stopiona Krew', 'Miażdżący Żar', 'Wewnętrzna Kuźnia', 'Pożar',
+        'Żywy Ogień', 'Ognisty Wir', 'Wypalanie', 'Węgle',
+        'Echo Ognia', 'Korona Ognia'],
+      frost: ['Szron', 'Chłód', 'Mroźny Wiatr', 'Lekki Ziąb', 'Celny Lód',
+        'Zmrożona Krew', 'Miażdżący Chłód', 'Zmarzłe Źródło', 'Zamieć',
+        'Żywy Chłód', 'Śnieżyca', 'Przemarzanie', 'Lód',
+        'Echo Mrozu', 'Korona Lodu'],
+      bolt: ['Wyładowanie', 'Prąd', 'Szybki Impuls', 'Tania Iskra', 'Celny Grom',
+        'Krew Burzy', 'Miażdżący Grom', 'Rdzeń Burzy', 'Burza',
+        'Żywy Prąd', 'Burzowy Wir', 'Przebicie', 'Jonizacja',
+        'Echo Burzy', 'Korona Burzy']
+    }
+  };
+  /* Описания идут по номеру шага: они одинаковы для всех трёх веток. */
+  const KN_D = {
+    ru: ['Сила школы +5%.', 'Урон заклинания +10%.', 'Перезарядка −7%.',
+      'Стоимость −8%.', 'Шанс крита +4%.', 'Сила школы +8%.',
+      'Крит. урон +25%.', 'Мана +12%.', 'Урон заклинания +15%.',
+      'Заклинание лечит 4% здоровья.', 'Перезарядка −10%, восстановление маны +0.5.',
+      'Каждый каст срезает 5% сопротивления школе.',
+      'Каст поджигает: 30% урона в секунду на 3 сек.',
+      'Отголосок: каст бьёт второй раз на 35% силы.',
+      'Венец: сила +20%, урон +25%, крит +5%, крит. урон +50%.'],
+    en: ['Spell school power +5%.', 'Spell damage +10%.', 'Cooldown −7%.',
+      'Cost −8%.', 'Crit chance +4%.', 'Spell school power +8%.',
+      'Crit damage +25%.', 'Mana +12%.', 'Spell damage +15%.',
+      'The spell heals 4% of health.', 'Cooldown −10%, mana regen +0.5.',
+      'Each cast shreds 5% of the school resistance.',
+      'The cast sets the foe ablaze: 30% damage per second for 3s.',
+      'Echo: the cast strikes a second time for 35% power.',
+      'Crown: power +20%, damage +25%, crit +5%, crit damage +50%.'],
+    zh: ['法术威力 +5%。', '法术伤害 +10%。', '冷却 −7%。',
+      '消耗 −8%。', '暴击率 +4%。', '法术威力 +8%。',
+      '暴击伤害 +25%。', '法力 +12%。', '法术伤害 +15%。',
+      '法术回复 4% 生命。', '冷却 −10%，法力回复 +0.5。',
+      '每次施法削减 5% 该系抗性。',
+      '施法点燃敌人：每秒 30% 伤害，持续 3 秒。',
+      '回响：法术再击一次，威力 35%。',
+      '王冠：威力 +20%，伤害 +25%，暴击 +5%，暴击伤害 +50%。'],
+    es: ['Potencia de la escuela +5%.', 'Daño del hechizo +10%.', 'Recarga −7%.',
+      'Coste −8%.', 'Prob. de crítico +4%.', 'Potencia de la escuela +8%.',
+      'Daño crítico +25%.', 'Maná +12%.', 'Daño del hechizo +15%.',
+      'El hechizo cura 4% de la vida.', 'Recarga −10%, regeneración de maná +0.5.',
+      'Cada lanzamiento corta 5% de la resistencia de la escuela.',
+      'El lanzamiento prende al enemigo: 30% de daño por segundo durante 3 s.',
+      'Eco: el hechizo golpea otra vez con 35% de potencia.',
+      'Corona: potencia +20%, daño +25%, crítico +5%, daño crítico +50%.'],
+    pl: ['Moc szkoły +5%.', 'Obrażenia czaru +10%.', 'Odnowienie −7%.',
+      'Koszt −8%.', 'Szansa na kryt +4%.', 'Moc szkoły +8%.',
+      'Obrażenia krytyczne +25%.', 'Mana +12%.', 'Obrażenia czaru +15%.',
+      'Czar leczy 4% życia.', 'Odnowienie −10%, regeneracja many +0.5.',
+      'Każdy czar ścina 5% odporności szkoły.',
+      'Czar podpala wroga: 30% obrażeń na sekundę przez 3 s.',
+      'Echo: czar uderza drugi raz z mocą 35%.',
+      'Korona: moc +20%, obrażenia +25%, kryt +5%, obrażenia krytyczne +50%.']
+  };
+  /* [название, описание] узла: ветка + номер шага */
+  const knText = (b, i) => {
+    const L = KN_T[lang] || KN_T.ru;
+    return [(L[b] || KN_T.ru[b] || [])[i] || '', (KN_D[lang] || KN_D.ru)[i] || ''];
+  };
+
   const perkText = id => (PERKS_T[lang] || PERKS_T.ru)[id] || PERKS_T.ru[id] || [id, ''];
 
   function t(key, vars) {
@@ -766,7 +888,7 @@ window.I18N = (function () {
   const achDesc = i => (ACH_D[lang] || ACH_D.ru)[i] || (ACH_D.ru[i] || '');
 
   return {
-    LANGS, t, words, achName, achDesc, perkText,
+    LANGS, t, words, achName, achDesc, perkText, knText,
     get lang() { return lang; },
     set lang(v) { lang = T[v] ? v : 'ru'; },
     isRTL: false

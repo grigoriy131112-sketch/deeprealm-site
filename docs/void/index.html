@@ -19,6 +19,7 @@
       <div class="res-item"><span class="v" id="res-gold">0</span><small data-i18n="res.gold">золото</small></div>
       <div class="res-item"><span class="v" id="res-kills">0</span><small data-i18n="res.kills">убито</small></div>
       <div class="res-item"><span class="v" id="res-zone">1</span><small data-i18n="res.path">путь</small></div>
+      <div class="res-item kp"><span class="v" id="res-kp">0</span><small data-i18n="res.kp">знания</small></div>
     </div>
     <!-- виден поверх любой страницы: игрок должен понимать, что бой замер -->
     <div id="pause-badge" data-i18n="hud.paused">⏸ пауза</div>
@@ -33,6 +34,7 @@
   <nav id="nav">
     <button class="nav-btn" data-page="hero" data-i18n="nav.hero">Статистика</button>
     <button class="nav-btn" data-page="inv" data-i18n="nav.inv">Инвентарь</button>
+    <button class="nav-btn" data-page="kn" data-i18n="nav.kn">Знания</button>
     <button class="nav-btn" data-page="up" data-i18n="nav.up">Улучшения</button>
     <button class="nav-btn" data-page="shop" data-i18n="nav.shop">Лавка</button>
     <button class="nav-btn" data-page="ach" data-i18n="nav.ach">Свершения</button>
@@ -80,6 +82,7 @@
 <div id="pages">
   <div class="page" data-page="hero"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="hero"></div></div>
   <div class="page" data-page="inv"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="inv"></div></div>
+  <div class="page" data-page="kn"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="kn"></div></div>
   <div class="page" data-page="up"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="up"></div></div>
   <div class="page" data-page="shop"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="shop"></div></div>
   <div class="page" data-page="ach"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="ach"></div></div>
@@ -157,6 +160,7 @@
 <script src="itemart.js"></script>
 <script src="monsters.js"></script>
 <script src="scenes.js"></script>
+<script src="knowledge.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

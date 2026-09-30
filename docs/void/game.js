@@ -277,6 +277,7 @@ function freshState() {
     kills: 0, deaths: 0, resSeen: {},
     upg: { dmg: 0, agi: 0, crit: 0 },
     perks: {}, spells: { fireball: 1 },
+    kn: { fireball: 0, frost: 0, bolt: 0 }, kp: 0,
     inv: [], eq: eq, chests: [],
     potions: 2, mpotions: 1,
     bossKills: {}, pendingPerks: 0,
@@ -299,6 +300,8 @@ function load() {
     st.upg = Object.assign(base.upg, d.upg || {});
     st.perks = d.perks || {};
     st.spells = Object.assign({ fireball: 1 }, d.spells || {});
+    st.kn = Object.assign({ fireball: 0, frost: 0, bolt: 0 }, d.kn || {});
+    st.kp = d.kp || 0;
     st.stat = Object.assign(base.stat, d.stat || {});
     st.bossKills = d.bossKills || {};
     st.eq = Object.assign(base.eq, d.eq || {});
@@ -331,6 +334,65 @@ function perkAdd(key) {
 }
 const spellLv = k => S.spells[k] || 0;
 
+/* ============================== ДРЕВО ЗНАНИЙ ============================== */
+/* Механика узлов живёт в knowledge.js, здесь — мостик к состоянию игры.
+   Суммы по веткам кэшируются по числу изученных узлов: stats() зовётся
+   каждый кадр, и пересчитывать дерево каждый раз незачем. */
+let knCache = null, knCacheKey = '';
+
+function knSum(b) {
+  return window.KNOWLEDGE.sum(S || { kn: {}, kp: 0 }, b);
+}
+function knAll() {
+  const key = S ? ((S.kn.fireball || 0) + '.' + (S.kn.frost || 0) + '.' + (S.kn.bolt || 0)) : '';
+  if (knCache && knCacheKey === key) return knCache;
+  knCacheKey = key;
+  knCache = { fireball: knSum('fireball'), frost: knSum('frost'), bolt: knSum('bolt') };
+  return knCache;
+}
+const knLv = b => (S && S.kn ? (S.kn[b] || 0) : 0);
+const knName = (b, i) => window.I18N.knText(b, i)[0];
+const knDesc = (b, i) => window.I18N.knText(b, i)[1];
+
+/* Очки знаний: копятся с убийств, Владык, уровней и сундуков. */
+function gainKp(n) {
+  if (!S || !n) return;
+  S.kp += n;
+  markTab('kn');
+}
+
+function buyNode(b, i) {
+  if (!window.KNOWLEDGE.canBuy(S, b, i)) return;
+  window.KNOWLEDGE.buy(S, b, i);
+  const st = stats();
+  S.hp = Math.min(st.maxHp, S.hp); S.mp = Math.min(st.maxMp, S.mp);
+  SFX('level');
+  toast('📖', knName(b, i), 'gold');
+  renderAll();
+  save();
+}
+
+/* Поджог: каст оставляет на твари горение. Один очаг на вид урона —
+   повторный каст освежает силу и время, а не плодит очаги. */
+const BURNS = {};
+function applyBurn(type, dps, time) {
+  const cur = BURNS[type];
+  BURNS[type] = { dps: Math.max(dps, cur ? cur.dps : 0), t: Math.max(time, cur ? cur.t : 0), acc: 0 };
+}
+function tickBurns(dt) {
+  for (const k in BURNS) {
+    const b = BURNS[k];
+    b.t -= dt;
+    b.acc += b.dps * dt;
+    if (b.acc >= 1) {
+      const d = Math.floor(b.acc); b.acc -= d;
+      dealDamage(d, { dot: true, flat: true, type: k, magic: true, silent: true });
+    }
+    if (b.t <= 0 || !enemy || enemy.hp <= 0) delete BURNS[k];
+  }
+}
+function clearBurns() { for (const k in BURNS) delete BURNS[k]; }
+
 function stats() {
   const lvl = S.level;
   const a = {
@@ -343,6 +405,15 @@ function stats() {
     it.affixes.forEach(f => { a[f.k] = (a[f.k] || 0) + f.v; });
   });
   for (const key in a) a[key] += perkAdd(key);
+
+  /* древо знаний: сила магии, мана и вампиризм от заклинаний */
+  const kn = knAll();
+  for (const b of window.KNOWLEDGE.BRANCHES) {
+    a.magicPower += kn[b].magicPower;
+    a.mpPct += kn[b].mpPct;
+    a.manaRegen += kn[b].manaRegen;
+    a.spellHeal += kn[b].spellHeal;
+  }
 
   const st = {};
   st.maxHp = Math.round((100 + 10 * (lvl - 1) + a.hpFlat) * (1 + a.hpPct));
@@ -460,7 +531,8 @@ function openChest(id) {
   S.gold += c.gold; S.potions += c.potions; S.mpotions += c.mpotions;
   c.items.forEach(it => addToBag(it));
   S.chests.splice(i, 1); SFX('chest');
-  toast('📦 ' + T('log.chestOpen'), '+' + fmt(c.gold) + '◉', 'gold');
+  gainKp(window.KNOWLEDGE.reward.chest);
+  toast('📦 ' + T('log.chestOpen'), '+' + fmt(c.gold) + '◉ · +' + window.KNOWLEDGE.reward.chest + '📖', 'gold');
   logLine('<b style="color:#cfcfd6">' + T('log.chestOpen') + ':</b> ' + c.name + ' · +' + fmt(c.gold) + '◉');
   renderAll();
 }
@@ -546,6 +618,7 @@ function spawnEnemy() {
   respawning = false;
   enemy = makeEnemy();
   spellCd = {};
+  clearBurns();
   renderEnemy();
   if (enemy.boss) { SFX('boss'); logLine('<b>' + enemy.name + '</b> ' + T('log.blocks')); }
 }
@@ -557,6 +630,7 @@ function gainXp(n) {
   let ups = 0;
   while (S.xp >= xpNeed(S.level)) {
     S.xp -= xpNeed(S.level); S.level++; S.pendingPerks++; ups++;
+    gainKp(window.KNOWLEDGE.reward.level);
     const st = stats();
     S.hp = st.maxHp; S.mp = st.maxMp;
     if (S.level % 5 === 0) { S.potions++; S.mpotions++; }
@@ -570,18 +644,23 @@ function gainXp(n) {
   }
 }
 
+/* Возвращает нанесённый урон: поджогу нужна доля от него, а не от кратности. */
 function dealDamage(mult, opts) {
-  if (!enemy || respawning) return;
+  if (!enemy || respawning) return 0;
   opts = opts || {};
   const st = stats();
-  let dmg = st.atk * mult * rnd(0.92, 1.08);
-  const crit = opts.alwaysCrit || Math.random() < st.crit;
-  if (crit) dmg *= st.critDmg;
+  /* поджог приходит уже готовым числом урона (opts.flat), удар — кратностью */
+  let dmg = opts.flat ? mult : st.atk * mult * rnd(0.92, 1.08);
+  /* крит заклинания считается по древу знаний, удар — по обычному шансу */
+  const critChance = opts.crit !== undefined ? opts.crit : st.crit;
+  const critMul = opts.critDmg !== undefined ? (1.5 + opts.critDmg) : st.critDmg;
+  const crit = !opts.flat && (opts.alwaysCrit || Math.random() < critChance);
+  if (crit) dmg *= critMul;
 
   /* тварь может уйти от удара целиком — тогда урона нет вовсе */
   if (!opts.dot && enemy.dodging > 0 && Math.random() < 0.6) {
     floatDmg(T('st.dodge'), 'miss');
-    return;
+    return 0;
   }
 
   /* броня режет только физический урон, сопротивления — каждый свой вид */
@@ -595,7 +674,7 @@ function dealDamage(mult, opts) {
     const soak = Math.min(enemy.shieldHp, Math.round(dmg * (enemy.shield || 0)));
     enemy.shieldHp -= soak; dmg -= soak;
     if (soak > 0) floatDmg('🛡', 'miss');
-    if (dmg <= 0) { updateEnemyBar(); return; }
+    if (dmg <= 0) { updateEnemyBar(); return 0; }
   }
 
   enemy.hp -= dmg;
@@ -612,14 +691,16 @@ function dealDamage(mult, opts) {
     const back = Math.max(1, Math.round(dmg * enemy.reflect));
     S.hp -= back;
     floatDmg('-' + fmt(back), 'player');
-    if (S.hp <= 0) { playerDeath(); return; }
+    if (S.hp <= 0) { playerDeath(); return dmg; }
   }
 
-  if (st.lifesteal > 0) S.hp = Math.min(st.maxHp, S.hp + dmg * st.lifesteal);
+  /* поджог не вампирит: иначе горение стало бы бесплатным лечением */
+  if (st.lifesteal > 0 && !opts.dot) S.hp = Math.min(st.maxHp, S.hp + dmg * st.lifesteal);
   if (opts.heal) S.hp = Math.min(st.maxHp, S.hp + st.maxHp * opts.heal);
 
   updateEnemyBar();
   if (enemy.hp <= 0) killEnemy();
+  return dmg;
 }
 
 function basicAttack(bySwipe) {
@@ -642,6 +723,7 @@ function killEnemy() {
   if (enemy.boss) S.bossKills[enemy.key] = (S.bossKills[enemy.key] || 0) + 1;
 
   logLine(T('log.killed') + ' <b>' + enemy.name + '</b> · +' + fmt(gold) + '◉ · +' + fmt(xp) + ' ' + T('bar.xp'));
+  gainKp(enemy.boss ? window.KNOWLEDGE.reward.boss : window.KNOWLEDGE.reward.kill);
   SFX('kill');
   burst(enemy.boss ? 40 : 16, L.pal.accent);
   gainXp(xp);
@@ -805,18 +887,35 @@ function castSpell(k) {
   if (!lv) return;
   if ((spellCd[k] || 0) > 0) return;
   const st = stats();
-  if (S.mp < sp.cost) { toast('🔷 ' + T('inv.mana'), sp.cost, 'arcane'); return; }
+  const kn = knAll()[k];
+  /* древо знаний делает школу дешевле и быстрее */
+  const cost = Math.max(1, Math.round(sp.cost * (1 - Math.min(0.6, kn.costPct))));
+  if (S.mp < cost) { toast('🔷 ' + T('inv.mana'), cost, 'arcane'); return; }
 
-  S.mp -= sp.cost;
-  spellCd[k] = sp.cd;
+  S.mp -= cost;
+  spellCd[k] = sp.cd * (1 - Math.min(0.6, kn.cdPct));
   S.stat.spells++;
 
-  const mult = sp.mult * lv * st.magicPower;
+  const mult = sp.mult * lv * st.magicPower * (1 + kn.dmgMul);
   /* у каждого заклинания свой вид урона: по голему бей молнией, дракона
      морозь — иначе сопротивление съест половину */
   const type = k === 'fireball' ? DMG_FIRE : k === 'frost' ? DMG_FROST : DMG_BOLT;
+  /* пробитие: каждый каст срезает твари сопротивление этой школе */
+  if (kn.shred > 0 && enemy.res) {
+    enemy.res[type] = Math.max(0.3, (enemy.res[type] || 1) - kn.shred);
+  }
   if (sp.slow) { enemy.slow = sp.slow; logLine('<b style="color:#b9a6ff">' + T('sp.' + k + '.n') + '</b>'); }
-  dealDamage(mult, { magic: true, alwaysCrit: k === 'bolt', heal: st.spellHeal, type });
+  const dealt = dealDamage(mult, { magic: true, alwaysCrit: k === 'bolt', heal: st.spellHeal, type,
+    crit: kn.crit, critDmg: kn.critDmg });
+  /* поджог: доля от фактического урона каста, а не от его кратности */
+  if (kn.dotMult > 0 && dealt > 0) applyBurn(type, dealt * kn.dotMult, kn.dotTime || 3);
+  /* отголосок: каст бьёт второй раз долей силы. Сопротивление при этом
+     уже срезано первым ударом, поэтому эхо всегда чуть злее. */
+  if (kn.echo > 0) {
+    dealDamage(mult * kn.echo, { magic: true, silent: true, type,
+      crit: kn.crit, critDmg: kn.critDmg });
+    logLine('✨ ' + T('kt.echo'));
+  }
   SFX(k === 'fireball' ? 'fire' : k === 'frost' ? 'frost' : 'bolt');
   checkAchievements();
   renderSpells(); renderHud();
@@ -935,7 +1034,7 @@ function renderTabs() {
 }
 
 let curPage = null;
-const PAGE_NAMES = { hero: 1, inv: 1, up: 1, shop: 1, ach: 1 };
+const PAGE_NAMES = { hero: 1, inv: 1, kn: 1, up: 1, shop: 1, ach: 1 };
 
 function openPage(p) {
   if (!PAGE_NAMES[p]) return;
@@ -978,10 +1077,11 @@ function renderHud() {
   if (mpBar) mpBar.dataset.label = '◆ ' + T('bar.mp');
   if (xpBar) xpBar.dataset.label = '✦ ' + T('bar.xp');
 
-  const g = $('#res-gold'), k = $('#res-kills'), z = $('#res-zone');
+  const g = $('#res-gold'), k = $('#res-kills'), z = $('#res-zone'), kp = $('#res-kp');
   if (g) g.textContent = fmt(S.gold);
   if (k) k.textContent = fmt(S.kills);
   if (z) z.textContent = (locIdx() + 1) + (S.cycle ? '.' + S.cycle : '');
+  if (kp) kp.textContent = fmt(S.kp || 0);
 }
 
 function renderEnemy() {
@@ -1058,6 +1158,7 @@ function renderAll() {
 function renderPanels() {
   if (!curPage) return;
   if (curPage === 'hero') renderHero();
+  if (curPage === 'kn') renderKn();
   if (curPage === 'inv') renderInv();
   if (curPage === 'up') renderUp();
   if (curPage === 'shop') renderShop();
@@ -1250,6 +1351,38 @@ function renderInv() {
   pageBody('inv').innerHTML = html;
 }
 
+/* ------------------------------ ДРЕВО ЗНАНИЙ ------------------------------ */
+function renderKn() {
+  const K = window.KNOWLEDGE;
+  let html = '<div class="card"><h3>📖 ' + T('kn.title') + ' · ' + T('kn.points') + ': <b>' + fmt(S.kp) + '</b></h3>' +
+    '<p class="hint">' + T('kn.hint') + '</p><div class="kt-tree">';
+
+  K.BRANCHES.forEach(b => {
+    const n = knLv(b);
+    const full = n >= K.MAX;
+    html += '<div class="kt-branch" data-branch="' + b + '">' +
+      '<div class="kt-head"><span class="kt-em">' + SPELL_BY_K[b].em + '</span>' +
+      '<span class="kt-name">' + T('sp.' + b + '.n') + '</span>' +
+      '<span class="kt-count' + (full ? ' full' : '') + '">' + n + ' / ' + K.MAX + '</span></div>';
+    html += '<div class="kt-nodes">';
+    for (let i = 0; i < K.MAX; i++) {
+      const done = i < n, next = i === n, can = K.canBuy(S, b, i);
+      const cls = 'kt-node' + (done ? ' done' : '') + (next ? ' next' : '') + (can ? ' can' : '');
+      const val = knDesc(b, i);
+      html += '<div class="' + cls + '" data-act="kn-buy" data-b="' + b + '" data-i="' + i + '"' +
+        ' title="' + knName(b, i) + ' — ' + val + '">' +
+        '<span class="kt-dot">' + (done ? '✓' : (can ? K.cost(i) : '🔒')) + '</span>' +
+        '<div class="kt-body"><div class="kt-title">' + knName(b, i) + '</div>' +
+        '<div class="kt-val">' + val + '</div></div>' +
+        (done ? '' : '<span class="kt-price">' + K.cost(i) + '📖</span>') +
+        '</div>';
+    }
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+  pageBody('kn').innerHTML = html;
+}
+
 /* ------------------------------ УЛУЧШЕНИЯ ------------------------------ */
 function renderUp() {
   const st = stats();
@@ -1379,6 +1512,7 @@ function buyStock(i) {
 
 const ACTIONS = {
   upg: el => buyUpgrade(el.dataset.k),
+  'kn-buy': el => buyNode(el.dataset.b, Number(el.dataset.i)),
   potion: () => {
     if (S.potions <= 0) return;
     const st = stats(); S.potions--;
@@ -1761,6 +1895,7 @@ function loop() {
         if (enemy.slow > 0) enemy.slow = Math.max(0, enemy.slow - dt);
         /* способности твари: активация по кулдауну и угасание эффектов */
         if (!respawning) tickEnemy(dt);
+        if (!respawning) tickBurns(dt);
       }
       timers.regen += dt;
       if (timers.regen >= 1) {
@@ -1915,6 +2050,8 @@ window.__void = {
   startGame, openSettings, closeSettings, applyLanguage, language: () => SET.lang,
   swipeStart, swipeMove, swipeEnd, hasSave, load, save, freshState,
   setEnemy(e) { enemy = e; }, setRespawning(v) { respawning = !!v; }, setLevel(n) { S.level = n; },
+  KNOWLEDGE: window.KNOWLEDGE, knAll, knLv, buyNode, gainKp, applyBurn, tickBurns, clearBurns,
+  get burns() { return BURNS; },
   setLoc(k) { S.locKey = k; S.idx = 1; }, setIdx(n) { S.idx = n; }, setCycle(n) { S.cycle = n; },
   enemyAbility, tickEnemy, get perkQueue() { return perkQueue; }, pickPerk
 };
