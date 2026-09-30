@@ -799,7 +799,7 @@ function playerDeath() {
 
 /* ============================== ЗАКЛИНАНИЯ ============================== */
 function castSpell(k) {
-  if (!enemy || respawning) return;
+  if (!enemy || respawning || paused) return;
   const sp = SPELL_BY_K[k];
   const lv = spellLv(k);
   if (!lv) return;
@@ -876,12 +876,49 @@ function openModal(html, cls) {
   const m = $('#modal');
   m.innerHTML = '<div class="modal-box' + (cls ? ' ' + cls : '') + '">' + html + '</div>';
   m.classList.add('open');
+  updatePause();
 }
 function closeModal(force) {
   if (modalLocked && !force) return;
   modalLocked = false;
   $('#modal').classList.remove('open');
   $('#modal').innerHTML = '';
+  updatePause();
+}
+
+/* ============================== ПАУЗА ============================== */
+/* Бой замирает, пока игрок в инвентаре, лавке, настройках или в окне
+   выбора способности. Иначе тварь добивает героя, пока тот надевает
+   предмет или копит золото, и это несправедливо.
+   Ждём закрытия ОКНА ВЫБОРА СПОСОБНОСТИ: оно может открыться уже поверх
+   страницы, и герой не должен умереть под ним.
+   Главное меню намеренно не в списке: там бой ещё не начат. */
+let paused = false;
+
+function inMenuScreen() { const m = $('#mainmenu'); return !!m && m.classList.contains('open'); }
+
+function pausedNow() {
+  if (!S || inMenuScreen()) return false;
+  if (curPage) return true;
+  if ($('#modal').classList.contains('open')) return true;
+  const s = $('#settings');
+  return !!s && s.classList.contains('open');
+}
+
+/* Пауза вычисляется сразу при каждом открытии и закрытии окна, а не только
+   в игровом цикле: цикл может пропускать кадры из-за ограничения частоты,
+   и тогда бой оставался бы на паузе после выхода из инвентаря. */
+function updatePause() {
+  paused = pausedNow();
+  renderPause();
+}
+
+function renderPause() {
+  const on = paused || pausedNow();
+  const badge = $('#pause-badge');
+  if (badge) badge.classList.toggle('on', !!on);
+  const arena = $('#arena');
+  if (arena) arena.classList.toggle('paused', !!on);
 }
 
 /* ================================ РЕНДЕР ================================ */
@@ -907,12 +944,14 @@ function openPage(p) {
   $$('#pages .page').forEach(el => el.classList.toggle('active', el.dataset.page === p));
   $$('#nav .nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === p));
   renderPanels(); renderTabs();
+  updatePause();
   SFX('click');
 }
 function closePage() {
   curPage = null;
   $$('#pages .page').forEach(el => el.classList.remove('active'));
   $$('#nav .nav-btn').forEach(b => b.classList.remove('active'));
+  updatePause();
   SFX('click');
 }
 
@@ -1426,6 +1465,7 @@ function startGame() {
   if (!S) { S = load() || freshState(); }
   $('#mainmenu').classList.remove('open');
   $('#app').classList.add('on');
+  updatePause();
   SET.started = true; saveSettings();
   if (!S.hp) { const st = stats(); S.hp = st.maxHp; S.mp = st.maxMp; }
   window.AUDIO.musicStart(locIdx());
@@ -1462,10 +1502,12 @@ function openSettings() {
   $('#settings').classList.add('open');
   syncSettingsUI();
   langButtons('lang-list');
+  updatePause();
   SFX('click');
 }
 function closeSettings() {
   $('#settings').classList.remove('open');
+  updatePause();
   SFX('click');
 }
 function syncSettingsUI() {
@@ -1595,6 +1637,7 @@ const SWIPE = { active: false, x0: 0, y0: 0, x1: 0, y1: 0, t0: 0, moved: 0, id: 
 let swipeFx = null;
 
 function swipeStart(x, y) {
+  if (paused) return;
   SWIPE.active = true; SWIPE.x0 = SWIPE.x1 = x; SWIPE.y0 = SWIPE.y1 = y;
   SWIPE.t0 = now(); SWIPE.moved = 0; SWIPE.trail = [[x, y]];
 }
@@ -1623,7 +1666,7 @@ function swipeEnd() {
   }
 }
 function strike(power) {
-  if (!enemy || respawning) return;
+  if (!enemy || respawning || paused) return;
   dealDamage(power, {});
   SFX('hit');
   flashSwipe();
@@ -1679,6 +1722,13 @@ function loop() {
   const t = now();
   let dt = (t - lastFrame) / 1000; lastFrame = t;
   if (dt > 0.5) dt = 0.5;
+
+  /* пауза: бой замирает, пока игрок в меню, инвентаре, лавке или настройках.
+     Считаем её ДО шага по времени, иначе на первом же кадре после закрытия
+     окна герой получил бы разом весь накопленный урон. И до ограничения
+     частоты кадров — иначе на пропущенных кадрах пауза не обновилась бы. */
+  updatePause();
+  if (paused) return;
 
   /* ограничение кадров из настроек */
   if (SET.frameLimit) {
@@ -1856,6 +1906,7 @@ else init();
 window.__void = {
   get S() { return S; }, get enemy() { return enemy; }, get set() { return SET; },
   get curPage() { return curPage; },
+  get paused() { return paused; }, updatePause, pausedNow, openModal, closeModal,
   stats, loc, locName, locSub, locIdx, LOCATIONS, RARITIES, SLOTS, BAG_SIZE, UPGRADES, PERKS,
   SPELLS, ACHIEVEMENTS, MONSTERS_PER_LOC, saveKey: SAVE_KEY,
   openPage, closePage, renderAll, renderPanels, makeEnemy, spawnEnemy, killEnemy, makeChest,
