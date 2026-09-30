@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#070708">
+<meta name="description" content="Пожиратель Пустоты — инкрементальная ARPG на чистом JS: дарк-фэнтези, локации, Владыки, лут и сундуки.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>%F0%9F%92%80</text></svg>">
+<title>Пожиратель Пустоты</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<div id="app">
+  <header id="topbar">
+    <div class="brand" data-i18n="title">ПОЖИРАТЕЛЬ ПУСТОТЫ</div>
+    <div class="res">
+      <div class="res-item"><span class="v" id="res-gold">0</span><small data-i18n="res.gold">золото</small></div>
+      <div class="res-item"><span class="v" id="res-kills">0</span><small data-i18n="res.kills">убито</small></div>
+      <div class="res-item"><span class="v" id="res-zone">1</span><small data-i18n="res.path">путь</small></div>
+    </div>
+    <div class="hdr-btns">
+      <button class="ghost" id="btn-sound" title="Звук">🔊</button>
+      <button class="ghost" id="btn-save" title="Сохранить">💾</button>
+      <button class="ghost" id="btn-settings" title="Настройки">⚙</button>
+      <button class="ghost" id="btn-menu" title="Меню">☰</button>
+    </div>
+  </header>
+
+  <nav id="nav">
+    <button class="nav-btn" data-page="hero" data-i18n="nav.hero">Статистика</button>
+    <button class="nav-btn" data-page="inv" data-i18n="nav.inv">Инвентарь</button>
+    <button class="nav-btn" data-page="up" data-i18n="nav.up">Улучшения</button>
+    <button class="nav-btn" data-page="shop" data-i18n="nav.shop">Лавка</button>
+    <button class="nav-btn" data-page="ach" data-i18n="nav.ach">Свершения</button>
+  </nav>
+
+  <main>
+    <section id="arena">
+      <div class="zone-bar">
+        <div class="zone-info">
+          <span class="zone-name" id="zone-name">—</span>
+          <span class="zone-sub" id="zone-sub">—</span>
+        </div>
+        <div class="zone-hint" id="zone-hint">—</div>
+      </div>
+
+      <div id="stage">
+        <div id="scene"></div>
+        <div id="enemy-wrap">
+          <div id="enemy-art"></div>
+          <div id="enemy-name">—</div>
+          <!-- полоса жизни твари — под её именем -->
+          <div class="bar enemy"><i id="enemy-hp-fill"></i><span id="enemy-hp-text">0 / 0</span></div>
+          <div id="enemy-status"></div>
+        </div>
+        <div id="dmg-layer"></div>
+      </div>
+
+      <div id="spell-bar"></div>
+      <div id="combat-log"></div>
+    </section>
+
+    <!-- HUD: полосы в стиле Skyrim — жизнь и мана в строку, опыт отдельно -->
+    <div id="hud">
+      <div class="hud-row">
+        <div class="bar hero" id="bar-hp"><i id="hero-hp-fill"></i><span id="hero-hp-text">0 / 0</span></div>
+        <div class="bar mana" id="bar-mp"><i id="hero-mp-fill"></i><span id="hero-mp-text">0 / 0</span></div>
+      </div>
+      <div class="bar xp" id="bar-xp"><i id="hero-xp-fill"></i><span id="hero-xp-text">0 / 0</span></div>
+      <div class="hud-hint" id="hud-hint" data-i18n="hud.hint">пробел — удар · Q/W/E — заклинания</div>
+    </div>
+  </main>
+</div>
+
+<!-- отдельные страницы -->
+<div id="pages">
+  <div class="page" data-page="hero"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="hero"></div></div>
+  <div class="page" data-page="inv"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="inv"></div></div>
+  <div class="page" data-page="up"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="up"></div></div>
+  <div class="page" data-page="shop"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="shop"></div></div>
+  <div class="page" data-page="ach"><div class="page-close"><button data-act="page-close" data-i18n="back">← Назад к бою</button></div><div class="page-inner" data-body="ach"></div></div>
+</div>
+
+<!-- главное меню -->
+<div id="mainmenu" class="menu">
+  <div class="menu-bg" id="menu-bg"></div>
+  <div class="menu-inner">
+    <h1 class="menu-title" data-i18n="title">ПОЖИРАТЕЛЬ ПУСТОТЫ</h1>
+    <div class="menu-sub" data-i18n="menu.hint">Инкрементальная ARPG · клик или свайп решает всё</div>
+    <div class="menu-btns">
+      <button class="menu-btn primary" data-act="menu-play" data-i18n="menu.play">Играть</button>
+      <button class="menu-btn" data-act="menu-new" data-i18n="menu.new">Новая игра</button>
+      <button class="menu-btn" data-act="menu-settings" data-i18n="menu.settings">Настройки</button>
+      <button class="menu-btn" data-act="menu-credits" data-i18n="menu.credits">Об игре</button>
+    </div>
+    <div class="menu-langs" id="menu-langs"></div>
+  </div>
+</div>
+
+<!-- настройки: FPS, лимит кадров, громкости, язык -->
+<div id="settings" class="menu-sheet">
+  <div class="sheet-inner">
+    <h2 data-i18n="set.title">Настройки</h2>
+
+    <div class="set-group">
+      <div class="set-group-title" data-i18n="set.graphics">Графика</div>
+      <label class="set-row"><span data-i18n="set.fps">Показывать FPS</span>
+        <input type="checkbox" id="set-fps"></label>
+      <label class="set-row"><span data-i18n="set.limit">Ограничение кадров</span>
+        <select id="set-limit">
+          <option value="0" data-i18n="set.limitOff">Без ограничения</option>
+          <option value="120">120 FPS</option>
+          <option value="60" selected>60 FPS</option>
+          <option value="30">30 FPS</option>
+        </select></label>
+      <label class="set-row"><span data-i18n="set.quality">Качество деталей</span>
+        <select id="set-quality">
+          <option value="low" data-i18n="set.q.low">Низкое</option>
+          <option value="mid" selected data-i18n="set.q.mid">Среднее</option>
+          <option value="high" data-i18n="set.q.high">Высокое</option>
+        </select></label>
+      <div class="set-note" id="set-fps-now"></div>
+    </div>
+
+    <div class="set-group">
+      <div class="set-group-title" data-i18n="set.audio">Звук</div>
+      <label class="set-row"><span data-i18n="set.master">Общая громкость</span>
+        <input type="range" id="set-master" min="0" max="100" value="80"><b id="v-master">80</b></label>
+      <label class="set-row"><span data-i18n="set.music">Громкость музыки</span>
+        <input type="range" id="set-music" min="0" max="100" value="45"><b id="v-music">45</b></label>
+      <label class="set-row"><span data-i18n="set.sfx">Громкость эффектов</span>
+        <input type="range" id="set-sfx" min="0" max="100" value="80"><b id="v-sfx">80</b></label>
+    </div>
+
+    <div class="set-group">
+      <div class="set-group-title" data-i18n="set.langTitle">Язык интерфейса</div>
+      <div class="lang-list" id="lang-list"></div>
+    </div>
+
+    <div class="sheet-acts">
+      <button class="btn blood" data-act="hard-reset" data-i18n="set.reset">Стереть прогресс</button>
+      <button class="btn" data-act="settings-close" data-i18n="set.close">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div id="fps"></div>
+<div id="toasts"></div>
+<div id="modal"></div>
+
+<script src="i18n.js"></script>
+<script src="audio.js"></script>
+<script src="itemart.js"></script>
+<script src="monsters.js"></script>
+<script src="scenes.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
