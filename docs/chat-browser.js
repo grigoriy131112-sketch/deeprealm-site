@@ -1237,7 +1237,36 @@ const isCheckCmd = (text) => /проверь|проверить|check my|про�
 function isSelfMade(text) {
   const s = String(text || '');
   if (/(?<![а-яё])я\s+сам/i.test(s)) return false;
-  return /(?<![а-яё])сам(а|и|о|е|ому|ой|ого|им|их)?(?![а-яё])|за\s+меня|придума(й|йте|ть)|(?<![а-яё])сделай|(?<![а-яё])создай|сгенерируй|на\s+свой\s+вкус|на\s+тво[её]\s+усмотрение|твой\s+вариант|yourself|for me|make it|create it/i.test(s);
+  return /(?<![а-яё])сам(а|и|о|е|ому|ой|ого|им|их)?(?![а-яё])|за\s+меня|для\s+меня|мне\s+сам|придума(й|йте|ть)|(?<![а-яё])сделай|(?<![а-яё])создай|сгенерируй|на\s+свой\s+вкус|на\s+тво[её]\s+усмотрение|твой\s+вариант|yourself|for me|make it|create it/i.test(s);
+}
+
+// A player who asks how any of this works should get an answer, not another field
+// question. Recognising the help request is what makes the chat feel like a
+// conversation: "а как создать расу?" is answered, then the walk continues.
+function isHelpAsk(text) {
+  const s = String(text || '');
+  return /как\s+(мне\s+)?(создать|сделать|придумать|заполнить|начать|играть|быть)|что\s+(мне\s+)?(писать|нужно|делать|дальше|заполнять)|помоги|подскажи|объясни|не\s+знаю|не\s+понимаю|запутался|с\s+чего\s+начать|how\s+(do|can)\s+i|what\s+(do|should)\s+i|help me/i.test(s);
+}
+
+// A short, human reaction to the last message, so a turn reads as a reply rather
+// than a form field. It carries no «...» of its own, so the field question after it
+// stays the only question in the reply.
+function interviewerReaction(text, lang) {
+  const s = String(text || '').trim();
+  if (!s) return '';
+  if (/\?\s*$/.test(s)) return pick(lang, 'Хороший вопрос.', 'Good question.');
+  if (/не\s+знаю|не\s+уверен|затрудня|не\s+понимаю/i.test(s)) return pick(lang, 'Ничего, помогу разобраться.', 'No worries, I will help you figure it out.');
+  if (s.length < 12) return pick(lang, 'Коротко и ясно.', 'Short and clear.');
+  if (s.length >= 40) return pick(lang, 'Отлично, вот это уже деталь.', 'Nice, that is a real detail.');
+  return pick(lang, 'Записал.', 'Noted.');
+}
+
+// The two ways to get a race or a class, said plainly. This is what the player is
+// told when they ask how it works, instead of being asked for a field again.
+function howToMake(lang) {
+  return pick(lang,
+    'Расу или класс можно сделать двумя путями. Первый — рассказываешь сам: я задаю по одному вопросу, ты отвечаешь, я собираю анкету. Второй — говоришь «придумай мне расу сам» или «придумай мне класс сам», и я придумываю всё целиком: название, внешность, способности и слабости по правилам баланса. Как хочешь?',
+    'You can get a race or a class two ways. First, you describe it yourself: I ask one question at a time, you answer, I build the sheet. Second, say "make a race for me" or "make a class for me" and I make the whole thing: name, look, powers and weaknesses, all balanced. Which do you want?');
 }
 
 // The character interview walks the fields of the chat's own template, in order,
@@ -1349,13 +1378,16 @@ const STORY_INTENT = /заявк[а-яё]*\s+на\s+сюжет|предложи�
 // character walk, which is the bug that left races and classes impossible to make.
 // The creation verb and the noun may come in either order ("создай расу" and
 // "расу придумай"), so each is checked with a lookahead instead of a fixed order.
-// The endings are spelled out with [а-яё] rather than \w: \w is ASCII-only in
-// JavaScript, so \w* after "созда" never reaches the Cyrillic "ть" and the verb
-// form did not match at all. "Расскажи про расу" carries no creation verb and so
-// stays a question, not a request to build one.
-const CREATION_VERB = '(?:созда|сдела|придума|сгенерир|хочу|нужн|давай|надо|сам(?:а|и|о|е)?(?![а-яё]))';
-const RACE_WORD = 'рас[ауые](?![а-яё])';
-const CLASS_WORD = 'класс(?![а-яё])';
+//
+// The noun is matched loosely on purpose. Players type "рассу", "раса", "клас" and
+// "классу" as often as the dictionary spelling, and a strict "расу" meant those
+// requests fell straight through to the character walk - the interviewer answered
+// "расскажи про расу" instead of building one. The `{0,3}` cap keeps the word from
+// swallowing a longer lookalike: "расскажи" is too long to match, so a plain
+// question about races is still a question.
+const CREATION_VERB = '(?:созда|сдела|придума|сгенерир|хочу|хотел|нужн|давай|надо|мож(?:ешь|но|ем)|сам(?:а|и|о|е)?(?![а-яё]))';
+const RACE_WORD = '(?<![а-яё])рас+[а-яё]{0,3}(?![а-яё])';
+const CLASS_WORD = '(?<![а-яё])класс?[а-яё]{0,3}(?![а-яё])';
 const RACE_INTENT = new RegExp(
   `(?=[\\s\\S]*${RACE_WORD})(?=[\\s\\S]*${CREATION_VERB})|сво[яю]\\s+${RACE_WORD}|нов[ауо][яю]\\s+${RACE_WORD}|new race|create a race|make a race|race for me`,
   'i'
@@ -1532,12 +1564,14 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   // and hands back the draft, so the very next "проверь" approves and forwards it.
   const made = generatedSheet(history, app, lang);
   if (made) return renderGenerated(made, lang);
-  // A race or a class is walked through its own checklist. The opening message names
-  // the rules and the first question, so the walk starts on the very turn the player
-  // asks for it, rather than promising to start and then falling back to the
-  // character template.
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
+  // A question about how this works is explained instead of opening the walk, so
+  // "а как мне создать расу?" gets the two options and then the first question.
+  if (isHelpAsk(text)) {
+    const kind = wantsRace ? 'race' : wantsClass ? 'class' : interviewKind(app, history);
+    return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
+  }
   if (wantsRace) {
     const rules = (getKnowledge().races?.race_template_rules || []).map((r) => `— ${r}`).join('\n');
     return [
@@ -1547,7 +1581,7 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
       nextFieldPrompt({ ...app, _kind: 'race' }, lang, history)
     ].join('\n');
   }
-  if (CLASS_INTENT.test(text)) {
+  if (wantsClass) {
     const rules = (getKnowledge().classes?.class_balance_rules || []).map((r) => `— ${r}`).join('\n');
     return [
       pick(lang, 'Давай сделаем класс. Правила баланса:', 'Let us make a class. Balance rules:'),
@@ -1561,7 +1595,11 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
       'Привет. Я Анкетолог Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
       'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
   }
-  return nextFieldPrompt(app, lang, history);
+  // Otherwise react to what was just said, then ask for the next thing. The
+  // reaction is what makes the walk feel like a conversation instead of a form.
+  const question = nextFieldPrompt(app, lang, history);
+  const reaction = interviewerReaction(text, lang);
+  return [reaction, question].filter(Boolean).join('\n');
 }
 
 // -------------------------------------------------------------------- staff

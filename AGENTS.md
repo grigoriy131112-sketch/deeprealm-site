@@ -280,6 +280,19 @@ permission is missing. Probe that way before starting any long operation.
 - "Я сам создам расу" (the player writes it) must keep opening the walk, so
   `isSelfMade` excludes a leading "я сам". A request must name a race or a class;
   a bare "сделай" mid-walk stays on the checklist.
+- The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
+  players type "рассу" and "клас" as often as the dictionary spelling. A strict
+  "расу" was the bug behind "he keeps asking me to describe the race": the typo
+  never matched the intent, so the request fell through to the character walk.
+  The `{0,3}` cap keeps "расскажи" (too long) from matching, so a plain question
+  about races is still a question, not a build request.
+- The interviewer is conversational: `interviewerReaction` prefixes a short human
+  reply ("Записал", "Отлично, вот это уже деталь") before the next field, and
+  `isHelpAsk` answers "а как мне создать расу?" with `howToMake` (the two ways:
+  describe it yourself, or ask the AI to make it). The help check runs before the
+  walk branch, so a question is explained instead of silently opening the walk.
+  A reaction must carry no «...» of its own, or tests that read the last «...» as
+  the asked field would see the reaction instead.
 - A generated sheet is shown exactly as built and is never handed to the model
   (see the `made` branch in `answerInterview`): a rewrite could paraphrase its
   numbers or drop an ability, so the player would submit something else than they

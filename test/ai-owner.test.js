@@ -495,6 +495,34 @@ test('asking twice gives a stable sheet, and a different request a different one
   assert.notEqual(a, c, 'a different request can give a different race');
 });
 
+test('the interviewer understands the typos players actually type', () => {
+  // The owner typed "рассу" and the old pattern only knew "расу", so the request
+  // fell through to the character walk. These spellings must all build a sheet.
+  for (const ask of ['можешь создать рассу для меня сам', 'создай рассу сам', 'придумай мне рассу', 'создай мне клас', 'можешь создать клас для меня', 'создай мне класc сам']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+    assert.match(reply, /Готово/, `"${ask}" builds a race or class`);
+    assert.doesNotMatch(reply, /Расскажи про «/, `"${ask}" must not fall back to a field question`);
+  }
+});
+
+test('a plain question about a race stays a question, not a build request', () => {
+  for (const ask of ['расскажи про расу', 'расскажи про рассу', 'что такое класс', 'какие есть расы']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+    assert.doesNotMatch(reply, /Готово/, `"${ask}" is not treated as "make me one"`);
+  }
+});
+
+test('the interviewer reacts to what was said instead of only asking a field', () => {
+  const reply = localInterview({ messages: [{ role: 'user', content: 'Меня зовут Лира, я эльфийка-маг' }], lang: 'ru', application: {} });
+  assert.match(reply, /Записал|деталь|Отлично/, 'a real answer gets a human reaction');
+  assert.match(reply, /«/, 'the next field is still asked');
+});
+
+test('asking how to make a race is answered, not met with another field question', () => {
+  const reply = localInterview({ messages: [{ role: 'user', content: 'а как мне создать расу?' }], lang: 'ru', application: {} });
+  assert.match(reply, /придумай мне расу сам|двумя путями/, 'the two ways are explained');
+});
+
 test('a generated race respects the balance rules it is built from', () => {
   for (const seedText of ['расу сам', 'другую расу придумай', 'создай расу сама', 'make a race for me']) {
     const reply = localInterview({ messages: [{ role: 'user', content: seedText }], lang: 'ru', application: {} });
