@@ -365,6 +365,10 @@ permission is missing. Probe that way before starting any long operation.
 - `docs/` is generated: run `npm run build-pages` after changing anything in
   `public/` or `data/`, then commit. Pages serves `docs/404.html` for unknown
   URLs, which is why the bare "404 page not found" text is gone.
+- `docs/` also holds hand-added files that live nowhere else (the `/void` game and
+  `docs/img`). The build must only remove the files it owns; the old
+  `fs.rmSync(docs, { recursive: true })` deleted the owner's assets on every
+  rebuild. `test/build-pages.test.js` runs the real build and pins this.
 - A local commit changes nothing for the owner until it is pushed: Pages only
   deploys what is on `main`. After committing, `git push origin main`, then wait
   for `GET /repos/:owner/:repo/pages/builds/latest` to report `built` before

@@ -29,8 +29,20 @@ const files = [
   ['data/telegram.json', 'data/telegram.json', { optional: true }]
 ];
 
-// Keep the checkout clean: rebuild from scratch so a deleted file cannot linger.
-fs.rmSync(out, { recursive: true, force: true });
+// The files this build owns. Only these are removed and rewritten: `docs/` also
+// holds hand-added assets that live nowhere else in the repo (the `/void` game and
+// `docs/img`), and wiping the whole tree deleted them. The owner has lost those
+// files to a rebuild before, so the clean step is scoped to the list.
+const generated = [
+  ...files.map(([, to]) => to),
+  'data/knowledge.json',
+  'data/knowledge.raw.json',
+  '.nojekyll'
+];
+
+for (const rel of generated) {
+  fs.rmSync(path.join(out, rel), { recursive: true, force: true });
+}
 
 for (const [from, to, opts] of files) {
   const src = path.join(root, from);
