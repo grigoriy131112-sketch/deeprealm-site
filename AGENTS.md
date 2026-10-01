@@ -430,6 +430,21 @@ permission is missing. Probe that way before starting any long operation.
   field just answered, `nextFieldPrompt` returns the closing nudge.
 - A plot is recognised both from intent and from the GM template headings
   (`STORY_INTENT` in `ai-engine.js` mirrors `STORY_MARKERS` in `publish.js`).
+- A race and a class have their own checklists (`INTERVIEW_FIELDS.race/class`).
+  The walk starts on the very turn the player asks for it: the old code answered
+  "describe the race" and then fell through to the character template, so a race
+  or a class could never be created. `RACE_INTENT`/`CLASS_INTENT` are matched with
+  `[а-яё]*`, never `\w*`, because `\w` is ASCII-only in JavaScript and the Cyrillic
+  verb ending was never matched.
+- The checklist is remembered in the draft as `_kind`. `answerInterview` stamps it
+  (`{ ...appState, _kind: kind }`) and returns it; `interviewKind` lets an explicit
+  request in the newest message win over the stored kind, so a player can switch
+  mid-interview. `_kind` is stripped from the shown draft (`renderApplication`) and
+  from the owner's sheet text (`sheetText`), and used as the `detectSheetKind`
+  fallback so a thin race/class sheet is still filed under the right heading.
+- Cooldowns are measured in turns: `class_balance_rules` in `data/knowledge.json`
+  says so, and `INTERVIEWER_SYSTEM` rule 11/12 tells the model to collect a
+  per-ability cooldown in turns and never to send the player off to a template.
 - An approved sheet of any kind is forwarded to the owner, never published by the
   site. `publish.js` only detects the kind (`detectSheetKind`), and
   `answerInterview` returns no `published` field. `detectSheetKind` must be wired

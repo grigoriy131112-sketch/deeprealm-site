@@ -98,7 +98,8 @@ ${parts.join('\n\n')}
     var count = function (list) { return list.filter(function (re) { return re.test(text); }).length; };
     if (count(klass) >= 3) return 'class';
     if (count(race) >= 3) return 'race';
-    return 'character';
+    var kind = application && application._kind;
+    return kind === 'race' || kind === 'class' ? kind : 'character';
   }
   setSheetDetector(sheetKind);
 

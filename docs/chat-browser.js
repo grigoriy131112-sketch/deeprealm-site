@@ -126,6 +126,8 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Анкетолог чата Deepr
 8. ЕДИНСТВЕННАЯ ссылка, которую ты можешь давать — на чат Telegram: ${knowledge.chat.telegram}. НИКОГДА не придумывай другие ссылки, кнопки, файлы, "базы данных" или адреса сайтов. Если ссылка на чат ещё не положена по проверке — не давай никаких ссылок вообще.
 9. Ты не сохраняешь ничего в базах и не запускаешь игру. Единственное финальное действие — резюме проверки, пометка "ОДОБРЕНО ✅" и ссылка на Telegram-чат.
 10. Если анкета расы или класса заполнена полностью и нарушений баланса нет — СРАЗУ пиши пометку "ОДОБРЕНО ✅" и завершай проверку. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали: статья для сайта будет опубликована автоматически. Никаких вопросов после одобрения.
+11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце проверяешь по правилам. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
+12. ПЕРЕЗАРЯДКА СПОСОБНОСТЕЙ измеряется в ходах. У каждой способности класса должна быть указана перезарядка в ходах (например, «перезарядка: 2 хода»). Если игрок её не указал — спроси.
 
 ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ:
 Если игрок хочет предложить сюжет, приключение или квест для ГМ — помоги оформить заявку по шаблону ниже. Не требуй заполнить всё сразу: задавай по 2–3 вопроса за раз и в конце собери заявку целиком. Если игрок не знает, что написать — предложи пример и объясни, почему для ГМ это важно. Напоминай правила: не пиши сценарий, пиши ситуацию; давай личный крючок под персонажей; согласуй идеи с лором мира.
@@ -796,8 +798,9 @@ function hasFieldText(history, field) {
     .join('\n');
   if (!text.trim()) return false;
   const name = String(field || '').toLowerCase();
-  // A value written as "Поле: значение" counts for that field.
-  if (new RegExp(`${name}\\s*[:\\-—]\\s*\\S`, 'i').test(text)) return true;
+  // A value written as "Поле: значение" counts for that field. The lookbehind keeps
+  // "Самоназвание: X" from also marking the plain "Название" field as answered.
+  if (new RegExp(`(?<![а-яё])${name}\\s*[:\\-—]\\s*\\S`, 'i').test(text)) return true;
   // Some fields are recognised by what a player actually writes about them. The
   // boundaries are lookarounds rather than \b: \b is defined on [A-Za-z0-9_], so in
   // Cyrillic text it matches at the wrong places and "Меня зовут Лира" would not be
@@ -811,9 +814,35 @@ function hasFieldText(history, field) {
     'происхождение': /(предыстор|происхожден|родил|вырос|детств)/i,
     'хобби': /(хобби|увлека|люблю|занимаюсь|интерес)/i,
     'особенности внешности': /(особенност|шрам|татуировк|метк|крыл)/i,
-    'стартовое снаряжение': /(снаряжен|оружи|брон|меч|лук|посох|кинжал|доспех)/i
+    'стартовое снаряжение': /(снаряжен|оружи|брон|меч|лук|посох|кинжал|доспех)/i,
+    // Race checklist. "Название" also covers "название расы" and the values written
+    // as "Название: ..."; the rest match the words a player uses for each field.
+    'название': /(?<![а-яё])(название|называется|самоназвание)/i,
+    'самоназвание': /(самоназвание|называют себя)/i,
+    'где живут': /(живут|обитают|среда обитания|местность|дом)/i,
+    'чем занимаются': /(занимаются|деятельность|ремесл|работают|промысел)/i,
+    'боевые навыки': /(боевые навыки|сражаются|бой|оружие|тактик)/i,
+    'способности': /(способност|умени|навык)/i,
+    'уязвимости': /(уязвим|слабост|недостатк|боятся)/i,
+    'общественное устройство': /(правлени|законы|иерархи|социальн|общество|структур)/i,
+    'магия': /(маги|школ|заклинани)/i,
+    // Class checklist.
+    'название класса': /(?<![а-яё])(название|называется|класс\s*[:\-—])/i,
+    'роль': /(?<![а-яё])(роль|танк|саппорт|дамаг|лекарь|поддержк)/i,
+    'ресурс': /(?<![а-яё])(ресурс|мана|ярость|выносливост|энерги|стрелы)/i,
+    'хп': /(?<![а-яёa-z])(хп|hp|здоровь|хитпоинт)/i,
+    'базовая атака': /(базовая атака|базов\w*\s*урон|обычная атака|автоатак)/i,
+    'ультимейт': /(ультимейт|ульт\b)/i,
+    'ограничения и слабости': /(ограничен|слабост|минус|недостатк)/i,
+    'истощение ресурса': /(истощен|истоща|обнулен)/i
   };
-  return Object.entries(markers).some(([key, re]) => name.includes(key) && re.test(text));
+  // Several markers can be substrings of one field name ("класс" sits inside
+  // "Название класса"), so the most specific one decides. Without that, the word
+  // "класс" anywhere in the dialogue would mark the class name as answered.
+  const keys = Object.keys(markers).filter((key) => name.includes(key));
+  if (!keys.length) return false;
+  keys.sort((a, b) => b.length - a.length);
+  return markers[keys[0]].test(text);
 }
 
 // The field the assistant last asked about, read from its own wording. The scan
@@ -847,23 +876,44 @@ function repliedSinceLastQuestion(history) {
 // The fields worth asking about out loud. The character template has seventeen, but
 // asking a player for "Ориентация" or "Физические характеристики" one by one turns a
 // chat into a form; the rest stay in the template for the player to fill in themselves.
-// A plot has its own checklist, taken from the GM template's own headings.
+// A plot has its own checklist, taken from the GM template's own headings. A race and
+// a class have their own too: the numbered pairs of the race template are asked as one
+// "Способности"/"Уязвимости" question, which is how a human reviewer would put it.
 const INTERVIEW_FIELDS = {
   character: ['Имя', 'Раса', 'Класс', 'Характер', 'Внешность', 'Происхождение'],
-  story: ['Название сюжета', 'Жанр', 'Завязка', 'Главная проблема', 'Антагонист', 'Локации']
+  story: ['Название сюжета', 'Жанр', 'Завязка', 'Главная проблема', 'Антагонист', 'Локации'],
+  race: ['Название', 'Самоназвание', 'Внешность', 'Где живут', 'Чем занимаются', 'Боевые навыки', 'Способности', 'Уязвимости', 'Общественное устройство', 'Магия'],
+  class: ['Название класса', 'Роль', 'Ресурс', 'ХП', 'Базовая атака', 'Способности', 'Ультимейт', 'Ограничения и слабости', 'Истощение ресурса']
 };
 
-const STORY_INTENT = /заявк\w*\s+на\s+сюжет|предложить\s+сюжет|придумать\s+сюжет|создать\s+сюжет|мой\s+сюжет|сюжет\s+для\s+гм|new plot|create a plot|propose a plot|название\s+сюжета|завязка|главная\s+проблема|тэглайн|теглайн|крючок/i;
+const STORY_INTENT = /заявк[а-яё]*\s+на\s+сюжет|предложить\s+сюжет|придума[а-яё]*\s+сюжет|созда[а-яё]*\s+сюжет|мой\s+сюжет|сюжет\s+для\s+гм|new plot|create a plot|propose a plot|название\s+сюжета|завязка|главная\s+проблема|тэглайн|теглайн|крючок/i;
+// "хочу расу", "своя раса" and the English chip all mean the same thing as the
+// literal "создать расу"; matching only the verb made the chip fall through to the
+// character walk, which is the bug that left races and classes impossible to make.
+// The endings are spelled out with [а-яё]* rather than \w*: \w is ASCII-only in
+// JavaScript, so \w* after "созда" never reaches the Cyrillic "ть" and the verb
+// form did not match at all.
+const RACE_INTENT = /созда[а-яё]*\s+(свою\s+)?расу|хочу\s+(свою\s+)?расу|свою\s+расу|своя\s+раса|новую\s+расу|новая\s+раса|придума[а-яё]*\s+расу|new race|create a race|make a race/i;
+const CLASS_INTENT = /созда[а-яё]*\s+(свой\s+)?класс|хочу\s+(свой\s+)?класс|свой\s+класс|своя\s+класс|новый\s+класс|придума[а-яё]*\s+класс|new class|create a class|make a class/i;
+const CHARACTER_INTENT = /созда[а-яё]*\s+персонаж|хочу\s+персонаж|новый\s+персонаж|new character|create a character/i;
 
-// Which checklist the interview is walking. A plot is recognised by what the player
-// asked for, and remembered in the draft so the walk continues on later turns.
+// Which checklist the interview is walking. A plot, a race and a class are recognised
+// by what the player asked for, and remembered in the draft so the walk continues on
+// later turns. An explicit request in the newest message always wins, so a player who
+// changes their mind mid-interview switches to the new checklist instead of being
+// stuck on the old one.
 function interviewKind(application = {}, history = []) {
   const app = application && typeof application === 'object' ? application : {};
-  if (app._kind === 'story' || app._kind === 'character') return app._kind;
-  const text = (Array.isArray(history) ? history : [])
-    .filter((m) => m && m.role !== 'assistant')
-    .map((m) => String(m.content || ''))
-    .join('\n');
+  const msgs = (Array.isArray(history) ? history : []).filter((m) => m && m.role !== 'assistant');
+  const lastText = String(msgs[msgs.length - 1]?.content || '');
+  if (CHARACTER_INTENT.test(lastText)) return 'character';
+  if (RACE_INTENT.test(lastText)) return 'race';
+  if (CLASS_INTENT.test(lastText)) return 'class';
+  if (STORY_INTENT.test(lastText)) return 'story';
+  if (['race', 'class', 'story', 'character'].includes(app._kind)) return app._kind;
+  const text = msgs.map((m) => String(m.content || '')).join('\n');
+  if (RACE_INTENT.test(text)) return 'race';
+  if (CLASS_INTENT.test(text)) return 'class';
   return STORY_INTENT.test(text) ? 'story' : 'character';
 }
 
@@ -871,8 +921,29 @@ function interviewFields(application, history) {
   return INTERVIEW_FIELDS[interviewKind(application, history)] || INTERVIEW_FIELDS.character;
 }
 
+// What each checklist asks, in the wording a reviewer would use, plus the hint shown
+// in brackets. A race and a class are asked with their own field names rather than the
+// template's numbered pairs ("Уникальная способность 1"), because "Способности" is what
+// a person says and what the player answers.
+const FIELD_PROMPTS = {
+  race: {
+    'Способности': ['Способности', 'две сильные способности и в чём их сила'],
+    'Уязвимости': ['Уязвимости', 'минимум две серьёзные слабости'],
+    'Общественное устройство': ['Общественное устройство', 'форма правления, законы, иерархия'],
+    'Магия': ['Магия', 'какими школами владеют, максимум двумя, и какими нет']
+  },
+  class: {
+    'Название класса': ['Название класса', 'как класс называется'],
+    'Способности': ['Способности', '2–3 способности на уровень, от 1 до 15, и перезарядка каждой в ходах'],
+    'Ультимейт': ['Ультимейт', 'урон и эффект, один раз за сессию'],
+    'Ограничения и слабости': ['Ограничения и слабости', 'минимум одно ограничение и одна слабость'],
+    'Истощение ресурса': ['Истощение ресурса', 'что происходит, когда ресурс дошёл до нуля']
+  }
+};
+
 function nextFieldPrompt(app, lang, history = []) {
   const fields = getKnowledge().character_template?.fields || {};
+  const kind = interviewKind(app, history);
   const names = interviewFields(app, history);
   const drafted = new Set(Object.keys(app || {}));
   const covered = new Set(names.filter((f) => drafted.has(f) || hasFieldText(history, f)));
@@ -880,37 +951,51 @@ function nextFieldPrompt(app, lang, history = []) {
   const checkNudge = pick(lang, 'Если основное рассказал — скажи «проверь», и я проверю.', 'If that is the essentials — say "check" and I will review it.');
   const tellMore = pick(lang, 'Расскажи ещё что-нибудь.', 'Tell me more.');
   if (!missing.length) return [tellMore, checkNudge].join('\n');
-  const next = nextMissingField(missing, fields, lang, history);
+  const next = nextMissingField(missing, fields, lang, history, kind);
   // Nothing left after the field just asked and answered: the walk is over, and
   // asking the same field again would be the loop this engine exists to avoid.
   if (!next) return [tellMore, checkNudge].join('\n');
   // Once the essentials are covered, the interview offers the check alongside the
   // next field instead of asking for one more.
-  return covered.size >= INTERVIEW_MIN_FIELDS ? [next, checkNudge].join('\n') : next;
+  return covered.size >= interviewMinFields(kind) ? [next, checkNudge].join('\n') : next;
 }
 
 // The next field to ask about, skipping the one just asked so the same question
 // never comes twice in a row. Null means the walk has nothing left to ask.
-function nextMissingField(missing, fields, lang, history) {
-  const names = interviewFields({}, history);
+function nextMissingField(missing, fields, lang, history, kind = 'character') {
+  // The checklist is passed in rather than re-detected, so a race or class walk
+  // cannot drift back to the character template if the opening request scrolls out
+  // of the history window.
+  const names = INTERVIEW_FIELDS[kind] || INTERVIEW_FIELDS.character;
   const asked = lastAskedField(history, names);
   if (asked && repliedSinceLastQuestion(history)) {
     const idx = names.indexOf(asked);
     const after = missing.find((f) => names.indexOf(f) > idx);
-    return after ? fieldPrompt(after, fields, lang) : null;
+    return after ? fieldPrompt(after, fields, lang, kind) : null;
   }
-  return fieldPrompt(missing[0], fields, lang);
+  return fieldPrompt(missing[0], fields, lang, kind);
 }
 
-function fieldPrompt(field, fields, lang) {
+function fieldPrompt(field, fields, lang, kind = 'character') {
+  const custom = FIELD_PROMPTS[kind] && FIELD_PROMPTS[kind][field];
+  if (custom) {
+    return pick(lang, `Расскажи про «${custom[0]}» (${custom[1]}).`, `Tell me about "${custom[0]}" (${custom[1]}).`);
+  }
   const hint = typeof fields[field] === 'string' && fields[field] ? ` (${fields[field]})` : '';
   return pick(lang, `Расскажи про «${field}»${hint}.`, `Tell me about "${field}"${hint}.`);
 }
 
 // How many essentials must be covered before a check can pass. The template has
 // seventeen fields, and demanding all of them would turn the chat into a form, so
-// a filled-in character is recognised by name, race and class at the least.
+// a filled-in character is recognised by name, race and class at the least. A race
+// and a class are held to more: the whole point of the balance rules is that a sheet
+// names its abilities and its weaknesses, so those cannot be skipped.
 const INTERVIEW_MIN_FIELDS = 3;
+const KIND_MIN_FIELDS = { character: 3, story: 3, race: 4, class: 4 };
+
+function interviewMinFields(kind) {
+  return KIND_MIN_FIELDS[kind] || INTERVIEW_MIN_FIELDS;
+}
 
 function countFilledFields(app, history) {
   const names = interviewFields(app, history);
@@ -921,7 +1006,7 @@ function countFilledFields(app, history) {
 }
 
 function renderApplication(app, lang) {
-  const entries = Object.entries(app || {}).filter(([k]) => !k.startsWith('note_'));
+  const entries = Object.entries(app || {}).filter(([k]) => !k.startsWith('note_') && !k.startsWith('_'));
   if (!entries.length) return pick(lang, 'Анкета пока пустая.', 'The application is empty so far.');
   return [pick(lang, 'Черновик анкеты:', 'Application draft:'), ...entries.map(([k, v]) => `${k}: ${v}`)].join('\n');
 }
@@ -941,26 +1026,42 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   }
   if (isShowCmd(text)) return renderApplication(app, lang);
   if (isCheckCmd(text)) {
-    // A filled-in character is recognised from the draft and from the dialogue, so
-    // a player who never used "add to the application" can still be checked.
+    // A filled-in sheet is recognised from the draft and from the dialogue, so a
+    // player who never used "add to the application" can still be checked. A race
+    // and a class must carry their abilities and weaknesses, which is what the
+    // balance rules are about, so they need more covered fields than a character.
+    const kind = interviewKind(app, history);
     const filled = countFilledFields(app, history);
-    if (filled < INTERVIEW_MIN_FIELDS) {
+    if (filled < interviewMinFields(kind)) {
       return [
         pick(lang, 'Анкета ещё не заполнена: мне нужно больше деталей, иначе проверять нечего.', 'The application is not filled in yet: I need more detail before checking.'),
         nextFieldPrompt(app, lang, history)
       ].join('\n');
     }
+    const approved = pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅');
+    return approved;
+  }
+  // A race or a class is walked through its own checklist. The opening message names
+  // the rules and the first question, so the walk starts on the very turn the player
+  // asks for it, rather than promising to start and then falling back to the
+  // character template.
+  if (RACE_INTENT.test(text)) {
+    const rules = (getKnowledge().races?.race_template_rules || []).map((r) => `— ${r}`).join('\n');
     return [
-      pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅')
+      pick(lang, 'Давай сделаем расу. Правила:', 'Let us make a race. Rules:'),
+      rules,
+      pick(lang, 'Отвечай по пунктам, и я соберу анкету расы. Когда закончим — скажи «проверь».', 'Answer point by point and I will build the race sheet. When we are done — say "check".'),
+      nextFieldPrompt({ ...app, _kind: 'race' }, lang, history)
     ].join('\n');
   }
-  if (/создать.*расу|свою расу|new race|create a race/i.test(text)) {
-    const rules = (getKnowledge().races?.race_template_rules || []).map((r) => `— ${r}`).join('\n');
-    return [pick(lang, 'Давай сделаем расу. Правила:', 'Let us make a race. Rules:'), rules, pick(lang, 'Опиши расу: название, внешность, способности, уязвимости.', 'Describe the race: name, appearance, abilities, weaknesses.')].join('\n');
-  }
-  if (/создать.*класс|свой класс|new class|create a class/i.test(text)) {
+  if (CLASS_INTENT.test(text)) {
     const rules = (getKnowledge().classes?.class_balance_rules || []).map((r) => `— ${r}`).join('\n');
-    return [pick(lang, 'Давай сделаем класс. Правила баланса:', 'Let us make a class. Balance rules:'), rules, pick(lang, 'Опиши класс: роль, ресурс, способности, истощение.', 'Describe the class: role, resource, abilities, exhaustion.')].join('\n');
+    return [
+      pick(lang, 'Давай сделаем класс. Правила баланса:', 'Let us make a class. Balance rules:'),
+      rules,
+      pick(lang, 'Отвечай по пунктам, и я соберу анкету класса. Когда закончим — скажи «проверь».', 'Answer point by point and I will build the class sheet. When we are done — say "check".'),
+      nextFieldPrompt({ ...app, _kind: 'class' }, lang, history)
+    ].join('\n');
   }
   if (isGreeting(text) || !text.trim()) {
     return pick(lang,
@@ -1604,11 +1705,16 @@ async function answerGuide({ messages = [], lang = 'ru', onLive = null } = {}) {
 async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
+  // The checklist the walk is on is remembered in the draft, so a race or class
+  // interview continues on its own template on later turns instead of falling back
+  // to the character one once the opening request is no longer the newest message.
+  const kind = interviewKind(appState, history);
+  const nextApp = { ...appState, _kind: kind };
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
   // browser bundle sends notifications without the page having to pass anything.
   const send = typeof notify === 'function' ? notify : notifierFn;
   if (isEndCommand(lastUserText(history))) {
-    return { reply: withEnd(finaleText('interview', lang)), application: appState, finale: true };
+    return { reply: withEnd(finaleText('interview', lang)), application: nextApp, finale: true };
   }
   // The live wording arrives after the engine's answer, and the fixed hand-off is
   // attached outside the engine, so the rewrite is decorated the same way here as
@@ -1616,9 +1722,9 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   let decorate = (body) => withEnd(body);
   const { reply: raw, by, livePending } = await askModelOrLocal([
     { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
-    { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(appState)}` },
+    { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(nextApp)}` },
     ...history.map(asRole)
-  ], () => localInterview({ messages: history, lang, application: appState }), {
+  ], () => localInterview({ messages: history, lang, application: nextApp }), {
     live: true,
     role: 'interview',
     onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
@@ -1626,16 +1732,16 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   const clean = raw;
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.
-  const approved = approvedWithSheet(clean, history, appState);
+  const approved = approvedWithSheet(clean, history, nextApp);
   let delivered = false;
   let sheetKind = null;
   if (approved) {
-    sheetKind = detectSheet(history, appState);
+    sheetKind = detectSheet(history, nextApp) || kind;
     if (typeof send === 'function') {
       const result = await send({
         kind: sheetKind,
-        title: applicationTitle(appState, sheetKind, history),
-        text: sheetText(history, appState),
+        title: applicationTitle(nextApp, sheetKind, history),
+        text: sheetText(history, nextApp),
         lang
       }).catch(() => null);
       delivered = Boolean(result && result.ok);
@@ -1649,7 +1755,7 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   decorate = (body) => withEnd(approved ? `${body}\n\n${closing}\n\n${handoff}` : body);
   return {
     reply: decorate(clean),
-    application: appState,
+    application: nextApp,
     delivered,
     source: by,
     livePending: Boolean(livePending),
@@ -1663,7 +1769,7 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
 function sheetText(history, application) {
   const app = application && typeof application === 'object' ? application : {};
   const fields = Object.entries(app)
-    .filter(([k]) => !k.startsWith('note_'))
+    .filter(([k]) => !k.startsWith('note_') && !k.startsWith('_'))
     .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
   const dialogue = history
     .filter((m) => m.role !== 'assistant')
@@ -1828,7 +1934,8 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
     var count = function (list) { return list.filter(function (re) { return re.test(text); }).length; };
     if (count(klass) >= 3) return 'class';
     if (count(race) >= 3) return 'race';
-    return 'character';
+    var kind = application && application._kind;
+    return kind === 'race' || kind === 'class' ? kind : 'character';
   }
   setSheetDetector(sheetKind);
 

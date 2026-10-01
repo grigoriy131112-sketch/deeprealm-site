@@ -362,3 +362,60 @@ test('an approved plot goes to the owner and is not published by the site', asyn
   assert.equal(out.published, undefined, 'nothing is published by the site');
   setNotifier(null);
 });
+
+test('asking for a race starts the race checklist, not the character one', () => {
+  // The exact chip the Interviewer page offers. Before the fix this fell through
+  // to the character walk, so a race could never be created.
+  for (const ask of ['Хочу создать расу', 'Я хочу создать расу', 'создать расу', 'I want to create a race']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+    assert.match(reply, /анкету расы/, `"${ask}" opens the race walk`);
+    assert.match(reply, /«Название»/, `"${ask}" asks the first race field`);
+    assert.doesNotMatch(reply, /«Имя»/, `"${ask}" must not ask a character field`);
+  }
+});
+
+test('asking for a class starts the class checklist and mentions the cooldown rule', () => {
+  const reply = localInterview({ messages: [{ role: 'user', content: 'Хочу создать класс' }], lang: 'ru', application: {} });
+  assert.match(reply, /анкету класса/, 'the class walk opens');
+  assert.match(reply, /«Название класса»/, 'the first class field is asked');
+  assert.match(reply, /перезарядка/i, 'the cooldown-in-turns rule is stated');
+  assert.doesNotMatch(reply, /«Имя»/, 'no character field is asked');
+});
+
+test('a race interview continues on its own checklist and approves a full sheet', () => {
+  // The draft remembers the checklist, so the walk does not fall back to the
+  // character template once the opening request is no longer the newest message.
+  const app = { _kind: 'race' };
+  const history = [{ role: 'user', content: 'Название: Тени' }];
+  const reply = localInterview({ messages: history, lang: 'ru', application: app });
+  assert.match(reply, /«Самоназвание»/, 'the race walk moves to its next field');
+  assert.doesNotMatch(reply, /«Имя»/, 'the character template is not used');
+
+  const full = {
+    _kind: 'race', 'Название': 'Тени', 'Самоназвание': 'Шадэ', 'Внешность': 'высокие, серые глаза',
+    'Где живут': 'подземелья', 'Способности': 'шаг сквозь тень', 'Уязвимости': 'свет и соль'
+  };
+  const approved = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: full });
+  assert.match(approved, /ОДОБРЕНО/, 'a filled race sheet is approved');
+});
+
+test('a thin race sheet is not approved and is not filed as a character', async () => {
+  const thin = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: { _kind: 'race', 'Название': 'Тени' } });
+  assert.doesNotMatch(thin, /ОДОБРЕНО/, 'one field is not enough for a race');
+  assert.match(thin, /не заполнена/);
+
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const messages = [
+    { role: 'user', content: 'Хочу создать расу' },
+    { role: 'assistant', content: 'Расскажи про «Название».' },
+    { role: 'user', content: 'Название: Тени. Самоназвание: Шадэ. Внешность: высокие. Где живут: подземелья. Способности: шаг сквозь тень. Уязвимости: свет.' },
+    { role: 'assistant', content: 'Если основное рассказал — скажи «проверь».' },
+    { role: 'user', content: 'проверь' }
+  ];
+  const out = await answerInterview({ messages, lang: 'ru' });
+  assert.equal(sent.length, 1, 'the race goes to the owner');
+  assert.equal(sent[0].kind, 'race', 'the draft kind keeps it out of the character bucket');
+  assert.equal(out.application._kind, 'race', 'the kind is remembered in the draft');
+  setNotifier(null);
+});

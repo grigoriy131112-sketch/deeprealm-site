@@ -6,7 +6,7 @@ import {
   sentToOwnerText, applicationTitle, staffAnswerPairs, detectSheet,
   staffTurn, matchActivityFaq, GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM
 } from './chat-core.js';
-import { localGuide, localInterview, localStaff } from './ai-engine.js';
+import { localGuide, localInterview, localStaff, interviewKind } from './ai-engine.js';
 import { keepsEssentials } from './ai-maker.js';
 
 let modelCaller = null;
@@ -137,11 +137,16 @@ export async function answerGuide({ messages = [], lang = 'ru', onLive = null } 
 export async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
+  // The checklist the walk is on is remembered in the draft, so a race or class
+  // interview continues on its own template on later turns instead of falling back
+  // to the character one once the opening request is no longer the newest message.
+  const kind = interviewKind(appState, history);
+  const nextApp = { ...appState, _kind: kind };
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
   // browser bundle sends notifications without the page having to pass anything.
   const send = typeof notify === 'function' ? notify : notifierFn;
   if (isEndCommand(lastUserText(history))) {
-    return { reply: withEnd(finaleText('interview', lang)), application: appState, finale: true };
+    return { reply: withEnd(finaleText('interview', lang)), application: nextApp, finale: true };
   }
   // The live wording arrives after the engine's answer, and the fixed hand-off is
   // attached outside the engine, so the rewrite is decorated the same way here as
@@ -149,9 +154,9 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   let decorate = (body) => withEnd(body);
   const { reply: raw, by, livePending } = await askModelOrLocal([
     { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
-    { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(appState)}` },
+    { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(nextApp)}` },
     ...history.map(asRole)
-  ], () => localInterview({ messages: history, lang, application: appState }), {
+  ], () => localInterview({ messages: history, lang, application: nextApp }), {
     live: true,
     role: 'interview',
     onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
@@ -159,16 +164,16 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   const clean = raw;
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.
-  const approved = approvedWithSheet(clean, history, appState);
+  const approved = approvedWithSheet(clean, history, nextApp);
   let delivered = false;
   let sheetKind = null;
   if (approved) {
-    sheetKind = detectSheet(history, appState);
+    sheetKind = detectSheet(history, nextApp) || kind;
     if (typeof send === 'function') {
       const result = await send({
         kind: sheetKind,
-        title: applicationTitle(appState, sheetKind, history),
-        text: sheetText(history, appState),
+        title: applicationTitle(nextApp, sheetKind, history),
+        text: sheetText(history, nextApp),
         lang
       }).catch(() => null);
       delivered = Boolean(result && result.ok);
@@ -182,7 +187,7 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   decorate = (body) => withEnd(approved ? `${body}\n\n${closing}\n\n${handoff}` : body);
   return {
     reply: decorate(clean),
-    application: appState,
+    application: nextApp,
     delivered,
     source: by,
     livePending: Boolean(livePending),
@@ -196,7 +201,7 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
 function sheetText(history, application) {
   const app = application && typeof application === 'object' ? application : {};
   const fields = Object.entries(app)
-    .filter(([k]) => !k.startsWith('note_'))
+    .filter(([k]) => !k.startsWith('note_') && !k.startsWith('_'))
     .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`);
   const dialogue = history
     .filter((m) => m.role !== 'assistant')

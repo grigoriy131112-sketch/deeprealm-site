@@ -1084,6 +1084,10 @@ async function sendInterview(text) {
     }
     addMessage('interview', 'assistant', data.reply);
     attachLive('interview', live);
+    // The draft carries the checklist the interview is walking, so a long race or
+    // class interview keeps its template even after the opening request scrolls out
+    // of the history window the engine reads.
+    if (data && data.application) { convo.application = data.application; saveStore(); }
   } catch (err) {
     pending.remove();
     pushMsg('interviewLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());
