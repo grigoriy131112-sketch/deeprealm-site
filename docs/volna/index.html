@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="day">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ВОЛНА — дневник настроения</title>
+<meta name="description" content="Волна — трекер настроения и личный дневник. Всё хранится только в твоём браузере." />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#45D6A6" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="styles.css?v=10" />
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand__mark">🌊</div>
+      <div>
+        <div class="brand__name">ВОЛНА</div>
+        <div class="brand__sub">дневник настроения</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a class="nav__link is-active" href="index.html">🌊 Настроение</a>
+      <a class="nav__link" href="diary.html">📓 Дневник</a>
+    </nav>
+    <div class="topbar__right">
+      <span class="chip chip--streak" id="chipStreak">🔥 <b id="streakNum">0</b> дней</span>
+      <button class="icon-btn" id="remindBtn" title="Напоминание">🔔</button>
+      <button class="icon-btn" id="themeBtn" title="Сменить тему">🌙</button>
+      <button class="icon-btn" id="resetBtn" title="Сбросить всё">↺</button>
+    </div>
+  </header>
+
+  <!-- сегодняшняя запись -->
+  <section class="card tape hero">
+    <span class="hero__kicker" id="todayKicker">сегодня</span>
+    <h1 class="hero__title" id="heroTitle">Как ты <em>сегодня</em>?</h1>
+    <p class="hero__sub" id="heroSub">Отметь настроение — это займёт 10 секунд.</p>
+
+    <div class="moods" id="moods"></div>
+
+    <div class="label">Что повлияло? <span id="tagHint">можно выбрать несколько</span></div>
+    <div class="tags" id="tags"></div>
+
+    <div class="label">Заметка <span>необязательно</span></div>
+    <textarea class="note" id="note" placeholder="Пара слов о дне…"></textarea>
+
+    <div class="hero__actions">
+      <button class="btn btn--primary" id="saveBtn" disabled>💾 Сохранить день</button>
+      <button class="btn btn--ghost" id="clearBtn">Очистить</button>
+    </div>
+  </section>
+
+  <!-- календарь -->
+  <div class="section-head">
+    <h2>Календарь</h2>
+    <span id="calHint">нажми на день, чтобы посмотреть запись</span>
+  </div>
+  <section class="card">
+    <div class="cal__head">
+      <div class="cal__month" id="calMonth"></div>
+      <div class="cal__nav">
+        <button id="prevMonth" title="Предыдущий месяц">‹</button>
+        <button id="nextMonth" title="Следующий месяц">›</button>
+      </div>
+    </div>
+    <div class="cal__dow" id="calDow"></div>
+    <div class="cal__grid" id="calGrid"></div>
+  </section>
+
+  <!-- инсайты -->
+  <div class="section-head">
+    <h2>Что говорит статистика</h2>
+    <span id="insightRange">за всё время</span>
+  </div>
+  <div class="insights" id="insights"></div>
+
+  <div class="section-head">
+    <h2>Динамика настроения</h2>
+    <div class="seg" id="rangeSeg">
+      <button data-r="30" class="on">30 дней</button>
+      <button data-r="90">90 дней</button>
+    </div>
+  </div>
+  <section class="card"><div class="chart" id="moodChart"></div></section>
+
+  <div class="section-head">
+    <h2>Среднее по дням недели</h2>
+    <span>где ты обычно на подъёме</span>
+  </div>
+  <section class="card"><div class="wk" id="weekChart"></div></section>
+
+  <div class="section-head">
+    <h2>Распределение настроений</h2>
+    <span>сколько дней в каждой зоне</span>
+  </div>
+  <section class="card"><div class="dist" id="dist"></div></section>
+
+  <div class="section-head">
+    <h2>Достижения</h2>
+    <span id="achSummary"></span>
+  </div>
+  <div class="ach" id="achievements"></div>
+
+  <footer class="footer">
+    <div><b>ВОЛНА</b> · сделано с 🌊 · всё хранится только в твоём браузере</div>
+    <div>Никаких аккаунтов и серверов. Данные можно стереть кнопкой ↺.</div>
+  </footer>
+</div>
+
+<!-- day modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal__head">
+      <div>
+        <div class="modal__title" id="modalTitle">День</div>
+        <div class="modal__date" id="modalDate"></div>
+      </div>
+      <button class="icon-btn" id="closeBtn" title="Закрыть">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- reminder modal -->
+<div class="overlay" id="remindOverlay">
+  <div class="modal modal--sm" role="dialog" aria-modal="true">
+    <div class="modal__head">
+      <div>
+        <div class="modal__title">🔔 Напоминание</div>
+        <div class="modal__date">Отметить настроение в одно и то же время</div>
+      </div>
+      <button class="icon-btn" id="remindClose" title="Закрыть">✕</button>
+    </div>
+    <div class="remind">
+      <label class="remind__row">
+        <span>Время</span>
+        <input type="time" id="remindTime" value="20:00" />
+      </label>
+      <p class="remind__hint" id="remindHint">Уведомление придёт, пока вкладка открыта.</p>
+      <div class="remind__actions">
+        <button class="btn btn--primary" id="remindSave">Сохранить</button>
+        <button class="btn" id="remindOff">Выключить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="confetti" id="confetti"></div>
+
+<script src="data.js?v=10"></script>
+<script src="pwa.js?v=10"></script>
+<script src="app.js?v=10"></script>
+</body>
+</html>

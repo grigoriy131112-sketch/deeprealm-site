@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="day">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Дневник — ВОЛНА</title>
+<meta name="description" content="Волна — личный дневник с шифрованием. Пиши что думаешь: записи хранятся только в твоём браузере." />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#45D6A6" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="styles.css?v=10" />
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand__mark">📓</div>
+      <div>
+        <div class="brand__name">ВОЛНА</div>
+        <div class="brand__sub">личный дневник</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a class="nav__link" href="index.html">🌊 Настроение</a>
+      <a class="nav__link is-active" href="diary.html">📓 Дневник</a>
+    </nav>
+    <div class="topbar__right">
+      <span class="chip chip--streak" id="chipStreak">🔥 <b id="streakNum">0</b> дней подряд</span>
+      <button class="icon-btn" id="lockBtn" title="Шифрование дневника">🔓</button>
+      <button class="icon-btn" id="themeBtn" title="Сменить тему">🌙</button>
+    </div>
+  </header>
+
+  <div class="diary-head">
+    <div>
+      <div class="diary-title">Твой дневник</div>
+      <div class="diary-sub" id="diarySub">Пиши что думаешь. Всё остаётся только в твоём браузере.</div>
+    </div>
+    <div class="toolbar">
+      <button class="tool tool--wide" id="newBtn" title="Новая запись">✏️ Новая</button>
+      <button class="tool tool--wide" id="tplBtn" title="Шаблоны записей">🧩 Шаблон</button>
+      <button class="tool" id="printBtn" title="Печать / PDF">🖨</button>
+      <button class="tool" id="exportBtn" title="Скачать все записи (JSON)">⬇</button>
+      <button class="tool" id="importBtn" title="Загрузить записи из файла">⬆</button>
+      <button class="tool" id="deleteBtn" title="Удалить запись">🗑</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden />
+    </div>
+  </div>
+
+  <div class="lock-banner" id="lockBanner" hidden>
+    <span id="lockBannerText"></span>
+    <button class="btn btn--primary" id="unlockBtn">🔓 Разблокировать</button>
+  </div>
+
+  <div class="prompt" id="promptCard">
+    <span class="prompt__ico">💬</span>
+    <div>
+      <div class="prompt__lbl">Вопрос дня</div>
+      <div class="prompt__q" id="promptQ"></div>
+    </div>
+    <button class="tool" id="promptBtn" title="Подставить в запись">↪</button>
+  </div>
+
+  <div class="diary-layout">
+
+    <!-- список записей -->
+    <aside class="card" style="padding:18px">
+      <div class="dsearch"><input id="search" placeholder="Поиск по записям…" /></div>
+      <div class="dlist" id="list"></div>
+    </aside>
+
+    <!-- блокнот -->
+    <section class="notebook">
+      <div class="card paper">
+        <div class="toolbar" id="fmtBar" style="margin-bottom:10px">
+          <button class="tool" data-cmd="bold" title="Жирный"><b>Ж</b></button>
+          <button class="tool" data-cmd="italic" title="Курсив"><i>К</i></button>
+          <button class="tool" data-cmd="underline" title="Подчёркнутый"><u>Ч</u></button>
+          <button class="tool" data-cmd="strikeThrough" title="Зачёркнутый"><s>S</s></button>
+          <button class="tool" data-cmd="hiliteColor" data-val="#FFE27A" title="Выделить">🖍</button>
+          <span class="tool-sep"></span>
+          <button class="tool" data-cmd="insertUnorderedList" title="Список">•</button>
+          <button class="tool" data-cmd="insertOrderedList" title="Нумерованный список">1.</button>
+          <button class="tool" data-cmd="formatBlock" data-val="blockquote" title="Цитата">❝</button>
+          <span class="tool-sep"></span>
+          <button class="tool" data-cmd="removeFormat" title="Убрать форматирование">✕</button>
+        </div>
+
+        <input class="dtitle" id="dtitle" placeholder="Заголовок…" maxlength="120" />
+        <div class="mood-link" id="moodLink" hidden></div>
+        <div class="dbody" id="dbody" contenteditable="true" spellcheck="true"
+             data-placeholder="Дорогой дневник…"></div>
+
+        <div class="paper__foot">
+          <span class="counter" id="counter">0 символов</span>
+          <div class="diary-actions">
+            <span class="saved-flag" id="savedFlag">✓ сохранено</span>
+            <button class="btn btn--primary" id="saveBtn">💾 Сохранить</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="footer">
+    <div><b>ВОЛНА</b> · дневник · данные хранятся только в твоём браузере (localStorage)</div>
+    <div>Скачивай резервную копию кнопкой ⬇, чтобы не потерять записи при очистке браузера.</div>
+  </footer>
+</div>
+
+<!-- preview / print modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal__head">
+      <div>
+        <div class="modal__title" id="pvTitle">Запись</div>
+        <div class="modal__date" id="pvDate"></div>
+      </div>
+      <button class="icon-btn" id="closeBtn" title="Закрыть">✕</button>
+    </div>
+    <div class="pv" id="pvBody"></div>
+    <div class="diary-actions" style="margin-top:18px">
+      <button class="btn btn--primary" id="doPrint">🖨 Печать / PDF</button>
+      <button class="btn btn--ghost" id="closeBtn2">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- templates picker -->
+<div class="overlay" id="tplOverlay">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal__head">
+      <div><div class="modal__title">🧩 Шаблоны</div>
+      <div class="modal__date">Выбери заготовку — текст подставится в лист</div></div>
+      <button class="icon-btn" id="tplClose" title="Закрыть">✕</button>
+    </div>
+    <div id="tplList"></div>
+  </div>
+</div>
+
+<!-- password gate -->
+<div class="overlay" id="lockOverlay">
+  <div class="modal" style="width:min(440px,100%)" role="dialog" aria-modal="true">
+    <div class="modal__head">
+      <div><div class="modal__title" id="lockTitle">🔐 Дневник зашифрован</div>
+      <div class="modal__date" id="lockSub">Введи пароль, чтобы открыть записи</div></div>
+      <button class="icon-btn" id="lockClose" title="Закрыть">✕</button>
+    </div>
+    <div class="pw">
+      <input class="dsearch" id="passInput" type="password" placeholder="Пароль" />
+      <button class="pw__eye" id="passEye1" type="button" title="Показать пароль" aria-label="Показать пароль">👁</button>
+    </div>
+    <div class="pw" id="passRow2" hidden>
+      <input class="dsearch" id="passInput2" type="password" placeholder="Повтори пароль" />
+      <button class="pw__eye" id="passEye2" type="button" title="Показать пароль" aria-label="Показать пароль">👁</button>
+    </div>
+    <div class="lock-msg" id="lockMsg" role="alert" aria-live="polite"></div>
+    <div class="diary-actions" style="margin-top:16px">
+      <button class="btn btn--primary" id="lockOk">Продолжить</button>
+      <button class="btn btn--ghost" id="lockCancel">Отмена</button>
+    </div>
+    <div class="lock-note">
+      Пароль не хранится нигде. Если забудешь — записи восстановить нельзя.
+      Сохрани резервную копию кнопкой ⬇ заранее.
+    </div>
+  </div>
+</div>
+
+<script src="data.js?v=10"></script>
+<script src="crypto.js?v=10"></script>
+<script src="pwa.js?v=10"></script>
+<script src="diary.js?v=10"></script>
+</body>
+</html>

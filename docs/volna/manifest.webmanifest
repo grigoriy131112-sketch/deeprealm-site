@@ -1,0 +1,17 @@
+{
+  "name": "Волна — дневник настроения",
+  "short_name": "Волна",
+  "description": "Ежедневный трекер настроения и личный дневник. Всё хранится только в браузере.",
+  "lang": "ru",
+  "dir": "ltr",
+  "start_url": "index.html",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FBF3E6",
+  "theme_color": "#45D6A6",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
