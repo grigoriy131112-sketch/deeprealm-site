@@ -292,7 +292,9 @@ permission is missing. Probe that way before starting any long operation.
   describe it yourself, or ask the AI to make it). The help check runs before the
   walk branch, so a question is explained instead of silently opening the walk.
   A reaction must carry no «...» of its own, or tests that read the last «...» as
-  the asked field would see the reaction instead.
+  the asked field would see the reaction instead. Partway through a race or class
+  walk the interviewer also offers to finish the sheet itself, so the player can
+  hand the work over at any point instead of only at the very start.
 - A generated sheet is shown exactly as built and is never handed to the model
   (see the `made` branch in `answerInterview`): a rewrite could paraphrase its
   numbers or drop an ability, so the player would submit something else than they

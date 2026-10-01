@@ -523,6 +523,20 @@ test('asking how to make a race is answered, not met with another field question
   assert.match(reply, /придумай мне расу сам|двумя путями/, 'the two ways are explained');
 });
 
+test('the interviewer offers to finish the sheet itself partway through', () => {
+  const app = { _kind: 'race', 'Название': 'Тени', 'Где живут': 'в пещерах' };
+  const history = [
+    { role: 'user', content: 'Хочу создать свою расу' },
+    { role: 'assistant', content: 'Давай сделаем расу...' },
+    { role: 'user', content: 'Название: Тени, живут в пещерах' }
+  ];
+  const reply = localInterview({ messages: history, lang: 'ru', application: app });
+  assert.match(reply, /придумаю остальное за тебя/, 'the handover is offered');
+  // And the offer leads straight to a generated sheet.
+  history.push({ role: 'assistant', content: reply }, { role: 'user', content: 'придумай мне рассу сам' });
+  assert.match(localInterview({ messages: history, lang: 'ru', application: app }), /Готово/);
+});
+
 test('a generated race respects the balance rules it is built from', () => {
   for (const seedText of ['расу сам', 'другую расу придумай', 'создай расу сама', 'make a race for me']) {
     const reply = localInterview({ messages: [{ role: 'user', content: seedText }], lang: 'ru', application: {} });

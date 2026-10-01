@@ -658,7 +658,15 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   // reaction is what makes the walk feel like a conversation instead of a form.
   const question = nextFieldPrompt(app, lang, history);
   const reaction = interviewerReaction(text, lang);
-  return [reaction, question].filter(Boolean).join('\n');
+  // Once a couple of things are on the sheet, the interviewer offers to finish the
+  // rest itself. That is what turns "it only asks me questions" into a two-way
+  // conversation: the player can hand the work over at any point, not only at the
+  // very start with a magic phrase.
+  const kind = interviewKind(app, history);
+  const offer = (kind === 'race' || kind === 'class') && countFilledFields(app, history) >= 2
+    ? pick(lang, `Хочешь, придумаю остальное за тебя — скажи «придумай мне ${kind === 'race' ? 'расу' : 'класс'} сам».`, `Want me to make the rest for you? Say "make a ${kind} for me".`)
+    : '';
+  return [reaction, question, offer].filter(Boolean).join('\n');
 }
 
 // -------------------------------------------------------------------- staff
