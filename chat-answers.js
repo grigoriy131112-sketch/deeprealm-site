@@ -6,7 +6,7 @@ import {
   sentToOwnerText, applicationTitle, staffAnswerPairs, detectSheet,
   staffTurn, matchActivityFaq, GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM
 } from './chat-core.js';
-import { localGuide, localInterview, localStaff, interviewKind } from './ai-engine.js';
+import { localGuide, localInterview, localStaff, interviewKind, generatedSheet } from './ai-engine.js';
 import { keepsEssentials } from './ai-maker.js';
 
 let modelCaller = null;
@@ -141,7 +141,12 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // interview continues on its own template on later turns instead of falling back
   // to the character one once the opening request is no longer the newest message.
   const kind = interviewKind(appState, history);
-  const nextApp = { ...appState, _kind: kind };
+  // A self-authored race or class arrives as a finished sheet, so its fields join
+  // the draft and the very next "проверь" can approve and forward it. Without this
+  // the generated sheet would be shown but never stored, and the check would find
+  // an empty draft.
+  const made = generatedSheet(history, appState, lang);
+  const nextApp = made ? { ...appState, ...made.app, _kind: made.kind } : { ...appState, _kind: kind };
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
   // browser bundle sends notifications without the page having to pass anything.
   const send = typeof notify === 'function' ? notify : notifierFn;
@@ -152,15 +157,24 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // attached outside the engine, so the rewrite is decorated the same way here as
   // the answer the player sees first.
   let decorate = (body) => withEnd(body);
-  const { reply: raw, by, livePending } = await askModelOrLocal([
-    { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
-    { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(nextApp)}` },
-    ...history.map(asRole)
-  ], () => localInterview({ messages: history, lang, application: nextApp }), {
-    live: true,
-    role: 'interview',
-    onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
-  });
+  const localReply = () => localInterview({ messages: history, lang, application: nextApp });
+  // A generated sheet is a concrete submission, so it is shown exactly as built and
+  // never handed to the model: a rewrite could paraphrase its numbers or drop an
+  // ability, and the player would then submit something else than they read.
+  const asked = made
+    ? { reply: localReply(), by: 'local', livePending: false }
+    : await askModelOrLocal([
+        { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
+        { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(nextApp)}` },
+        ...history.map(asRole)
+      ], localReply, {
+        live: true,
+        role: 'interview',
+        onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
+      });
+  const raw = asked.reply;
+  const by = asked.by;
+  const livePending = asked.livePending;
   const clean = raw;
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.

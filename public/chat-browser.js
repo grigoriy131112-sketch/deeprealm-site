@@ -127,6 +127,7 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Анкетолог чата Deepr
 9. Ты не сохраняешь ничего в базах и не запускаешь игру. Единственное финальное действие — резюме проверки, пометка "ОДОБРЕНО ✅" и ссылка на Telegram-чат.
 10. Если анкета расы или класса заполнена полностью и нарушений баланса нет — СРАЗУ пиши пометку "ОДОБРЕНО ✅" и завершай проверку. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали: статья для сайта будет опубликована автоматически. Никаких вопросов после одобрения.
 11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце проверяешь по правилам. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
+11а. Если игрок просит придумать расу или класс ЗА НЕГО ("создай сам", "придумай за меня", "сделай сам") — не задавай вопросов и не отказывайся: придумай расу или класс целиком и сразу, по правилам баланса, со способностями и слабостями, и выведи готовую анкету. Встроенный движок уже умеет это и без тебя; если ты пишешь ответ сам, сделай то же самое.
 12. ПЕРЕЗАРЯДКА СПОСОБНОСТЕЙ измеряется в ходах. У каждой способности класса должна быть указана перезарядка в ходах (например, «перезарядка: 2 хода»). Если игрок её не указал — спроси.
 
 ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ:
@@ -492,6 +493,452 @@ function staffTurn(history, appState = {}, lang = 'ru') {
 }
 
 
+// ---- ai-gen.js ----
+// Generates a whole race or class when the player asks the Interviewer to do it
+// for them ("создай сам", "придумай за меня").
+//
+// The built-in engine runs with no model and no key, so the sheets are composed
+// from themed building blocks rather than written by an LLM: each theme carries
+// its own abilities *and* the weaknesses that balance them, so any combination
+// stays inside the balance rules by construction. A seed taken from the dialogue
+// rotates the theme, so asking twice gives a different result.
+
+// The bundle flattens every module into one scope, so this helper is named to stay
+// unique against the same helper in ai-engine.js.
+const genPick = (lang, ru, en) => (lang === 'en' ? en : ru);
+
+// --- races -----------------------------------------------------------------
+// Each theme is self-consistent: the habitat explains the abilities, the
+// abilities explain the weaknesses, and the magic line never crosses the
+// "no more than two schools" rule.
+const RACE_THEMES = [
+  {
+    names: ['Пепельники', 'Углежоги'], selves: ['Тлеющие', 'Пепельные'],
+    look: 'Пепельно-серая кожа в трещинах, под которой тлеет багровый жар; глаза — угли без белков; сухощавы, среднего роста, всегда пахнут дымом.',
+    habitat: 'выжженные пустоши и пепельные степи там, где прошла Великая Битва',
+    activity: 'собирают пепел павших, куют обсидиан, служат проводниками через выжженные земли',
+    combat: 'бьются на средней дистанции: швыряют раскалённые обломки и поджигают землю под ногами врага',
+    powers: [
+      ['Жар ядра', 'касание обжигает: 15 урона огнём и подпалина на 2 хода'],
+      ['Тлеющий шаг', 'мгновенно переносятся к любому открытому огню в пределах видимости']
+    ],
+    weak: [
+      'Вода и холод: во влажном месте жар гаснет — способности стоят вдвое дороже, движения вялы',
+      'Хрупкий пепел: дробящее оружие наносит на треть больше урона'
+    ],
+    society: 'воинские общины вокруг общего кострища; правят не старейшие, а те, кто дольше всех продержался в огне; чужака пускают к костру, но не к кузне',
+    magic: ['Огонь и Руны', 'Лёд и Природа'],
+    relations: 'к людям — настороженно (те жгли их земли); к эльфам — презрительно (слишком мягкие); к драконорождённым — как к родичам по жару; к дворфам — с уважением за кузни; к оркам — как к достойным противникам; к павшим — с жалостью, пускают к костру',
+    fear: 'боятся утонуть и боятся погаснуть'
+  },
+  {
+    names: ['Инеистые', 'Морозники'], selves: ['Белые', 'Стужёные'],
+    look: 'Кожа цвета старого снега, волосы — белые пряди, глаза бледно-голубые без зрачка; дышат морозным паром даже в жару, пальцы покрыты инеем.',
+    habitat: 'высокогорные плато и ледники на границе Кхарада',
+    activity: 'хранят тропы через перевалы, охотятся на ледяных тварей, вырезают руны на льду',
+    combat: 'держат дистанцию, ставят ледяные стены и замораживают оружие врага',
+    powers: [
+      ['Дыхание стужи', 'конус холода: 18 урона и замедление на 2 хода'],
+      ['Ледяная броня', 'наращивает лёд: +5 к защите, но −2 к скорости, пока держится']
+    ],
+    weak: [
+      'Огонь: жар плавит их броню и наносит двойной урон',
+      'Хрупкость: от резкого удара лёд на теле трескается, и они теряют 5 ХП за ход, пока не отогреются'
+    ],
+    society: 'кланы, что держатся вместе только зимой; летом расходятся по одиночке; решения принимает тот, кто пережил больше зим',
+    magic: ['Лёд и Ветер', 'Огонь и Кровь'],
+    relations: 'к людям — равнодушно; к эльфам — с недоверием (лес для них мёртв); к драконорождённым — враждебно (жар убивает); к дворфам — по-деловому, меняют лёд на металл; к оркам — с уважением за выносливость; к павшим — избегают, считая их «оттаявшими мертвецами»',
+    fear: 'боятся огня и тесноты'
+  },
+  {
+    names: ['Костяные', 'Гробовники'], selves: ['Молчащие', 'Сухие'],
+    look: 'Сухая, натянутая на кости кожа серо-жёлтого оттенка, глубоко посаженные глаза с мутной радужкой; говорят шёпотом, почти не открывая рта.',
+    habitat: 'катакомбы и старые склепы Элдарии, заброшенные шахты Подземелья',
+    activity: 'оберегают могилы, выкупают и перезахоранивают кости, ведут счёт умершим',
+    combat: 'дерутся медленно и упорно, не чувствуют боли и не отступают',
+    powers: [
+      ['Шёпот мёртвых', 'задают вопрос останкам: те отвечают тем, что знали при жизни'],
+      ['Немота смерти', 'взглядом лишают цель голоса на 2 хода — та не может колдовать и звать на помощь']
+    ],
+    weak: [
+      'Голоса: они слышат мёртвых постоянно; в тишине легко теряют рассудок и на день теряют способности',
+      'Свет и серебро: освящённое оружие жжёт их как живое, нанося двойной урон'
+    ],
+    society: 'тихие дома во главе с теми, кто помнит больше всех имён; никого не хоронят без свидетеля',
+    magic: ['Некромантия и Тьма', 'Свет и Природа'],
+    relations: 'к людям — как к шумным детям; к эльфам — с уважением (те не боятся смерти); к драконорождённым — холодно; к дворфам — по-деловому; к оркам — настороженно; к павшим — как к своим, первыми дают им кров',
+    fear: 'боятся забвения'
+  },
+  {
+    names: ['Соляные', 'Приливные'], selves: ['Солёные', 'Морские'],
+    look: 'Кожа покрыта соляной коркой, волосы — жёсткие, как водоросли; глаза цвета мёртвой воды, между пальцами перепонки, дышат и жабрами, и лёгкими.',
+    habitat: 'солёные болота и берега неспокойных морей Вел\'Моры',
+    activity: 'водят корабли между рифами, добывают соль, вытаскивают утопленников',
+    combat: 'затягивают врага в воду, бьют острогой и топят',
+    powers: [
+      ['Соляной плевок', 'осыпает врага солью: 12 урона и −3 к точности на 2 хода'],
+      ['Дыхание глубины', 'под водой дышат и видят в темноте, а на суше могут задержать дыхание на час']
+    ],
+    weak: [
+      'Сухость: вдали от воды слабеют — раз в день теряют 10 ХП, если не смочат кожу',
+      'Соль как рана: их же соль разъедает открытые раны, поэтому лечение действует вдвое слабее'
+    ],
+    society: 'береговые артели, где слово капитана выше закона; долг перед артелью важнее жизни',
+    magic: ['Ветер и Природа', 'Огонь и Руны'],
+    relations: 'к людям — настороженно, но торгуют; к эльфам — с недоверием; к драконорождённым — с опаской; к дворфам — по-деловому; к оркам — нейтрально; к павшим — равнодушно',
+    fear: 'боятся пересохнуть'
+  },
+  {
+    names: ['Глубинные', 'Каменники'], selves: ['Каменные', 'Нижние'],
+    look: 'Плотная, как базальт, кожа с прожилками руды; глаза светятся тусклым янтарём; роста низкого, широки в плечах, почти не моргают.',
+    habitat: 'глубокие пещеры и старые рудники под горами Кхарада',
+    activity: 'ведут счёт жилам руды, роют тоннели, чинят обвалы',
+    combat: 'держат узкий проход, бьют молотом и обрушивают камень на головы',
+    powers: [
+      ['Каменная кожа', 'твердеет: получаемый физический урон вдвое меньше на 2 хода'],
+      ['Чутьё жилы', 'чувствуют пустоты и металл в камне на десятки шагов']
+    ],
+    weak: [
+      'Тяжесть: медлительны, не плавают и тонут камнем на дно',
+      'Долг: без сна в камне слабеют — каждые сутки без отдыха теряют 5 ХП и 5 к точности'
+    ],
+    society: 'артели во главе со старшим мастером; того, кто соврал о жиле, изгоняют вниз навсегда',
+    magic: ['Руны и Природа', 'Ветер и Тьма'],
+    relations: 'к людям — по-деловому; к эльфам — с презрением (лес — не камень); к драконорождённым — с уважением за силу; к дворфам — как к соперникам по ремеслу; к оркам — нейтрально; к павшим — не пускают в шахты',
+    fear: 'боятся обвала и открытого неба'
+  },
+  {
+    names: ['Грозовые', 'Небесники'], selves: ['Громовые', 'Ветряные'],
+    look: 'Кожа с пепельным отливом, волосы стоят дыбом от статики; глаза белые, светящиеся; в гневе вокруг них трещат искры.',
+    habitat: 'одинокие плато и обветренные скалы, где чаще бьют молнии',
+    activity: 'ловят молнии в копья-громоотводы, предсказывают бури, служат наёмниками-наблюдателями',
+    combat: 'бьют молнией с дистанции и уходят в разряд',
+    powers: [
+      ['Разряд', 'молния: 20 урона и оглушение на 1 ход'],
+      ['Грозовой шаг', 'мгновенно переносятся к месту, где только что сверкнула молния']
+    ],
+    weak: [
+      'Земля: заземление вредит — стоя на голой земле, они получают вдвое больше урона от молний и не могут уйти шагом',
+      'Разряд в кровь: при перегрузке (0 ресурса) теряют сознание на 2 хода'
+    ],
+    society: 'вольные ватаги без вождей; слушаются только того, кто громче всех переживёт бурю',
+    magic: ['Молния и Ветер', 'Некромантия и Кровь'],
+    relations: 'к людям — свысока; к эльфам — нейтрально; к драконорождённым — как к небесным родичам; к дворфам — с насмешкой; к оркам — с уважением; к павшим — равнодушно',
+    fear: 'боятся заземления и цепей'
+  }
+];
+
+// The sheet the owner receives, in the order of the race template, so it can be
+// pasted into the blog as-is. The weaknesses come from the theme itself, which is
+// what makes every generated race pass the "minimum two weaknesses" rule.
+function raceDraft(lang, seed) {
+  const t = RACE_THEMES[seed % RACE_THEMES.length];
+  const name = t.names[(seed >>> 5) % t.names.length];
+  const self = t.selves[(seed >>> 9) % t.selves.length];
+  const [magic, noMagic] = t.magic;
+  const lines = [
+    `Название: ${name}`,
+    `Самоназвание: ${self}`,
+    `Внешность: ${t.look}`,
+    `Где живут: ${t.habitat}`,
+    `Чем занимаются: ${t.activity}`,
+    `Боевые навыки: ${t.combat}`,
+    `Способности: ${t.powers.map(([n, e]) => `${n} — ${e}`).join('; ')}`,
+    `Уязвимости: ${t.weak.join('; ')}`,
+    `Чего боятся: ${t.fear}`,
+    `Общественное устройство: ${t.society}`,
+    `Магия: владеют — ${magic}; не владеют — ${noMagic}`,
+    `Отношения с другими расами: ${t.relations}`
+  ];
+  return {
+    kind: 'race',
+    name,
+    app: {
+      _kind: 'race',
+      'Название': name,
+      'Самоназвание': self,
+      'Внешность': t.look,
+      'Где живут': t.habitat,
+      'Чем занимаются': t.activity,
+      'Боевые навыки': t.combat,
+      'Способности': t.powers.map(([n, e]) => `${n} — ${e}`).join('; '),
+      'Уязвимости': t.weak.join('; '),
+      'Чего боятся': t.fear,
+      'Общественное устройство': t.society,
+      'Магия': `владеют — ${magic}; не владеют — ${noMagic}`,
+      'Отношения с другими расами': t.relations
+    },
+    text: lines.join('\n')
+  };
+}
+
+// --- classes ---------------------------------------------------------------
+// Each theme carries a resource, a start value, a basic attack and a level-1..15
+// ability list with a cooldown in turns on every ability, which is the rule the
+// owner asked for. The numbers stay inside class_balance_rules: 100–120 HP,
+// +10–15 per level, 30–50 resource, +3–5 per level, 15 max basic attack,
+// 50 max ability damage at 15, and the two ultimates at 35 / 60.
+const CLASS_THEMES = [
+  {
+    names: ['Пепельный страж', 'Угольный страж'],
+    role: 'танк-выжигатель: держит линию и жжёт всё, что подходит близко',
+    resource: 'Жар',
+    start: '45 жара (+4 за уровень)',
+    basic: '3 жара',
+    hp: 120, hpGrow: 15,
+    abilities: [
+      ['Раскалённая кожа', '2 хода', '10 жара', '+5 к защите; каждый, кто бьёт в упор, получает 6 урона огнём'],
+      ['Угольный плевок', '3 хода', '12 жара', '18 урона огнём одной цели'],
+      ['Огненная борозда', '4 хода', '18 жара', 'полоса огня: 22 урона всем на линии и горение на 2 хода'],
+      ['Пепельная завеса', '5 ходов', '20 жара', 'ослепляет врагов на 1 ход и снижает их точность на 3'],
+      ['Тлеющее сердце', '6 ходов', '25 жара', 'возвращает 25 ХП, но получает +25% урона холодом до конца боя'],
+      ['Взрыв углей', '5 ходов', '30 жара', '32 урона по площади вокруг себя'],
+      ['Пепельный панцирь', '6 ходов', '28 жара', 'поглощает 30 урона, пока держится'],
+      ['Выжженная земля', '6 ходов', '35 жара', '38 урона по площади и −2 к скорости врагов на 2 хода'],
+      ['Обсидиановый клинок', '4 хода', '22 жара', 'базовая атака наносит 20 урона вместо 12 на 3 хода'],
+      ['Пепельный вихрь', '5 ходов', '30 жара', '30 урона всем рядом и отбрасывает их на шаг'],
+      ['Столб пламени', '7 ходов', '40 жара', '45 урона одной цели, стоящей на месте'],
+      ['Жар земли', '8 ходов', '45 жара', '48 урона по площади и −3 к защите врагов на 2 хода']
+    ],
+    ult1: ['Пепельное небо', '1 раз за сессию', '35 жара', '35 урона всем врагам и −3 к их точности до конца боя'],
+    ult2: ['Погребальный костёр', '1 раз за сессию', '50 жара', '60 урона по выбранной области и горение на 2 хода'],
+    evolutions: ['Кузнец — кует броню союзникам', 'Пепельный жрец — лечит себя из огня', 'Обугленный — становится неудержимым, но теряет защиту'],
+    limits: 'Огонь вредит своим: рядом с союзниками урон по площади режется вдвое',
+    weak: 'Холод и вода гасят жар: урон холодом повышен на 25%, а в воде способности стоят вдвое дороже',
+    exhaust: 'жар = 0 → не может использовать способности 2 хода и получает 8 урона за ход, пока жар не вернётся'
+  },
+  {
+    names: ['Ткач стужи', 'Ледяной ткач'],
+    role: 'контроллер: замедляет и запирает врага, не подпуская к себе',
+    resource: 'Мороз',
+    start: '50 мороза (+5 за уровень)',
+    basic: '4 мороза',
+    hp: 100, hpGrow: 10,
+    abilities: [
+      ['Морозный укол', '2 хода', '10 мороза', '15 урона холодом и −1 к скорости цели'],
+      ['Ледяная корка', '3 хода', '15 мороза', '+4 к защите союзника на 2 хода'],
+      ['Стынь', '4 хода', '20 мороза', 'замедляет цель на 3 хода: она ходит через раз'],
+      ['Осколки льда', '3 хода', '22 мороза', '25 урона по площади и −2 к точности врагов'],
+      ['Ледяная стена', '5 ходов', '25 мороза', 'стена на 2 хода: враг не проходит и получает 12 урона при попытке'],
+      ['Скованный воздух', '5 ходов', '28 мороза', '30 урона и обездвиживание цели на 1 ход'],
+      ['Иней в крови', '6 ходов', '30 мороза', '32 урона и −3 к защите цели на 2 хода'],
+      ['Зеркальный лёд', '6 ходов', '30 мороза', 'отражает 50% следующего магического урона по себе'],
+      ['Пурга', '7 ходов', '38 мороза', '40 урона по области и −3 к точности врагов на 2 хода'],
+      ['Ледяной саркофаг', '7 ходов', '40 мороза', 'запирает цель на 2 хода; она не может действовать'],
+      ['Абсолютный холод', '8 ходов', '45 мороза', '48 урона одной цели и −2 к её скорости до конца боя'],
+      ['Сердце зимы', '8 ходов', '50 мороза', '50 урона по площади и −3 к скорости всех врагов']
+    ],
+    ult1: ['Ледяное безмолвие', '1 раз за сессию', '35 мороза', '35 урона всем врагам и оглушение на 1 ход'],
+    ult2: ['Вечная стужа', '1 раз за сессию', '50 мороза', '60 урона по выбранной области и −3 к скорости врагов до конца боя'],
+    evolutions: ['Ледяной щит — держит удар вместо союзников', 'Стужёный убийца — бьёт осколками насквозь', 'Хранитель зимы — лечит союзников льдом'],
+    limits: 'Не может колдовать, если рядом открытый огонь: жар гасит мороз, и способности недоступны 1 ход',
+    weak: 'Огонь плавит их: урон огнём повышен на 30%',
+    exhaust: 'мороз = 0 → способности недоступны 2 хода и защита падает вдвое, пока мороз не вернётся'
+  },
+  {
+    names: ['Костепевец', 'Гробовый певец'],
+    role: 'призыватель: поднимает кости и бьёт ими по чужой воле',
+    resource: 'Кости',
+    start: '40 костей (+4 за уровень)',
+    basic: '3 кости',
+    hp: 105, hpGrow: 11,
+    abilities: [
+      ['Костяной шип', '2 хода', '8 костей', '14 урона одной цели'],
+      ['Поднять слугу', '4 хода', '15 костей', 'поднимает костяного слугу: 20 ХП, 8 урона, живёт 3 хода'],
+      ['Прах в глаза', '3 хода', '12 костей', '−3 к точности цели на 2 хода'],
+      ['Костяная стена', '5 ходов', '20 костей', 'щит на 25 урона для союзника'],
+      ['Взрыв костей', '5 ходов', '22 костей', '25 урона по площади вокруг слуги'],
+      ['Хоровод мёртвых', '6 ходов', '28 костей', 'поднимает второго слугу и лечит первого на 15 ХП'],
+      ['Песнь праха', '6 ходов', '30 костей', '30 урона всем врагам рядом и −2 к их защите'],
+      ['Костяной панцирь', '6 ходов', '28 костей', '+6 к защите себе на 2 хода'],
+      ['Проклятие кости', '7 ходов', '35 костей', '35 урона цели; если она умирает, встаёт на 2 хода как слуга'],
+      ['Погребальная песнь', '7 ходов', '38 костей', '38 урона по области и страх: враги не подходят 1 ход'],
+      ['Костяной вихрь', '8 ходов', '45 костей', '45 урона одной цели и −2 к её скорости до конца боя'],
+      ['Царь костей', '8 ходов', '50 костей', '48 урона по площади и все слуги бьют вне очереди']
+    ],
+    ult1: ['Зов гробницы', '1 раз за сессию', '35 костей', '35 урона всем врагам и поднимает слугу за каждого павшего'],
+    ult2: ['Костяной легион', '1 раз за сессию', '50 костей', '60 урона по выбранной области и три слуги на 3 хода'],
+    evolutions: ['Владыка мёртвых — ведёт больше слуг', 'Костяной тиран — сам становится слугой-гигантом', 'Певец праха — лечит союзников чужой смертью'],
+    limits: 'Слуги рассыпаются, если хозяин оглушён: приказ нельзя отдать, пока не придёт в себя',
+    weak: 'Освящённое оружие и свет жгут их слуг вдвое сильнее, а сам костепевец получает +20% урона от света',
+    exhaust: 'кости = 0 → не может поднимать слуг 3 хода; уже поднятые слуги рассыпаются через ход'
+  },
+  {
+    names: ['Приливный охотник', 'Соляной охотник'],
+    role: 'ловкий боец ближнего боя: топит и режет острогой',
+    resource: 'Соль',
+    start: '45 соли (+4 за уровень)',
+    basic: '3 соли',
+    hp: 110, hpGrow: 12,
+    abilities: [
+      ['Острога', '2 хода', '8 соли', '16 урона одной цели'],
+      ['Соляной след', '3 хода', '12 соли', '+3 к скорости себе на 2 хода'],
+      ['Тяга глубины', '4 хода', '18 соли', 'тянет цель к себе на шаг и наносит 20 урона'],
+      ['Соляная завеса', '4 хода', '20 соли', '−3 к точности врагов рядом на 2 хода'],
+      ['Гарпун', '5 ходов', '22 соли', '25 урона на дистанции и приковывает цель на 1 ход'],
+      ['Дыхание соли', '5 ходов', '25 соли', '28 урона по площади и разъедает броню: −3 к защите на 2 хода'],
+      ['Прилив', '6 ходов', '30 соли', '32 урона всем врагам рядом и отбрасывает их'],
+      ['Соль в раны', '6 ходов', '30 соли', '30 урона цели; её лечение вдвое слабее 2 хода'],
+      ['Мёртвая вода', '7 ходов', '35 соли', '36 урона по области и −2 к скорости врагов'],
+      ['Утопление', '7 ходов', '38 соли', '40 урона одной цели, если она уже замедлена'],
+      ['Соляной вихрь', '8 ходов', '45 соли', '46 урона по площади и −3 к защите врагов'],
+      ['Хозяин прилива', '8 ходов', '50 соли', '50 урона по области и все враги замедлены до конца боя']
+    ],
+    ult1: ['Девятый вал', '1 раз за сессию', '35 соли', '35 урона всем врагам и −3 к их точности до конца боя'],
+    ult2: ['Холодная пучина', '1 раз за сессию', '50 соли', '60 урона по выбранной области и обездвиживание на 1 ход'],
+    evolutions: ['Глубинный ужас — тащит врага на дно', 'Соляной клинок — режет быстрее всех', 'Хранитель берега — закрывает союзников собой'],
+    limits: 'Вдали от воды слабеет: вне боя у моря или болота теряет 5 соли в час и не восстанавливает её до отдыха',
+    weak: 'Сухость: на суше получаемый урон повышен на 15%',
+    exhaust: 'соль = 0 → 2 хода не может использовать способности и теряет 3 ХП за ход, пока соль не вернётся'
+  },
+  {
+    names: ['Рудный кователь', 'Каменный кователь'],
+    role: 'стойкий мастер: бьёт молотом и держит проход',
+    resource: 'Руда',
+    start: '50 руды (+5 за уровень)',
+    basic: '4 руды',
+    hp: 120, hpGrow: 15,
+    abilities: [
+      ['Удар молота', '2 хода', '10 руды', '18 урона одной цели'],
+      ['Каменная хватка', '3 хода', '15 руды', '+5 к защите себе на 2 хода'],
+      ['Обвал', '5 ходов', '22 руды', '25 урона по площади и −2 к скорости врагов'],
+      ['Рудная метка', '3 хода', '15 руды', 'цель получает +5 урона от всех атак на 2 хода'],
+      ['Каменный щит', '5 ходов', '22 руды', 'щит на 30 урона союзнику'],
+      ['Дрожь земли', '5 ходов', '28 руды', '30 урона всем врагам рядом и сбивает их с ног на 1 ход'],
+      ['Рудный панцирь', '6 ходов', '30 руды', '+6 к защите и −2 к скорости себе на 2 хода'],
+      ['Молот в наковальню', '6 ходов', '32 руды', '34 урона одной цели и −3 к её защите на 2 хода'],
+      ['Стальная воля', '6 ходов', '30 руды', 'снимает страх и оглушение с себя и союзника рядом'],
+      ['Обвал свода', '7 ходов', '40 руды', '40 урона по области и враги не могут войти в зону 1 ход'],
+      ['Кузнечный жар', '8 ходов', '45 руды', '45 урона одной цели и −2 к её скорости до конца боя'],
+      ['Недра', '8 ходов', '50 руды', '48 урона по площади и −3 к защите всех врагов']
+    ],
+    ult1: ['Сердце горы', '1 раз за сессию', '35 руды', '35 урона всем врагам и −3 к их точности до конца боя'],
+    ult2: ['Горный слом', '1 раз за сессию', '50 руды', '60 урона по выбранной области и обездвиживание на 1 ход'],
+    evolutions: ['Мастер брони — кует защиту союзникам', 'Разрушитель — бьёт так, что ломает оружие', 'Хранитель недр — держит проход один против многих'],
+    limits: 'Тяжёл и медлителен: не может носить лёгкое оружие, а уклонение всегда на 2 ниже обычного',
+    weak: 'Вода и лёд: урон холодом повышен на 20%, а в воде он не может двигаться',
+    exhaust: 'руда = 0 → 2 хода не может использовать способности и получает 10 урона за ход, пока руда не вернётся'
+  },
+  {
+    names: ['Громовой заклинатель', 'Бурный заклинатель'],
+    role: 'дальний маг: бьёт молнией и разгоняет бой',
+    resource: 'Разряд',
+    start: '40 разряда (+4 за уровень)',
+    basic: '3 разряда',
+    hp: 100, hpGrow: 10,
+    abilities: [
+      ['Искра', '2 хода', '8 разряда', '16 урона одной цели'],
+      ['Разгон', '3 хода', '12 разряда', '+3 к скорости союзника на 2 хода'],
+      ['Цепь', '4 хода', '20 разряда', '22 урона и перескакивает на второго врага рядом'],
+      ['Громовой щит', '5 ходов', '20 разряда', 'отражает 10 урона тому, кто бьёт в упор, 2 хода'],
+      ['Шаровая молния', '5 ходов', '25 разряда', '28 урона по площади'],
+      ['Оглушение', '6 ходов', '28 разряда', '30 урона цели и оглушение на 1 ход'],
+      ['Статика', '5 ходов', '25 разряда', '−3 к точности врагов рядом на 2 хода'],
+      ['Грозовой шаг', '6 ходов', '30 разряда', 'переносится к месту вспышки и бьёт на 25 урона вокруг'],
+      ['Разряд в кровь', '7 ходов', '35 разряда', '35 урона одной цели и −3 к её защите на 2 хода'],
+      ['Буря', '7 ходов', '38 разряда', '40 урона по области и −2 к скорости врагов'],
+      ['Небесный гнев', '8 ходов', '45 разряда', '46 урона одной цели, оглушая её на 1 ход'],
+      ['Хозяин грозы', '8 ходов', '50 разряда', '50 урона по площади и −3 к точности врагов до конца боя']
+    ],
+    ult1: ['Гроза', '1 раз за сессию', '35 разряда', '35 урона всем врагам и оглушение на 1 ход'],
+    ult2: ['Небесный разлом', '1 раз за сессию', '50 разряда', '60 урона по выбранной области и −3 к защите врагов до конца боя'],
+    evolutions: ['Громовой жрец — лечит союзников разрядом', 'Проводник бури — бьёт по всем сразу', 'Небесный страж — закрывает союзника грозовым щитом'],
+    limits: 'Заземление опасно: рядом с металлом или водой он получает +20% урона от электричества',
+    weak: 'Хрупок: получает на 15% больше физического урона от ближнего боя',
+    exhaust: 'разряд = 0 → базовая атака наносит вдвое меньше, а способности недоступны 2 хода'
+  }
+];
+
+// Ability cost rises with level the way the base classes do (5–15 resource for a
+// low ability, up to ~50 for the last), and every ability carries its cooldown in
+// turns. The list is written as "Ур. N: Название — эффект; стоимость; перезарядка".
+function classAbilityLines(t) {
+  const costs = [8, 12, 15, 18, 22, 25, 28, 30, 35, 38, 45, 50];
+  return t.abilities.map(([name, cd, cost, effect], i) => {
+    const level = i + 1;
+    return `Ур. ${level}: ${name} — ${effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`;
+  });
+}
+
+function classDraft(lang, seed) {
+  const t = CLASS_THEMES[seed % CLASS_THEMES.length];
+  const name = t.names[(seed >>> 5) % t.names.length];
+  const abilities = classAbilityLines(t).join('\n');
+  const [u1n, u1cd, u1cost, u1e] = t.ult1;
+  const [u2n, u2cd, u2cost, u2e] = t.ult2;
+  const lines = [
+    `Название класса: ${name}`,
+    `Роль: ${t.role}`,
+    `Ресурс: ${t.resource}`,
+    `ХП: ${t.hp} (+${t.hpGrow} за уровень)`,
+    `Базовая атака: ${t.basic}`,
+    'Способности:',
+    abilities,
+    `Ультимейт (10 уровень): ${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
+    `Ультимейт 2 (15 уровень): ${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
+    `Эволюции (после 15): ${t.evolutions.join('; ')}`,
+    `Ограничения: ${t.limits}`,
+    `Слабости: ${t.weak}`,
+    `Истощение ресурса: ${t.exhaust}`
+  ];
+  const abilityText = [
+    ...classAbilityLines(t),
+    `Ультимейт (10 уровень): ${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
+    `Ультимейт 2 (15 уровень): ${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`
+  ].join('\n');
+  return {
+    kind: 'class',
+    name,
+    app: {
+      _kind: 'class',
+      'Название класса': name,
+      'Роль': t.role,
+      'Ресурс': t.resource,
+      'ХП': `${t.hp} (+${t.hpGrow} за уровень)`,
+      'Базовая атака': t.basic,
+      'Способности': abilityText,
+      'Ультимейт': `${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
+      'Ультимейт 2': `${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
+      'Эволюции': t.evolutions.join('; '),
+      'Ограничения и слабости': `${t.limits}; ${t.weak}`,
+      'Истощение ресурса': t.exhaust
+    },
+    text: lines.join('\n')
+  };
+}
+
+function generateRace(lang, seed) { return raceDraft(lang, seed); }
+function generateClass(lang, seed) { return classDraft(lang, seed); }
+
+// A stable seed from the dialogue, so the same request twice in a row gives the
+// same sheet (the player sees one answer, not a slot machine), while a different
+// request gives a different theme.
+function seedFrom(history) {
+  const text = (Array.isArray(history) ? history : [])
+    .filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || ''))
+    .join(' ');
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// The reply the player sees: a short lead-in, the whole sheet, and the offer to
+// review it. The sheet is complete by construction, so the check can pass at once.
+function renderGenerated(draft, lang) {
+  const head = draft.kind === 'race'
+    ? genPick(lang, 'Готово. Придумал тебе расу целиком — по правилам баланса, со способностями и слабостями:', 'Done. I made you a whole race — balanced, with its own powers and weaknesses:')
+    : genPick(lang, 'Готово. Придумал тебе класс целиком — по правилам баланса, с перезарядкой в ходах:', 'Done. I made you a whole class — balanced, with cooldowns in turns:');
+  const tail = genPick(lang,
+    'Скажи «проверь» — проверю и отправлю владельцу. Или скажи, что поменять: имя, способности, слабости.',
+    'Say "check" and I will review it and send it to the owner. Or tell me what to change: name, powers, weaknesses.');
+  return [head, '', draft.text, '', tail].join('\n');
+}
+
+
 // ---- ai-engine.js ----
 // The site's own AI.
 //
@@ -503,6 +950,7 @@ function staffTurn(history, appState = {}, lang = 'ru') {
 // or the daily quota runs out) the chats keep answering exactly as before.
 //
 // The file is bundled into the browser too, so static hosting gets the same AI.
+
 
 
 let engArticles = [];
@@ -782,6 +1230,15 @@ const isGreeting = (text) => /^\s*(привет|здравствуй|хай|до
 const isAddCmd = (text) => /добавь в анкету|add to the application/i.test(String(text || ''));
 const isShowCmd = (text) => /покажи анкету|show application|моя анкета/i.test(String(text || ''));
 const isCheckCmd = (text) => /проверь|проверить|check my|проверка анкеты/i.test(String(text || ''));
+// "Сделай сам" — the player asks the Interviewer to author the sheet instead of
+// answering the checklist. This is a distinct request from "хочу расу": the latter
+// opens the walk, this one asks the interviewer to do the work. "Я сам" is the
+// opposite — the player wants to write it — so it is excluded.
+function isSelfMade(text) {
+  const s = String(text || '');
+  if (/(?<![а-яё])я\s+сам/i.test(s)) return false;
+  return /(?<![а-яё])сам(а|и|о|е|ому|ой|ого|им|их)?(?![а-яё])|за\s+меня|придума(й|йте|ть)|(?<![а-яё])сделай|(?<![а-яё])создай|сгенерируй|на\s+свой\s+вкус|на\s+тво[её]\s+усмотрение|твой\s+вариант|yourself|for me|make it|create it/i.test(s);
+}
 
 // The character interview walks the fields of the chat's own template, in order,
 // and only asks for one thing at a time. That is what makes it usable without a
@@ -890,11 +1347,23 @@ const STORY_INTENT = /заявк[а-яё]*\s+на\s+сюжет|предложи�
 // "хочу расу", "своя раса" and the English chip all mean the same thing as the
 // literal "создать расу"; matching only the verb made the chip fall through to the
 // character walk, which is the bug that left races and classes impossible to make.
-// The endings are spelled out with [а-яё]* rather than \w*: \w is ASCII-only in
+// The creation verb and the noun may come in either order ("создай расу" and
+// "расу придумай"), so each is checked with a lookahead instead of a fixed order.
+// The endings are spelled out with [а-яё] rather than \w: \w is ASCII-only in
 // JavaScript, so \w* after "созда" never reaches the Cyrillic "ть" and the verb
-// form did not match at all.
-const RACE_INTENT = /созда[а-яё]*\s+(свою\s+)?расу|хочу\s+(свою\s+)?расу|свою\s+расу|своя\s+раса|новую\s+расу|новая\s+раса|придума[а-яё]*\s+расу|new race|create a race|make a race/i;
-const CLASS_INTENT = /созда[а-яё]*\s+(свой\s+)?класс|хочу\s+(свой\s+)?класс|свой\s+класс|своя\s+класс|новый\s+класс|придума[а-яё]*\s+класс|new class|create a class|make a class/i;
+// form did not match at all. "Расскажи про расу" carries no creation verb and so
+// stays a question, not a request to build one.
+const CREATION_VERB = '(?:созда|сдела|придума|сгенерир|хочу|нужн|давай|надо|сам(?:а|и|о|е)?(?![а-яё]))';
+const RACE_WORD = 'рас[ауые](?![а-яё])';
+const CLASS_WORD = 'класс(?![а-яё])';
+const RACE_INTENT = new RegExp(
+  `(?=[\\s\\S]*${RACE_WORD})(?=[\\s\\S]*${CREATION_VERB})|сво[яю]\\s+${RACE_WORD}|нов[ауо][яю]\\s+${RACE_WORD}|new race|create a race|make a race|race for me`,
+  'i'
+);
+const CLASS_INTENT = new RegExp(
+  `(?=[\\s\\S]*${CLASS_WORD})(?=[\\s\\S]*${CREATION_VERB})|сво[йя]\\s+${CLASS_WORD}|нов[ауо][йя]\\s+${CLASS_WORD}|new class|create a class|make a class|class for me`,
+  'i'
+);
 const CHARACTER_INTENT = /созда[а-яё]*\s+персонаж|хочу\s+персонаж|новый\s+персонаж|new character|create a character/i;
 
 // Which checklist the interview is walking. A plot, a race and a class are recognised
@@ -1011,6 +1480,23 @@ function renderApplication(app, lang) {
   return [pick(lang, 'Черновик анкеты:', 'Application draft:'), ...entries.map(([k, v]) => `${k}: ${v}`)].join('\n');
 }
 
+// Whether this turn is the player asking the Interviewer to author a race or a
+// class itself, and if so, the finished sheet. It is checked before the checklist
+// so "создай сам расу" generates instead of opening the walk. The request must name
+// a race or a class ("создай сам расу"), so a bare "сделай" during a walk is left
+// to the checklist and cannot throw the player's own answers away.
+function generatedSheet(history, application = {}, lang = 'ru') {
+  const msgs = Array.isArray(history) ? history : [];
+  const last = [...msgs].reverse().find((m) => m && m.role !== 'assistant');
+  const text = String(last?.content || '');
+  if (!isSelfMade(text)) return null;
+  const wantsRace = RACE_INTENT.test(text);
+  const wantsClass = CLASS_INTENT.test(text);
+  if (!wantsRace && !wantsClass) return null;
+  const seed = seedFrom(msgs);
+  return wantsRace ? generateRace(lang, seed) : generateClass(lang, seed);
+}
+
 function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   const history = Array.isArray(messages) ? messages : [];
   const app = application && typeof application === 'object' ? application : {};
@@ -1041,11 +1527,18 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
     const approved = pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅');
     return approved;
   }
+  // The player asks the Interviewer to author the sheet itself ("создай сам",
+  // "придумай за меня"). It builds a complete race or class from the balance rules
+  // and hands back the draft, so the very next "проверь" approves and forwards it.
+  const made = generatedSheet(history, app, lang);
+  if (made) return renderGenerated(made, lang);
   // A race or a class is walked through its own checklist. The opening message names
   // the rules and the first question, so the walk starts on the very turn the player
   // asks for it, rather than promising to start and then falling back to the
   // character template.
-  if (RACE_INTENT.test(text)) {
+  const wantsRace = RACE_INTENT.test(text);
+  const wantsClass = CLASS_INTENT.test(text);
+  if (wantsRace) {
     const rules = (getKnowledge().races?.race_template_rules || []).map((r) => `— ${r}`).join('\n');
     return [
       pick(lang, 'Давай сделаем расу. Правила:', 'Let us make a race. Rules:'),
@@ -1709,7 +2202,12 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   // interview continues on its own template on later turns instead of falling back
   // to the character one once the opening request is no longer the newest message.
   const kind = interviewKind(appState, history);
-  const nextApp = { ...appState, _kind: kind };
+  // A self-authored race or class arrives as a finished sheet, so its fields join
+  // the draft and the very next "проверь" can approve and forward it. Without this
+  // the generated sheet would be shown but never stored, and the check would find
+  // an empty draft.
+  const made = generatedSheet(history, appState, lang);
+  const nextApp = made ? { ...appState, ...made.app, _kind: made.kind } : { ...appState, _kind: kind };
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
   // browser bundle sends notifications without the page having to pass anything.
   const send = typeof notify === 'function' ? notify : notifierFn;
@@ -1720,15 +2218,24 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   // attached outside the engine, so the rewrite is decorated the same way here as
   // the answer the player sees first.
   let decorate = (body) => withEnd(body);
-  const { reply: raw, by, livePending } = await askModelOrLocal([
-    { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
-    { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(nextApp)}` },
-    ...history.map(asRole)
-  ], () => localInterview({ messages: history, lang, application: nextApp }), {
-    live: true,
-    role: 'interview',
-    onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
-  });
+  const localReply = () => localInterview({ messages: history, lang, application: nextApp });
+  // A generated sheet is a concrete submission, so it is shown exactly as built and
+  // never handed to the model: a rewrite could paraphrase its numbers or drop an
+  // ability, and the player would then submit something else than they read.
+  const asked = made
+    ? { reply: localReply(), by: 'local', livePending: false }
+    : await askModelOrLocal([
+        { role: 'system', content: INTERVIEWER_SYSTEM(lang) },
+        { role: 'system', content: `ТЕКУЩАЯ ЧЕРНОВАЯ АНКЕТА (JSON): ${JSON.stringify(nextApp)}` },
+        ...history.map(asRole)
+      ], localReply, {
+        live: true,
+        role: 'interview',
+        onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
+      });
+  const raw = asked.reply;
+  const by = asked.by;
+  const livePending = asked.livePending;
   const clean = raw;
   // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
   // so the destination and the owner's username are never paraphrased.

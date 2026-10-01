@@ -10,6 +10,7 @@
 // The file is bundled into the browser too, so static hosting gets the same AI.
 
 import { getKnowledge, staffTurn, matchActivityFaq, finaleText } from './chat-core.js';
+import { generateRace, generateClass, seedFrom, renderGenerated } from './ai-gen.js';
 
 let engArticles = [];
 export function setEngineArticles(list) {
@@ -288,6 +289,15 @@ const isGreeting = (text) => /^\s*(привет|здравствуй|хай|до
 const isAddCmd = (text) => /добавь в анкету|add to the application/i.test(String(text || ''));
 const isShowCmd = (text) => /покажи анкету|show application|моя анкета/i.test(String(text || ''));
 const isCheckCmd = (text) => /проверь|проверить|check my|проверка анкеты/i.test(String(text || ''));
+// "Сделай сам" — the player asks the Interviewer to author the sheet instead of
+// answering the checklist. This is a distinct request from "хочу расу": the latter
+// opens the walk, this one asks the interviewer to do the work. "Я сам" is the
+// opposite — the player wants to write it — so it is excluded.
+function isSelfMade(text) {
+  const s = String(text || '');
+  if (/(?<![а-яё])я\s+сам/i.test(s)) return false;
+  return /(?<![а-яё])сам(а|и|о|е|ому|ой|ого|им|их)?(?![а-яё])|за\s+меня|придума(й|йте|ть)|(?<![а-яё])сделай|(?<![а-яё])создай|сгенерируй|на\s+свой\s+вкус|на\s+тво[её]\s+усмотрение|твой\s+вариант|yourself|for me|make it|create it/i.test(s);
+}
 
 // The character interview walks the fields of the chat's own template, in order,
 // and only asks for one thing at a time. That is what makes it usable without a
@@ -396,11 +406,23 @@ const STORY_INTENT = /заявк[а-яё]*\s+на\s+сюжет|предложи�
 // "хочу расу", "своя раса" and the English chip all mean the same thing as the
 // literal "создать расу"; matching only the verb made the chip fall through to the
 // character walk, which is the bug that left races and classes impossible to make.
-// The endings are spelled out with [а-яё]* rather than \w*: \w is ASCII-only in
+// The creation verb and the noun may come in either order ("создай расу" and
+// "расу придумай"), so each is checked with a lookahead instead of a fixed order.
+// The endings are spelled out with [а-яё] rather than \w: \w is ASCII-only in
 // JavaScript, so \w* after "созда" never reaches the Cyrillic "ть" and the verb
-// form did not match at all.
-const RACE_INTENT = /созда[а-яё]*\s+(свою\s+)?расу|хочу\s+(свою\s+)?расу|свою\s+расу|своя\s+раса|новую\s+расу|новая\s+раса|придума[а-яё]*\s+расу|new race|create a race|make a race/i;
-const CLASS_INTENT = /созда[а-яё]*\s+(свой\s+)?класс|хочу\s+(свой\s+)?класс|свой\s+класс|своя\s+класс|новый\s+класс|придума[а-яё]*\s+класс|new class|create a class|make a class/i;
+// form did not match at all. "Расскажи про расу" carries no creation verb and so
+// stays a question, not a request to build one.
+const CREATION_VERB = '(?:созда|сдела|придума|сгенерир|хочу|нужн|давай|надо|сам(?:а|и|о|е)?(?![а-яё]))';
+const RACE_WORD = 'рас[ауые](?![а-яё])';
+const CLASS_WORD = 'класс(?![а-яё])';
+const RACE_INTENT = new RegExp(
+  `(?=[\\s\\S]*${RACE_WORD})(?=[\\s\\S]*${CREATION_VERB})|сво[яю]\\s+${RACE_WORD}|нов[ауо][яю]\\s+${RACE_WORD}|new race|create a race|make a race|race for me`,
+  'i'
+);
+const CLASS_INTENT = new RegExp(
+  `(?=[\\s\\S]*${CLASS_WORD})(?=[\\s\\S]*${CREATION_VERB})|сво[йя]\\s+${CLASS_WORD}|нов[ауо][йя]\\s+${CLASS_WORD}|new class|create a class|make a class|class for me`,
+  'i'
+);
 const CHARACTER_INTENT = /созда[а-яё]*\s+персонаж|хочу\s+персонаж|новый\s+персонаж|new character|create a character/i;
 
 // Which checklist the interview is walking. A plot, a race and a class are recognised
@@ -517,6 +539,23 @@ function renderApplication(app, lang) {
   return [pick(lang, 'Черновик анкеты:', 'Application draft:'), ...entries.map(([k, v]) => `${k}: ${v}`)].join('\n');
 }
 
+// Whether this turn is the player asking the Interviewer to author a race or a
+// class itself, and if so, the finished sheet. It is checked before the checklist
+// so "создай сам расу" generates instead of opening the walk. The request must name
+// a race or a class ("создай сам расу"), so a bare "сделай" during a walk is left
+// to the checklist and cannot throw the player's own answers away.
+export function generatedSheet(history, application = {}, lang = 'ru') {
+  const msgs = Array.isArray(history) ? history : [];
+  const last = [...msgs].reverse().find((m) => m && m.role !== 'assistant');
+  const text = String(last?.content || '');
+  if (!isSelfMade(text)) return null;
+  const wantsRace = RACE_INTENT.test(text);
+  const wantsClass = CLASS_INTENT.test(text);
+  if (!wantsRace && !wantsClass) return null;
+  const seed = seedFrom(msgs);
+  return wantsRace ? generateRace(lang, seed) : generateClass(lang, seed);
+}
+
 export function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   const history = Array.isArray(messages) ? messages : [];
   const app = application && typeof application === 'object' ? application : {};
@@ -547,11 +586,18 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
     const approved = pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅');
     return approved;
   }
+  // The player asks the Interviewer to author the sheet itself ("создай сам",
+  // "придумай за меня"). It builds a complete race or class from the balance rules
+  // and hands back the draft, so the very next "проверь" approves and forwards it.
+  const made = generatedSheet(history, app, lang);
+  if (made) return renderGenerated(made, lang);
   // A race or a class is walked through its own checklist. The opening message names
   // the rules and the first question, so the walk starts on the very turn the player
   // asks for it, rather than promising to start and then falling back to the
   // character template.
-  if (RACE_INTENT.test(text)) {
+  const wantsRace = RACE_INTENT.test(text);
+  const wantsClass = CLASS_INTENT.test(text);
+  if (wantsRace) {
     const rules = (getKnowledge().races?.race_template_rules || []).map((r) => `— ${r}`).join('\n');
     return [
       pick(lang, 'Давай сделаем расу. Правила:', 'Let us make a race. Rules:'),

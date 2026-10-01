@@ -76,9 +76,9 @@ const I18N = {
     'chat.endTitle': 'Завершить диалог',
     'chat.endCommand': 'конец',
     guideWelcome: 'Привет, путник. Я Проводник Deeprealm. Спрошу тебя о правилах, лоре, расах, классах — или подскажу, как вступить в чат.',
-    appWelcome: 'Привет. Я Анкетолог Deeprealm. Расскажи о своём персонаже: имя, раса, класс, характер, сильные и слабые стороны. Когда захочешь добавить что-то в анкету — напиши «добавь в анкету». Когда закончим — я проверю всё и дам ссылку на чат.',
+    appWelcome: 'Привет. Я Анкетолог Deeprealm. Расскажи о своём персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь — придумаю расу или класс за тебя: просто скажи «придумай мне расу сам». Когда захочешь добавить что-то в анкету — напиши «добавь в анкету». Когда закончим — я проверю всё и дам ссылку на чат.',
     chipsGuide: ['Как вступить в чат?', 'Какие есть расы?', 'Какие есть классы?', 'Расскажи про Воина', 'Что такое пасс уровней?', 'Кто в администрации?', 'Что такое Подземелье?', 'Правила про метагейм?'],
-    chipsApp: ['Хочу создать персонажа', 'Хочу создать свою расу', 'Хочу создать свой класс', 'Хочу предложить сюжет', 'Добавь в анкету', 'Покажи анкету', 'Проверь мою заявку']
+    chipsApp: ['Хочу создать персонажа', 'Хочу создать свою расу', 'Хочу создать свой класс', 'Придумай мне расу сам', 'Придумай мне класс сам', 'Хочу предложить сюжет', 'Добавь в анкету', 'Покажи анкету', 'Проверь мою заявку']
   },
   en: {
     brand: 'Deeprealm',
@@ -157,9 +157,9 @@ const I18N = {
     'chat.endTitle': 'Finish the conversation',
     'chat.endCommand': 'finish',
     guideWelcome: 'Greetings, traveler. I am the Deeprealm Guide. Ask me about the rules, lore, races or classes — or how to join the chat.',
-    appWelcome: 'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, personality, strengths and weaknesses. Say "add to the application" to save details. When we are done I will review everything and grant the chat link.',
+    appWelcome: 'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, personality, strengths and weaknesses. I can also make a race or a class for you — just say "make a race for me". Say "add to the application" to save details. When we are done I will review everything and grant the chat link.',
     chipsGuide: ['How do I join?', 'What races are there?', 'What classes are there?', 'Tell me about the Warrior', 'What is the level pass?', 'Who is in the administration?', 'What is the Dungeon?', 'Rules on metagaming?'],
-    chipsApp: ['I want to create a character', 'I want to create a race', 'I want to create a class', 'I want to propose a plot', 'Add to the application', 'Show the application', 'Review my application']
+    chipsApp: ['I want to create a character', 'I want to create a race', 'I want to create a class', 'Make a race for me', 'Make a class for me', 'I want to propose a plot', 'Add to the application', 'Show the application', 'Review my application']
   }
 };
 

@@ -18,7 +18,7 @@ const strip = (code) => code
   .replace(/^export\s*\{[^}]*\};?\s*$/gm, '')
   .replace(/^export\s+(async\s+function|function|const|let|class)\s+/gm, '$1 ');
 
-const parts = ['chat-core.js', 'ai-engine.js', 'ai-maker.js', 'telegram.js', 'blog-reader.js', 'chat-answers.js'].map((name) => {
+const parts = ['chat-core.js', 'ai-gen.js', 'ai-engine.js', 'ai-maker.js', 'telegram.js', 'blog-reader.js', 'chat-answers.js'].map((name) => {
   const file = path.join(root, name);
   if (!fs.existsSync(file)) throw new Error(`missing source: ${name}`);
   return `// ---- ${name} ----\n${strip(fs.readFileSync(file, 'utf8'))}`;

@@ -419,3 +419,91 @@ test('a thin race sheet is not approved and is not filed as a character', async 
   assert.equal(out.application._kind, 'race', 'the kind is remembered in the draft');
   setNotifier(null);
 });
+
+// The Interviewer must be able to author a race or a class itself, not only ask the
+// player to describe one. These are the phrasings the owner tried by hand.
+test('the interviewer authors a race itself when asked to', () => {
+  for (const ask of ['можешь создать расу для меня сам', 'создай мне расу', 'придумай за меня расу', 'придумай мне расу сам']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+    assert.match(reply, /Готово/, `"${ask}" makes the interviewer build a race`);
+    assert.match(reply, /Название:/, `"${ask}" returns a named race`);
+    assert.match(reply, /Уязвимости:/, `"${ask}" gives the race its weaknesses`);
+    assert.doesNotMatch(reply, /Расскажи про «/, `"${ask}" must not fall back to asking the player`);
+  }
+});
+
+test('the interviewer authors a class itself with a cooldown on every ability', () => {
+  const reply = localInterview({ messages: [{ role: 'user', content: 'создай мне класс сам' }], lang: 'ru', application: {} });
+  assert.match(reply, /Готово/, 'the class is built on request');
+  assert.match(reply, /Название класса:/, 'the class is named');
+  assert.match(reply, /Перезарядка:/, 'cooldowns are given in turns');
+  assert.match(reply, /Истощение ресурса:/, 'the resource exhaustion rule is stated');
+  assert.doesNotMatch(reply, /Расскажи про «/, 'the player is not sent back to the checklist');
+  // Every ability and both ultimates carry a cooldown, which is the rule the owner asked for.
+  const cooldowns = (reply.match(/Перезарядка:/g) || []).length;
+  const abilities = (reply.match(/Ур\. \d+:/g) || []).length;
+  assert.equal(cooldowns, abilities + 2, 'each of the 12 abilities and both ultimates has a cooldown');
+});
+
+test('"я сам" still opens the walk: the player writes it, not the interviewer', () => {
+  const reply = localInterview({ messages: [{ role: 'user', content: 'Я сам создам расу' }], lang: 'ru', application: {} });
+  assert.match(reply, /Правила/, 'the race walk opens instead of generating');
+  assert.doesNotMatch(reply, /Готово/, 'the interviewer does not author it against the player\'s wish');
+});
+
+test('a self-made race is stored, approved and sent to the owner', async () => {
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const messages = [{ role: 'user', content: 'можешь создать расу для меня сам' }];
+  const first = await answerInterview({ messages, lang: 'ru' });
+  assert.match(first.reply, /Готово/, 'the race is authored');
+  assert.equal(first.application._kind, 'race', 'the draft is a race');
+  assert.ok(first.application['Название'], 'the generated fields are stored in the draft');
+  assert.ok(first.application['Уязвимости'], 'the weaknesses are stored too');
+
+  // The very next "проверь" approves the generated sheet without more questions.
+  messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
+  const second = await answerInterview({ messages, lang: 'ru', application: first.application });
+  assert.match(second.reply, /ОДОБРЕНО/, 'the generated race passes the check');
+  assert.equal(sent.length, 1, 'the generated race is sent to the owner');
+  assert.equal(sent[0].kind, 'race');
+  assert.equal(sent[0].title, first.application['Название'], 'the owner gets the generated name');
+  setNotifier(null);
+});
+
+test('a self-made class is stored, approved and sent to the owner', async () => {
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const messages = [{ role: 'user', content: 'придумай мне класс сам' }];
+  const first = await answerInterview({ messages, lang: 'ru' });
+  assert.match(first.reply, /Готово/, 'the class is authored');
+  assert.equal(first.application._kind, 'class', 'the draft is a class');
+
+  messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
+  const second = await answerInterview({ messages, lang: 'ru', application: first.application });
+  assert.match(second.reply, /ОДОБРЕНО/, 'the generated class passes the check');
+  assert.equal(sent.length, 1, 'the generated class is sent to the owner');
+  assert.equal(sent[0].kind, 'class');
+  setNotifier(null);
+});
+
+test('asking twice gives a stable sheet, and a different request a different one', () => {
+  const a = localInterview({ messages: [{ role: 'user', content: 'придумай мне расу сам' }], lang: 'ru', application: {} });
+  const b = localInterview({ messages: [{ role: 'user', content: 'придумай мне расу сам' }], lang: 'ru', application: {} });
+  assert.equal(a, b, 'the same request does not reroll the sheet under the player');
+  const c = localInterview({ messages: [{ role: 'user', content: 'создай расу сама, только про болото' }], lang: 'ru', application: {} });
+  assert.notEqual(a, c, 'a different request can give a different race');
+});
+
+test('a generated race respects the balance rules it is built from', () => {
+  for (const seedText of ['расу сам', 'другую расу придумай', 'создай расу сама', 'make a race for me']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: seedText }], lang: 'ru', application: {} });
+    // At least two weaknesses, a habitat and a society: the race rules the owner set.
+    assert.match(reply, /Уязвимости:/, `"${seedText}" names weaknesses`);
+    assert.match(reply, /Где живут:/, `"${seedText}" names a habitat`);
+    assert.match(reply, /Общественное устройство:/, `"${seedText}" describes a society`);
+    // No race may claim every school of magic.
+    assert.match(reply, /Магия: владеют — .+; не владеют — .+/, `"${seedText}" limits magic to two schools`);
+  }
+});
+

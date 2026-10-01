@@ -1,20 +1,20 @@
-# AGENTS.md — Deeprealm site
+# AGENTS.md ‚Äî Deeprealm site
 
 Instructions for any OpenHands chat or sandbox working on this repository.
 
 ## What this repo is
 
 The Deeprealm RP-chat website: lore, rules, races, classes, level pass,
-administration, the AI Guide (Проводник) and the AI application interviewers.
+administration, the AI Guide (–ü—Ä–æ–≤–æ–¥–Ω–∏–∫) and the AI application interviewers.
 Node + Express, no build step. Node >= 18.
 
-- `server.js` — Express app and API endpoints (`/api/knowledge`, `/api/chat-link`,
+- `server.js` ‚Äî Express app and API endpoints (`/api/knowledge`, `/api/chat-link`,
   `/api/guide`, `/api/interview`, `/api/staff`, `/api/refresh`, `/api/status`).
-- `public/` — static frontend (`index.html`, `app.js`, `styles.css`).
-- `data/knowledge.json` — all site content. Edit this to change lore, rules,
+- `public/` ‚Äî static frontend (`index.html`, `app.js`, `styles.css`).
+- `data/knowledge.json` ‚Äî all site content. Edit this to change lore, rules,
   races, classes, level pass and administration.
-- `blog-sync.js` — pulls player-made races/classes from the Deeprealm blog.
-- `test/server.test.js` — test suite.
+- `blog-sync.js` ‚Äî pulls player-made races/classes from the Deeprealm blog.
+- `test/server.test.js` ‚Äî test suite.
 
 The live site is deployed from this repository, independent of any sandbox.
 Never treat a `*.prod-runtime.all-hands.dev` URL as the real site; those are
@@ -62,7 +62,7 @@ Alternatively `git push` directly if you already have the repo checked out.
 ## Content changes
 
 Most requests are content, not code. Change `data/knowledge.json`, run
-`npm test`, then publish. Keep the JSON shape stable — `public/app.js` and
+`npm test`, then publish. Keep the JSON shape stable ‚Äî `public/app.js` and
 `server.js` read these keys directly.
 
 ## Notes
@@ -265,6 +265,30 @@ permission is missing. Probe that way before starting any long operation.
   have the engine behind it. `scripts/build-chat-browser.js` bundles the engine
   into `public/chat-browser.js`, so the same answers work offline.
 
+## The Interviewer authors races and classes on request (added 2026-09-27)
+
+- The Interviewer must be able to *create* a race or a class itself, not only
+  walk the player through a checklist. `ai-gen.js` is that generator: a keyless,
+  model-free set of themed race/class blocks whose abilities always come with the
+  weaknesses that balance them, so every generated sheet satisfies
+  `races.race_template_rules` and `classes.class_balance_rules` by construction.
+- `ai-engine.js` routes "придумай мне расу сам" / "создай мне класс сам"
+  (`isSelfMade` + `RACE_INTENT`/`CLASS_INTENT`) to the generator through
+  `generatedSheet`, which returns the finished sheet. `chat-answers.js` merges
+  that sheet into the draft, so the next "проверь" approves and forwards it with
+  no further questions.
+- "Я сам создам расу" (the player writes it) must keep opening the walk, so
+  `isSelfMade` excludes a leading "я сам". A request must name a race or a class;
+  a bare "сделай" mid-walk stays on the checklist.
+- A generated sheet is shown exactly as built and is never handed to the model
+  (see the `made` branch in `answerInterview`): a rewrite could paraphrase its
+  numbers or drop an ability, so the player would submit something else than they
+  read.
+- `scripts/build-chat-browser.js` bundles `ai-gen.js` *before* `ai-engine.js`.
+  The bundle flattens every module into one scope, so a helper name in a new
+  module must be unique (`pick` in `ai-gen.js` is `genPick`); a duplicate
+  `const` breaks the whole page at parse time, not just the new code.
+
 ## Player races/classes live from the blog (added 2026-09-27)
 
 - The site no longer has an Articles page, an article store or article
@@ -316,7 +340,7 @@ permission is missing. Probe that way before starting any long operation.
 ## Blog post slugs (historical, fixed 2026-09-25)
 
 - Blog URLs end in a generic `blog-post.html`, so a slug derived from the URL was
-  the same for two different posts (`Магистр сфер` and `Администрация`). The old
+  the same for two different posts (`–ú–∞–≥–∏—Å—Ç—Ä —Å—Ñ–µ—Ä` and `–ê–¥–º–∏–Ω–∏—Å—Ç—Ä–∞—Ü–∏—è`). The old
   article store matched on slug and one entry overwrote the other. That store is
   gone; the current blog reader keys entries by their own post URL
   (`mergeEntries`), so two posts can never collide.
@@ -329,7 +353,7 @@ permission is missing. Probe that way before starting any long operation.
   free keyless model to rewrite that answer in a natural voice. The second layer is
   optional: a dead endpoint means the engine's own text is used.
 - A rewrite is only accepted when `keepsEssentials` passes: it must keep the chat
-  link, the trailing «конец» and the «ОДОБРЕНО»/«РЕКОМЕНДОВАН» mark, and add no
+  link, the trailing ¬´–∫–æ–Ω–µ—Ü¬ª and the ¬´–û–î–û–ë–Ý–ï–ù–û¬ª/¬´–Ý–ï–ö–û–ú–ï–ù–î–û–í–ê–ù¬ª mark, and add no
   markdown. Do not loosen this without a reason - it is what stops the free model
   from inventing lore or stranding a player without the chat link.
 - Never make the live layer load-bearing. A failure opens a 10 minute cooldown and
@@ -342,7 +366,7 @@ permission is missing. Probe that way before starting any long operation.
   only `relay.url`/`relay.key`.
 - Notifications cover three things the owner asked for: every site visit
   (`/api/visit`, throttled per browser session), every approved character/race/
-  class sheet, and every answer a staff candidate gave (paired question → answer).
+  class sheet, and every answer a staff candidate gave (paired question ‚Üí answer).
 - An approved interview now forwards the sheet to the owner, so `handoffText`
   no longer sends the player to an application desk. The closing line comes from
   `sentToOwnerText`: it says the sheet was sent, or names the owner when delivery
@@ -420,15 +444,15 @@ permission is missing. Probe that way before starting any long operation.
 
 - Three separate bugs made the interviewers loop forever, all in `chat-core.js`
   and `ai-engine.js`. Do not undo these without re-reading why:
-  - `\b` is defined on `[A-Za-z0-9_]`, so a Cyrillic `\bимя\b` never matches at
+  - `\b` is defined on `[A-Za-z0-9_]`, so a Cyrillic `\b–∏–º—è\b` never matches at
     the right place. Field markers in `hasFieldText` use lookarounds
-    (`(?<![а-яё])`) instead.
+    (`(?<![–∞-—è—ë])`) instead.
   - `lastAskedField` scans back to the most recent assistant message that names
-    a field in «guillemets». Looking only at the last message restarted the walk
-    once the closing «скажи проверь» nudge appeared.
+    a field in ¬´guillemets¬ª. Looking only at the last message restarted the walk
+    once the closing ¬´—Å–∫–∞–∂–∏ –ø—Ä–æ–≤–µ—Ä—å¬ª nudge appeared.
   - `staffAnswerPairs` counts the candidate next message as an answer. A pure
     clarifying question must not advance the walk (`answeredStaffPairs` drops it,
-    but `hasAnswerContent` keeps "Да, смогу. А как часто?" as progress), and two
+    but `hasAnswerContent` keeps "–î–∞, —Å–º–æ–≥—É. –ê –∫–∞–∫ —á–∞—Å—Ç–æ?" as progress), and two
     clarifications on the same question are enough to move on.
 - The character walk ends instead of repeating: when nothing is left after the
   field just answered, `nextFieldPrompt` returns the closing nudge.
@@ -438,7 +462,7 @@ permission is missing. Probe that way before starting any long operation.
   The walk starts on the very turn the player asks for it: the old code answered
   "describe the race" and then fell through to the character template, so a race
   or a class could never be created. `RACE_INTENT`/`CLASS_INTENT` are matched with
-  `[а-яё]*`, never `\w*`, because `\w` is ASCII-only in JavaScript and the Cyrillic
+  `[–∞-—è—ë]*`, never `\w*`, because `\w` is ASCII-only in JavaScript and the Cyrillic
   verb ending was never matched.
 - The checklist is remembered in the draft as `_kind`. `answerInterview` stamps it
   (`{ ...appState, _kind: kind }`) and returns it; `interviewKind` lets an explicit
