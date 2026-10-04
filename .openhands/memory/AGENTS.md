@@ -82,4 +82,28 @@ staff-анкеты payload несёт `answers`; форматтер relay для
   уровням, страница «Классы» показывает карточку «Вехи».
 - Тесты: 146, все проходят.
 
+## 2026-10-04 — беседа «Что такое ДнД?» восстановлена (проект Grimhollow)
+
+Беседа `ff1ce2f04d63464fb438e3f5ae646119` (OpenHands Cloud, «📝 Что такое
+ДнД?») — это проект **Grimhollow**, браузерная RPG в духе D&D. Беседа не
+удалена, но её песочница была на паузе, а **последняя сессия (правки карты
+мира) осталась незакоммиченной**.
+
+Что сделано:
+- Скачана полная траектория (5027 событий) через
+  `GET /api/v1/app-conversations/ff1ce2f0.../download`.
+- Поднята песочница беседы (`POST /api/v1/sandboxes/Wb13KYN5ReQAjGJep8F6l/resume`)
+  и выкачаны незакоммиченные файлы через агент-сервер
+  (`GET /api/file/download?path=/workspace/project/<file>`).
+- Правки применены к локальному клону и **закоммичены** в
+  `grigoriy131112-sketch/Grimhollow` (коммит `86aa17b`, ветка `main`).
+  Сборка проходит, 105 тестов проходят.
+- Архив беседы сохранён в память: `.openhands/memory/ff1ce2f0/`
+  (`MEMORY.md`, `transcript.md`, `trajectory/events.tar.gz`,
+  `workspace/recovered/`).
+
+Открытый вопрос: GitHub Pages для Grimhollow **не включён** — сайт отдаёт 404.
+Репозиторий: `https://github.com/grigoriy131112-sketch/Grimhollow`.
+
+
 

@@ -1,0 +1,231 @@
+Art credits
+===========
+
+Icons (abilities and monsters) are from the game-icons.net collection,
+released under the Creative Commons Attribution 3.0 Unported (CC BY 3.0)
+license. Each icon is by its original author (e.g. Lorc, Delapouite, Skoll,
+Willdabeast, Sbed, Caro Asercion, DarkZaitzev).
+
+  https://game-icons.net/
+  License: https://creativecommons.org/licenses/by/3.0/
+
+The icons copied into client/public/art/{abilities,monsters}/ keep their
+original filenames' authorship as listed on game-icons.net. If you redistribute
+this project, keep this credit file.
+
+No paid or API-generated art is used in this project.
+
+Per-file sources (Wave 2 ability icons)
+======================================
+Each file client/public/art/abilities/<id>.svg is derived from the game-icons.net
+icon named below (<author>/<icon>). The same author/name pairs also apply to the
+Wave 1 ability icons; their filenames already match the game-icons.net names.
+
+  rage.svg  <-  delapouite/enrage
+  reckless_strike.svg  <-  lorc/axe-swing
+  wide_swing.svg  <-  lorc/battle-axe
+  thick_skin.svg  <-  delapouite/animal-hide
+  brutal_blow.svg  <-  lorc/hammer-drop
+  blood_rage.svg  <-  lorc/bloody-sword
+  rampage.svg  <-  delapouite/charging-bull
+  wild_heal.svg  <-  sbed/regeneration
+  executioner.svg  <-  lorc/guillotine
+  berserker.svg  <-  lorc/barbute
+  vicious_mockery.svg  <-  lorc/imp-laugh
+  inspiring_song.svg  <-  skoll/sound-waves
+  healing_ballad.svg  <-  lorc/heart-inside
+  discordant_note.svg  <-  delapouite/stabbed-note
+  mesmerizing_tune.svg  <-  lorc/lyre
+  soothing_melody.svg  <-  delapouite/harp
+  heroic_anthem.svg  <-  delapouite/trumpet
+  shatter_cry.svg  <-  lorc/sonic-screech
+  requiem.svg  <-  zajkonur/violin
+  master_maestro.svg  <-  delapouite/musical-notes
+  thorn_whip.svg  <-  lorc/thorny-vine
+  regrowth.svg  <-  lorc/sprout
+  entangling_roots.svg  <-  delapouite/tree-roots
+  bark_skin.svg  <-  delapouite/wood-pile
+  venom_bloom.svg  <-  lorc/mushroom
+  rejuvenate.svg  <-  lorc/pollen-dust
+  sunbeam.svg  <-  lorc/sun
+  nature_ward.svg  <-  delapouite/oak-leaf
+  wildfire.svg  <-  lorc/flame-tunnel
+  one_with_nature.svg  <-  lorc/oak
+  flurry_of_blows.svg  <-  lorc/fist
+  patient_defense.svg  <-  lorc/meditation
+  pressure_point.svg  <-  lorc/palm
+  ki_focus.svg  <-  lorc/water-splash
+  roundhouse.svg  <-  delapouite/high-kick
+  flowing_water.svg  <-  lorc/water-splash
+  quivering_palm.svg  <-  lorc/magic-palm
+  inner_peace.svg  <-  lorc/lotus
+  dragon_kick.svg  <-  lorc/boot-kick
+  perfect_body.svg  <-  delapouite/yin-yang
+  holy_strike.svg  <-  lorc/holy-symbol
+  lay_on_hands.svg  <-  delapouite/hand-of-god
+  shield_of_faith.svg  <-  delapouite/cross-shield
+  divine_favor.svg  <-  lorc/prayer
+  consecrate.svg  <-  delapouite/holy-water
+  aura_of_warding.svg  <-  lorc/aura
+  avenging_smite.svg  <-  lorc/hammer-drop
+  greater_blessing.svg  <-  lorc/holy-grail
+  divine_judgment.svg  <-  lorc/scales
+  aura_mastery.svg  <-  lorc/beams-aura
+  precise_shot.svg  <-  lorc/on-target
+  hunters_mark.svg  <-  skoll/bullseye
+  twin_shot.svg  <-  delapouite/split-arrows
+  camouflage.svg  <-  darkzaitzev/smoke-bomb
+  venom_arrow.svg  <-  lorc/poison-bottle
+  natural_recovery.svg  <-  lorc/leaf-swirl
+  volley.svg  <-  lorc/arrow-flights
+  beasts_bond.svg  <-  lorc/wolf-head
+  piercing_shot.svg  <-  lorc/pierced-body
+  eagle_eye.svg  <-  delapouite/eagle-head
+  chaos_bolt.svg  <-  lorc/spiral-thrust
+  draconic_ward.svg  <-  delapouite/dragon-shield
+  scorching_ray.svg  <-  lorc/sunbeams
+  sorcerous_restore.svg  <-  lorc/magic-swirl
+  lightning_arc.svg  <-  lorc/lightning-arc
+  mirror_image.svg  <-  lorc/mirror-mirror
+  fireball.svg  <-  lorc/fireball
+  empowered_spell.svg  <-  delapouite/spell-book
+  meteor_swarm.svg  <-  lorc/meteor-impact
+  innate_power.svg  <-  delapouite/radiations
+  eldritch_blast.svg  <-  lorc/interlaced-tentacles
+  dark_pact.svg  <-  lorc/scroll-unfurled
+  hex.svg  <-  lorc/candle-flame
+  siphon_life.svg  <-  lorc/bleeding-heart
+  curse_of_weakness.svg  <-  lorc/skull-crack
+  shadow_heal.svg  <-  lorc/shadow-grasp
+  soul_rend.svg  <-  lorc/screaming
+  infernal_shield.svg  <-  lorc/fire-shield
+  doom_bolt.svg  <-  lorc/magic-portal
+  dark_blessing.svg  <-  delapouite/soul-vessel
+
+
+Per-file sources (Wave 3A companion portraits)
+==========================================
+Each file client/public/art/portraits/<slug>.svg is derived from the game-icons.net
+icon named on the right.
+
+  marta_veil.svg  <-  lorc/visored-helm
+  rayven.svg  <-  darkzaitzev/hooded-figure
+  dorin_stone.svg  <-  cathelineau/nun-face
+  kael_vane.svg  <-  delapouite/wizard-face
+  gorr.svg  <-  delapouite/orc-head
+  lute.svg  <-  delapouite/portrait
+  yara_thorn.svg  <-  cathelineau/witch-face
+  bo.svg  <-  delapouite/monk-face
+  sera_dawn.svg  <-  delapouite/black-knight-helm
+  fin.svg  <-  delapouite/eagle-head
+  ember.svg  <-  delapouite/woman-elf-face
+  vashek.svg  <-  delapouite/warlock-hood
+  old_pell.svg  <-  lorc/beard
+  nyla.svg  <-  darkzaitzev/ninja-head
+  brann.svg  <-  delapouite/sun-priest
+  ash.svg  <-  delapouite/kenku-head
+  morrigan.svg  <-  delapouite/executioner-hood
+  tob.svg  <-  delapouite/hoodie
+  iris.svg  <-  delapouite/oak-leaf
+  cass.svg  <-  delapouite/viking-head
+  hale.svg  <-  delapouite/person
+  sable.svg  <-  darkzaitzev/hooded-assassin
+  pious_odo.svg  <-  delapouite/spartan-helmet
+  wolf.svg  <-  lorc/wolf-head
+
+
+Per-file sources (Wave 7A world-map landmarks)
+==============================================
+Each file client/public/art/landmarks/<name>.svg is derived from the
+game-icons.net icon named on the right (the black background square has been
+removed so the icon can sit on the map).
+
+  crossroads.svg    <-  delapouite/crossroad
+  swamp.svg         <-  delapouite/swamp
+  drowned_road.svg  <-  delapouite/road
+  ash_forest.svg    <-  delapouite/burning-forest
+  harbor.svg        <-  delapouite/harbor-dock
+  tide_caves.svg    <-  delapouite/mountain-cave
+  sunken_chapel.svg <-  delapouite/byzantin-temple
+  bonefield.svg     <-  lorc/crossed-bones
+  black_spire.svg   <-  delapouite/evil-tower
+  mountains.svg     <-  lorc/mountains
+  forest.svg        <-  delapouite/forest
+  hills.svg         <-  delapouite/hills
+  desert.svg        <-  delapouite/desert
+  graveyard.svg     <-  delapouite/graveyard
+  village.svg       <-  delapouite/huts-village
+  watchtower.svg    <-  delapouite/watchtower
+  well.svg          <-  delapouite/well
+  windmill.svg      <-  delapouite/windmill
+  volcano.svg       <-  lorc/volcano
+  sea.svg           <-  delapouite/black-sea
+  island.svg        <-  delapouite/island
+  lighthouse.svg    <-  delapouite/lighthouse
+  obelisk.svg       <-  delapouite/obelisk
+  caravan.svg       <-  delapouite/caravan
+  camp.svg          <-  delapouite/camping-tent
+  ruins.svg         <-  delapouite/ancient-ruins
+
+Per-file sources (Wave 8 extra world-map landmarks)
+===================================================
+Second batch of CC BY 3.0 game-icons.net icons for the livelier atlas (terrain
+accents, road stamps and the re-skinned named places).
+
+  stone_bridge.svg      <-  delapouite/stone-bridge
+  dead_wood.svg         <-  lorc/dead-wood
+  cave_entrance.svg     <-  delapouite/cave-entrance
+  church.svg            <-  delapouite/church
+  ship_wreck.svg        <-  delapouite/ship-wreck
+  sinking_ship.svg      <-  delapouite/sinking-ship
+  guarded_tower.svg     <-  lorc/guarded-tower
+  direction_signs.svg   <-  delapouite/direction-signs
+  dinosaur_bones.svg    <-  lorc/dinosaur-bones
+  pine_tree.svg         <-  lorc/pine-tree
+  quicksand.svg         <-  lorc/quicksand
+  campfire.svg          <-  lorc/campfire
+  tombstone.svg         <-  lorc/tombstone
+  waterfall.svg         <-  delapouite/waterfall
+  ancient_columns.svg   <-  delapouite/ancient-columns
+  castle_ruins.svg      <-  delapouite/castle-ruins
+  kraken_tentacle.svg   <-  delapouite/kraken-tentacle
+  mountain_road.svg     <-  delapouite/mountain-road
+  rock.svg              <-  delapouite/stone-pile
+  reeds.svg             <-  lorc/water-splash
+
+Base map (second licensed raster, deliberate exception)
+=======================================================
+The world map is drawn on a genuine antique engraving, not on our own art:
+
+  maps/isle-antique.jpg
+    Source: Wikimedia Commons, "AMH-7996-KB Map of the island of Boero.jpg"
+    https://commons.wikimedia.org/wiki/File:AMH-7996-KB_Map_of_the_island_of_Boero.jpg
+    Author: Jakob van der Schley / Pieter de Hondt
+    Source collection: Atlas of Mutual Heritage, Koninklijke Bibliotheek
+    (Dutch National Library); after 'Oud en Nieuw Oost-Indien' by François Valentyn
+    Date: circa 1753
+    License: Public domain (published before 1931; faithful reproduction of a
+    2-D public-domain work)
+    Derived work: downscaled and cropped to a 25:16 window for the web; the
+    paper tone is untouched.
+
+  The interactive layer on top of it (roads, seals, labels, party marker) is our
+  own vector work. Only the engraving and the parchment texture below are rasters.
+
+Textures (licensed rasters, deliberate exceptions)
+==================================================
+The world map is otherwise pure vector, but the parchment paper itself is a
+single raster texture. It is public domain, so no attribution is legally
+required; the credit is kept anyway.
+
+  textures/parchment.jpg
+    Source: Wikimedia Commons, "Pergament.1.jpg"
+    https://commons.wikimedia.org/wiki/File:Pergament.1.jpg
+    Author: Membeth
+    License: CC0 1.0 (public domain dedication)
+    https://creativecommons.org/publicdomain/zero/1.0/
+
+  Derived work: the luminance gradient of the original (one side was much
+  darker) was flattened in code, and the tone was normalised to a uniform aged
+  paper colour; only the fibre grain remains. Do not replace this with a
+  paid or non-free texture.
