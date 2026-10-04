@@ -32,6 +32,31 @@ function callModel(messages, options) {
   return modelCaller(messages, options);
 }
 
+// A notification must never hold the player's answer hostage. The relay and the
+// Telegram endpoint can accept a request and then never answer, and a send that
+// never settles leaves the chat stuck on "the Interviewer is thinking" - which is
+// exactly the freeze a player reported after "проверь". So the send is capped: the
+// sheet is still shown, approved and handed off, and the closing line reports the
+// timeout as "not delivered" instead of waiting forever.
+const NOTIFY_TIMEOUT_MS = 8000;
+function deliverWithin(send, info, timeoutMs = NOTIFY_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    timer = setTimeout(() => finish(null), timeoutMs);
+    Promise.resolve()
+      .then(() => send(info))
+      .then((result) => finish(result))
+      .catch(() => finish(null));
+  });
+}
+
 // The site's own engine is the floor, not a fallback of last resort: it needs no
 // key and no network, so a missing, expired or rate-limited model key can never
 // take the chats down. A working model still wins, because its wording is better;
@@ -134,7 +159,7 @@ export async function answerGuide({ messages = [], lang = 'ru', onLive = null } 
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-export async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
+export async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // The checklist the walk is on is remembered in the draft, so a race or class
@@ -184,12 +209,12 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   if (approved) {
     sheetKind = detectSheet(history, nextApp) || kind;
     if (typeof send === 'function') {
-      const result = await send({
+      const result = await deliverWithin(send, {
         kind: sheetKind,
         title: applicationTitle(nextApp, sheetKind, history),
         text: sheetText(history, nextApp),
         lang
-      }).catch(() => null);
+      }, notifyTimeoutMs);
       delivered = Boolean(result && result.ok);
     }
   }
@@ -227,7 +252,7 @@ function sheetText(history, application) {
   ].filter(Boolean).join('\n\n');
 }
 
-export async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
+export async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   const send = typeof notify === 'function' ? notify : notifierFn;
@@ -268,13 +293,13 @@ export async function answerStaff({ messages = [], lang = 'ru', application = {}
   if (done && !faq) {
     let delivered = false;
     if (typeof send === 'function') {
-      const result = await send({
+      const result = await deliverWithin(send, {
         role: role.name,
         branch: role.key,
         answers: staffAnswerPairs(history, { ...appState, branch: role.key }, lang),
         verdict: 'РЕКОМЕНДОВАН',
         lang
-      }).catch(() => null);
+      }, notifyTimeoutMs);
       delivered = Boolean(result && result.ok);
     }
     const closing = sentToOwnerText('staff', lang, { delivered });

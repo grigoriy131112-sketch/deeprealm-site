@@ -147,14 +147,22 @@ ${parts.join('\n\n')}
 
   function sendRelay(type, info) {
     if (!relay) return Promise.resolve({ ok: false, skipped: true, reason: 'not_configured' });
+    // A relay that accepts the request and never answers must not hang the chat:
+    // the approved sheet is shown either way, and this only decides the closing
+    // line. So the call is aborted after a few seconds and reported as failed.
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, 8000) : null;
     return fetch(relayBase() + '/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Relay-Key': relay.key },
-      body: JSON.stringify(Object.assign({}, info || {}, { type: type }))
+      body: JSON.stringify(Object.assign({}, info || {}, { type: type })),
+      signal: controller ? controller.signal : undefined
     }).then(function (res) {
       return res.ok ? { ok: true } : { ok: false, error: 'relay ' + res.status };
     }).catch(function (err) {
       return { ok: false, error: String(err && err.message || err) };
+    }).finally(function () {
+      if (timer) clearTimeout(timer);
     });
   }
 

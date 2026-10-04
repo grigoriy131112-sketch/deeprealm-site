@@ -282,6 +282,19 @@ test('a failed notification says so instead of claiming delivery', async () => {
   setNotifier(null);
 });
 
+test('a notification that never settles cannot freeze the approval', async () => {
+  // The relay and the Telegram endpoint can accept a request and never answer. The
+  // player must still get the verdict and the hand-off, with delivery reported as
+  // failed, instead of the chat staying on "the Interviewer is thinking" forever.
+  setNotifier(() => new Promise(() => {}));
+  const out = await answerInterview({ messages: APPROVED_DIALOGUE, lang: 'ru', notifyTimeoutMs: 50 });
+  assert.equal(out.finale, true, 'the approval still reaches the player');
+  assert.equal(out.delivered, false);
+  assert.match(out.reply, /ОДОБРЕНО/);
+  assert.match(out.reply, /не удалось/);
+  setNotifier(null);
+});
+
 test('a finished staff interview sends all the answers to the owner', async () => {
   const sent = [];
   setNotifier(async (info) => { sent.push(info); return { ok: true }; });

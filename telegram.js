@@ -98,11 +98,24 @@ export function createNotifier(options = {}) {
         // limit is not tripped by a long sheet.
         const wait = Math.max(0, lastSent + MIN_GAP_MS - Date.now());
         if (wait) await new Promise((r) => setTimeout(r, wait));
-        const res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: part, disable_web_page_preview: true })
-        });
+        // Telegram can accept the request and never answer; without a cap that would
+        // pin the queue (and the approving chat) forever.
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 10000) : null;
+        let res;
+        try {
+          res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: part, disable_web_page_preview: true }),
+            signal: controller ? controller.signal : undefined
+          });
+        } catch (err) {
+          log(`telegram error: ${err.message}`);
+          return { ok: false, error: 'telegram unreachable' };
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
         lastSent = Date.now();
         if (!res || !res.ok) {
           const detail = res && typeof res.text === 'function' ? await res.text().catch(() => '') : '';

@@ -1868,11 +1868,24 @@ function createNotifier(options = {}) {
         // limit is not tripped by a long sheet.
         const wait = Math.max(0, lastSent + MIN_GAP_MS - Date.now());
         if (wait) await new Promise((r) => setTimeout(r, wait));
-        const res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: part, disable_web_page_preview: true })
-        });
+        // Telegram can accept the request and never answer; without a cap that would
+        // pin the queue (and the approving chat) forever.
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 10000) : null;
+        let res;
+        try {
+          res = await fetchImpl(`${API_ROOT}/bot${config.token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: part, disable_web_page_preview: true }),
+            signal: controller ? controller.signal : undefined
+          });
+        } catch (err) {
+          log(`telegram error: ${err.message}`);
+          return { ok: false, error: 'telegram unreachable' };
+        } finally {
+          if (timer) clearTimeout(timer);
+        }
         lastSent = Date.now();
         if (!res || !res.ok) {
           const detail = res && typeof res.text === 'function' ? await res.text().catch(() => '') : '';
@@ -2139,6 +2152,31 @@ function callModel(messages, options) {
   return modelCaller(messages, options);
 }
 
+// A notification must never hold the player's answer hostage. The relay and the
+// Telegram endpoint can accept a request and then never answer, and a send that
+// never settles leaves the chat stuck on "the Interviewer is thinking" - which is
+// exactly the freeze a player reported after "проверь". So the send is capped: the
+// sheet is still shown, approved and handed off, and the closing line reports the
+// timeout as "not delivered" instead of waiting forever.
+const NOTIFY_TIMEOUT_MS = 8000;
+function deliverWithin(send, info, timeoutMs = NOTIFY_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    timer = setTimeout(() => finish(null), timeoutMs);
+    Promise.resolve()
+      .then(() => send(info))
+      .then((result) => finish(result))
+      .catch(() => finish(null));
+  });
+}
+
 // The site's own engine is the floor, not a fallback of last resort: it needs no
 // key and no network, so a missing, expired or rate-limited model key can never
 // take the chats down. A working model still wins, because its wording is better;
@@ -2241,7 +2279,7 @@ async function answerGuide({ messages = [], lang = 'ru', onLive = null } = {}) {
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
+async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // The checklist the walk is on is remembered in the draft, so a race or class
@@ -2291,12 +2329,12 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   if (approved) {
     sheetKind = detectSheet(history, nextApp) || kind;
     if (typeof send === 'function') {
-      const result = await send({
+      const result = await deliverWithin(send, {
         kind: sheetKind,
         title: applicationTitle(nextApp, sheetKind, history),
         text: sheetText(history, nextApp),
         lang
-      }).catch(() => null);
+      }, notifyTimeoutMs);
       delivered = Boolean(result && result.ok);
     }
   }
@@ -2334,7 +2372,7 @@ function sheetText(history, application) {
   ].filter(Boolean).join('\n\n');
 }
 
-async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null } = {}) {
+async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   const send = typeof notify === 'function' ? notify : notifierFn;
@@ -2375,13 +2413,13 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
   if (done && !faq) {
     let delivered = false;
     if (typeof send === 'function') {
-      const result = await send({
+      const result = await deliverWithin(send, {
         role: role.name,
         branch: role.key,
         answers: staffAnswerPairs(history, { ...appState, branch: role.key }, lang),
         verdict: 'РЕКОМЕНДОВАН',
         lang
-      }).catch(() => null);
+      }, notifyTimeoutMs);
       delivered = Boolean(result && result.ok);
     }
     const closing = sentToOwnerText('staff', lang, { delivered });
@@ -2536,14 +2574,22 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
 
   function sendRelay(type, info) {
     if (!relay) return Promise.resolve({ ok: false, skipped: true, reason: 'not_configured' });
+    // A relay that accepts the request and never answers must not hang the chat:
+    // the approved sheet is shown either way, and this only decides the closing
+    // line. So the call is aborted after a few seconds and reported as failed.
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, 8000) : null;
     return fetch(relayBase() + '/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Relay-Key': relay.key },
-      body: JSON.stringify(Object.assign({}, info || {}, { type: type }))
+      body: JSON.stringify(Object.assign({}, info || {}, { type: type })),
+      signal: controller ? controller.signal : undefined
     }).then(function (res) {
       return res.ok ? { ok: true } : { ok: false, error: 'relay ' + res.status };
     }).catch(function (err) {
       return { ok: false, error: String(err && err.message || err) };
+    }).finally(function () {
+      if (timer) clearTimeout(timer);
     });
   }
 
