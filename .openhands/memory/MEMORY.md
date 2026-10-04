@@ -41,3 +41,24 @@
   поднята её песочница, выкачано и закоммичено незакоммиченное состояние карты
   мира (коммит `86aa17b` в `grigoriy131112-sketch/Grimhollow`). Архив беседы —
   `.openhands/memory/ff1ce2f0/`. GitHub Pages у Grimhollow пока не включён (404).
+- 2026-10-04 реализовано «Очки отряда» — дерево усилений отряда (Wave 12):
+  очки капают за победы в бою и за уровень предводителя, тратятся на четыре
+  ветви (командование/сноровка/колдовство/сбор), усиливающие весь отряд.
+  Добавлены `game/party_upgrades.js`, `services/upgrades.js`,
+  `routes/upgrades.js`, страница `/upgrades/:leaderId`, тесты.
+  Коммит `74591df` в `main` Grimhollow; 114 тестов проходят, сборка клиента
+  зелёная. Подробности — `AGENTS.md` (раздел «Очки отряда»).
+
+## Песочница беседы «Что такое ДнД?» (как поднять)
+
+- ID беседы: `ff1ce2f04d63464fb438e3f5ae646119`; песочница `Wb13KYN5ReQAjGJep8F6l`.
+- UI: https://app.all-hands.dev/canvas/conversations/ff1ce2f04d63464fb438e3f5ae646119
+- «Только для чтения» = песочница в статусе PAUSED. Разбудить (идемпотентно):
+  `curl -X POST https://app.all-hands.dev/api/v1/sandboxes/Wb13KYN5ReQAjGJep8F6l/resume -H "Authorization: Bearer $OPENHANDS_API_KEY"`
+- Статус и `conversation_url`/`session_api_key`:
+  `curl "https://app.all-hands.dev/api/v1/app-conversations?ids=ff1ce2f04d63464fb438e3f5ae646119" -H "Authorization: Bearer $OPENHANDS_API_KEY"`
+- `execution_status: error` — след давнего сбоя платформы; на доступ к файлам
+  и запись он не влияет, пока `sandbox_status: RUNNING` и runtime `available`.
+- Файлы наружу: `GET <conversation_url>/api/conversations/<id>/file/download?path=<abs-inside-workspace>`
+  (путь только внутри воркспейса) с заголовком `X-Session-API-Key`.
+
