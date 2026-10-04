@@ -289,10 +289,13 @@ export async function answerStaff({ messages = [], lang = 'ru', application = {}
 
   // Every scripted question has been answered: close the interview with the fixed
   // hand-off instead of asking the model to improvise one. All the answers go to
-  // the owner in one message, and the candidate is told they were sent.
+  // the owner in one message, and the candidate is told they were sent. The send
+  // happens once: without the flag, every later message in the finished interview
+  // would forward the whole sheet to the owner again.
   if (done && !faq) {
-    let delivered = false;
-    if (typeof send === 'function') {
+    const alreadySent = appState._staffSent === true;
+    let delivered = alreadySent;
+    if (!alreadySent && typeof send === 'function') {
       const result = await deliverWithin(send, {
         role: role.name,
         branch: role.key,
@@ -305,7 +308,7 @@ export async function answerStaff({ messages = [], lang = 'ru', application = {}
     const closing = sentToOwnerText('staff', lang, { delivered });
     return {
       reply: withEnd(`${closing}\n\n${finaleText('staff', lang)}`),
-      application: { ...appState, branch: role.key },
+      application: { ...appState, branch: role.key, _staffSent: true },
       role: role.key,
       done: true,
       delivered,

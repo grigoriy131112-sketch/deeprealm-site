@@ -2409,10 +2409,13 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
 
   // Every scripted question has been answered: close the interview with the fixed
   // hand-off instead of asking the model to improvise one. All the answers go to
-  // the owner in one message, and the candidate is told they were sent.
+  // the owner in one message, and the candidate is told they were sent. The send
+  // happens once: without the flag, every later message in the finished interview
+  // would forward the whole sheet to the owner again.
   if (done && !faq) {
-    let delivered = false;
-    if (typeof send === 'function') {
+    const alreadySent = appState._staffSent === true;
+    let delivered = alreadySent;
+    if (!alreadySent && typeof send === 'function') {
       const result = await deliverWithin(send, {
         role: role.name,
         branch: role.key,
@@ -2425,7 +2428,7 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
     const closing = sentToOwnerText('staff', lang, { delivered });
     return {
       reply: withEnd(`${closing}\n\n${finaleText('staff', lang)}`),
-      application: { ...appState, branch: role.key },
+      application: { ...appState, branch: role.key, _staffSent: true },
       role: role.key,
       done: true,
       delivered,
@@ -2566,7 +2569,11 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
         while (base.length && base.charAt(base.length - 1) === '/') base = base.slice(0, -1);
         if (cfg && base && cfg.key) relay = { base: base, key: String(cfg.key) };
         setNotifier(function (info) {
-          return sendRelay('sheet', info);
+          // A staff notification carries the candidate's answers, so it must go out
+          // as "staff": sent as "sheet" the relay dropped the answers and the owner
+          // saw only the heading.
+          var type = info && Array.isArray(info.answers) ? 'staff' : 'sheet';
+          return sendRelay(type, info);
         });
         return relay;
       });

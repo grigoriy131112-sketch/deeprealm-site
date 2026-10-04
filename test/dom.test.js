@@ -502,3 +502,60 @@ test('the doorway overlay covers the room change and is cleaned up afterwards', 
   assert.equal(doorway.classList.contains('parting'), false, 'no class is left behind');
 });
 
+
+// --- owner notifications on the static site ---------------------------------
+// GitHub Pages has no server, so approvals are relayed to the owner through the
+// bundled notifier. A staff interview must go out as "staff" with its answers: sent
+// as "sheet" the relay dropped them and the owner saw only the heading. And it must
+// be sent once, not on every later message.
+
+function relayBoot(state = {}) {
+  const calls = [];
+  const opts = {
+    fetch: async (url, o = {}) => {
+      const u = String(url);
+      if (u.includes('/api/knowledge-raw')) return { ok: true, status: 200, json: async () => KNOWLEDGE };
+      if (u.includes('/api/knowledge')) return { ok: true, status: 200, json: async () => PAYLOAD };
+      if (u.includes('data/telegram.json')) return { ok: true, status: 200, json: async () => ({ relay: { url: 'https://relay.example.test', key: 'k' } }) };
+      if (u.includes('relay.example.test')) { calls.push(JSON.parse(o.body || '{}')); return { ok: true, status: 200, json: async () => ({ ok: true }) }; }
+      if (u.startsWith('https://example.test/api')) return { ok: false, status: 404, json: async () => null };
+      throw new Error('unreachable: ' + u);
+    }
+  };
+  return { state, opts, calls };
+}
+
+async function say(win, who, text) {
+  const input = win.document.getElementById(`${who}Input`);
+  input.value = text;
+  win.document.getElementById(`${who}Form`).dispatchEvent(new win.Event('submit', { cancelable: true, bubbles: true }));
+  await sleep(120);
+}
+
+test('a staff interview is relayed as staff with its answers, and only once', async () => {
+  const { state, opts, calls } = relayBoot();
+  const win = await boot(state, opts);
+  await say(win, 'staff', 'хочу в гейм-мастера');
+  await say(win, 'staff', 'каждый день');
+  await say(win, 'staff', 'веду по вечерам');
+  await say(win, 'staff', 'опыт есть');
+  await sleep(120);
+
+  const staffCalls = calls.filter((c) => c.type === 'staff');
+  assert.equal(staffCalls.length, 1, 'the owner gets exactly one staff notification');
+  assert.ok(staffCalls[0].answers.length >= 1, 'the answers travel with the notification');
+  assert.equal(calls.some((c) => c.type === 'sheet' && c.answers), false, 'a staff interview must not be sent as a sheet');
+});
+
+test('an approved sheet is relayed as a sheet with its full text', async () => {
+  const { state, opts, calls } = relayBoot();
+  const win = await boot(state, opts);
+  await say(win, 'interview', 'придумай мне класс сам');
+  await say(win, 'interview', 'проверь');
+  await sleep(120);
+
+  const sheets = calls.filter((c) => c.type === 'sheet');
+  assert.equal(sheets.length, 1, 'the owner gets exactly one sheet');
+  assert.match(sheets[0].text, /Название класса:/, 'the full sheet text travels, not just the heading');
+});
+

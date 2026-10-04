@@ -139,7 +139,11 @@ ${parts.join('\n\n')}
         while (base.length && base.charAt(base.length - 1) === '/') base = base.slice(0, -1);
         if (cfg && base && cfg.key) relay = { base: base, key: String(cfg.key) };
         setNotifier(function (info) {
-          return sendRelay('sheet', info);
+          // A staff notification carries the candidate's answers, so it must go out
+          // as "staff": sent as "sheet" the relay dropped the answers and the owner
+          // saw only the heading.
+          var type = info && Array.isArray(info.answers) ? 'staff' : 'sheet';
+          return sendRelay(type, info);
         });
         return relay;
       });
