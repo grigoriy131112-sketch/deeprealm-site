@@ -10,7 +10,7 @@
 // The file is bundled into the browser too, so static hosting gets the same AI.
 
 import { getKnowledge, staffTurn, matchActivityFaq, finaleText } from './chat-core.js';
-import { generateRace, generateClass, seedFrom, renderGenerated } from './ai-gen.js';
+import { generateRace, generateClass, generateClassForRace, seedFrom, renderGenerated } from './ai-gen.js';
 
 let engArticles = [];
 export function setEngineArticles(list) {
@@ -146,6 +146,16 @@ export function buildDocs(k) {
     if (list.length) add(`spec:${name}`, pick('ru', `Специализации ${name}`, `${name} specializations`), `${name}: ${list.join(', ')}.`, 'class', ['специализация', name]);
   }
   if (classes.class_system) add('class-system', pick('ru', 'Система классов', 'Class system'), classes.class_system, 'class', ['класс', 'система', 'уровни']);
+  if (classes.milestones) {
+    const ms = classes.milestones;
+    add('milestones', pick('ru', 'Вехи и специализации', 'Milestones and specializations'), pick('ru',
+      `Вехи: 20, 30, 40, 50. На 16 уровне игрок выбирает одну из ${ms.specializations_per_class || 3} специализаций класса. `
+        + `Между вехами промежуточные уровни — ${(ms.structure || []).map((s) => `${s.levels} (до ${s.milestone})`).join(', ')} — `
+        + `и на каждом ровно одна способность специализации. Всего ${ms.total_specialization_levels} уровней специализации.`,
+      `Milestones: 20, 30, 40, 50. At level 16 a player picks one of the class's ${ms.specializations_per_class || 3} specializations. `
+        + `Between milestones: ${(ms.structure || []).map((s) => `${s.levels} (to ${s.milestone})`).join(', ')}, one specialization ability each.`
+    ), 'class', ['веха', 'вехи', 'специализация', 'специализации', 'уровни', '16 уровень']);
+  }
   if (classes.class_balance_rules) add('class-rules', pick('ru', 'Правила баланса классов', 'Class balance rules'), classes.class_balance_rules.map((r) => `— ${r}`).join('\n'), 'class', ['класс', 'баланс', 'правила']);
   if ((classes.player_classes || []).length) {
     add('class-players', pick('ru', 'Классы игроков', 'Player classes'), classes.player_classes.map((c) => `${c.name} — ${c.author}${c.url ? ` (${c.url})` : ''}`).join('\n'), 'class', ['классы', 'игроки']);
@@ -324,8 +334,8 @@ function interviewerReaction(text, lang) {
 // told when they ask how it works, instead of being asked for a field again.
 function howToMake(lang) {
   return pick(lang,
-    'Расу или класс можно сделать двумя путями. Первый — рассказываешь сам: я задаю по одному вопросу, ты отвечаешь, я собираю анкету. Второй — говоришь «придумай мне расу сам» или «придумай мне класс сам», и я придумываю всё целиком: название, внешность, способности и слабости по правилам баланса. Как хочешь?',
-    'You can get a race or a class two ways. First, you describe it yourself: I ask one question at a time, you answer, I build the sheet. Second, say "make a race for me" or "make a class for me" and I make the whole thing: name, look, powers and weaknesses, all balanced. Which do you want?');
+    'Расу или класс можно сделать двумя путями. Первый — рассказываешь сам: я задаю по одному вопросу, ты отвечаешь, я собираю анкету. Второй — говоришь «придумай мне расу сам» или «придумай мне класс сам», и я придумываю всё целиком: название, внешность, способности и слабости по правилам баланса. А если раса у тебя уже готова — вставь её и скажи «сделай класс под мою расу», я соберу класс под неё. Как хочешь?',
+    'You can get a race or a class two ways. First, you describe it yourself: I ask one question at a time, you answer, I build the sheet. Second, say "make a race for me" or "make a class for me" and I make the whole thing: name, look, powers and weaknesses, all balanced. And if your race is already done — paste it and say "make a class for my race", and I will build a class to match it. Which do you want?');
 }
 
 // The character interview walks the fields of the chat's own template, in order,
@@ -378,6 +388,7 @@ function hasFieldText(history, field) {
     'хп': /(?<![а-яёa-z])(хп|hp|здоровь|хитпоинт)/i,
     'базовая атака': /(базовая атака|базов\w*\s*урон|обычная атака|автоатак)/i,
     'ультимейт': /(ультимейт|ульт\b)/i,
+    'специализации и вехи': /(специализац|вех|эволюц|16 уровень)/i,
     'ограничения и слабости': /(ограничен|слабост|минус|недостатк)/i,
     'истощение ресурса': /(истощен|истоща|обнулен)/i
   };
@@ -428,7 +439,7 @@ const INTERVIEW_FIELDS = {
   character: ['Имя', 'Раса', 'Класс', 'Характер', 'Внешность', 'Происхождение'],
   story: ['Название сюжета', 'Жанр', 'Завязка', 'Главная проблема', 'Антагонист', 'Локации'],
   race: ['Название', 'Самоназвание', 'Внешность', 'Где живут', 'Чем занимаются', 'Боевые навыки', 'Способности', 'Уязвимости', 'Общественное устройство', 'Магия'],
-  class: ['Название класса', 'Роль', 'Ресурс', 'ХП', 'Базовая атака', 'Способности', 'Ультимейт', 'Ограничения и слабости', 'Истощение ресурса']
+  class: ['Название класса', 'Роль', 'Ресурс', 'ХП', 'Базовая атака', 'Способности', 'Ультимейт', 'Специализации и вехи', 'Ограничения и слабости', 'Истощение ресурса']
 };
 
 const STORY_INTENT = /заявк[а-яё]*\s+на\s+сюжет|предложить\s+сюжет|придума[а-яё]*\s+сюжет|созда[а-яё]*\s+сюжет|мой\s+сюжет|сюжет\s+для\s+гм|new plot|create a plot|propose a plot|название\s+сюжета|завязка|главная\s+проблема|тэглайн|теглайн|крючок/i;
@@ -457,6 +468,19 @@ const CLASS_INTENT = new RegExp(
 );
 const CHARACTER_INTENT = /созда[а-яё]*\s+персонаж|хочу\s+персонаж|новый\s+персонаж|new character|create a character/i;
 
+// A ready sheet the player pasted in (for example copied from the blog) carries the
+// template's own field labels. Reading the kind from them lets a pasted race or class
+// be checked against its own rules instead of being mistaken for a character sheet.
+function kindFromSheetText(text) {
+  const s = String(text || '').toLowerCase();
+  const has = (list) => list.filter((w) => s.includes(w)).length;
+  const classHits = has(['название класса', 'базовая атака', 'ультимейт', 'истощение ресурса', 'специализац', 'роль:', 'ресурс:']);
+  const raceHits = has(['самоназвание', 'где живут', 'чем занимаются', 'боевые навыки', 'уязвимост', 'общественное устройство', 'форма правления', 'какой магией']);
+  if (classHits >= 2) return 'class';
+  if (raceHits >= 2) return 'race';
+  return null;
+}
+
 // Which checklist the interview is walking. A plot, a race and a class are recognised
 // by what the player asked for, and remembered in the draft so the walk continues on
 // later turns. An explicit request in the newest message always wins, so a player who
@@ -470,6 +494,13 @@ export function interviewKind(application = {}, history = []) {
   if (RACE_INTENT.test(lastText)) return 'race';
   if (CLASS_INTENT.test(lastText)) return 'class';
   if (STORY_INTENT.test(lastText)) return 'story';
+  // A pasted ready sheet wins over the remembered kind, so a player can bring an
+  // already-finished race or class and have it checked on the spot. The sheet is not
+  // always the newest message (the check command may follow it), so the last few
+  // player messages are scanned rather than only the last one.
+  const recent = msgs.slice(-4).map((m) => String(m.content || '')).join('\n');
+  const fromSheet = kindFromSheetText(recent);
+  if (fromSheet) return fromSheet;
   if (['race', 'class', 'story', 'character'].includes(app._kind)) return app._kind;
   const text = msgs.map((m) => String(m.content || '')).join('\n');
   if (RACE_INTENT.test(text)) return 'race';
@@ -580,12 +611,48 @@ export function generatedSheet(history, application = {}, lang = 'ru') {
   const msgs = Array.isArray(history) ? history : [];
   const last = [...msgs].reverse().find((m) => m && m.role !== 'assistant');
   const text = String(last?.content || '');
-  if (!isSelfMade(text)) return null;
+  const hasClassWord = new RegExp(CLASS_WORD, 'i').test(text);
+  const forRace = hasClassWord && isClassForRace(text);
+  if (!isSelfMade(text) && !forRace) return null;
+  const seed = seedFrom(msgs);
+  // A class for an already-made race: the player names the race, so the class is
+  // tied to it instead of being a free-floating kit. Checked first because such a
+  // request names both a race and a class.
+  if (forRace) return generateClassForRace(lang, seed, raceNameFor(text, application, msgs));
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
   if (!wantsRace && !wantsClass) return null;
-  const seed = seedFrom(msgs);
-  return wantsRace ? generateRace(lang, seed) : generateClass(lang, seed);
+  return wantsRace && !wantsClass ? generateRace(lang, seed) : generateClass(lang, seed);
+}
+
+// "Класс под готовую расу X", "сделай класс для расы X", "класс по расе X". A class
+// requested together with a race is a different request from a free-standing class.
+export function isClassForRace(text) {
+  const s = String(text || '');
+  return /класс[а-яё]{0,3}\s*(?:под|для|по)\s*(?:(?:готов[а-яё]*|мою|свою|эту|ту)\s+)?рас|рас[а-яё]{0,3}\s*(?:под|для)\s*класс|class\s+(?:for|to)\s+(?:the\s+|my\s+)?race/i.test(s);
+}
+
+// The race the class is built for. The newest message wins, then a ready race the
+// player pasted in (the "Название" line of a race sheet), then the draft the race
+// interview left behind, then any race named in the dialogue.
+export function raceNameFor(text, application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  const quoted = String(text || '').match(/[«"']([^»"']{2,60})[»"']/);
+  if (quoted) return quoted[1].trim();
+  // A pasted race sheet carries its own "Название: X" line. The lookbehind keeps
+  // "Самоназвание: X" from being read as the race name.
+  const labelled = String(text || '').match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)/i);
+  if (labelled) return labelled[1].trim().split(/[.\n]/)[0].slice(0, 60);
+  const named = String(text || '').match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+  if (named) return named[1].trim();
+  for (const key of ['Название', 'Название расы']) {
+    if (typeof app[key] === 'string' && app[key].trim()) return app[key].trim();
+  }
+  const msgs = Array.isArray(history) ? history : [];
+  const mentioned = msgs.filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || '')).join('\n')
+    .match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)|(?<![а-яё])(?:расу|расы|раса|расе)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/i);
+  return mentioned ? String(mentioned[1] || mentioned[2] || '').trim().split(/[.\n]/)[0].slice(0, 60) : '';
 }
 
 export function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {

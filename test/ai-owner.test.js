@@ -500,6 +500,43 @@ test('a self-made class is stored, approved and sent to the owner', async () => 
   setNotifier(null);
 });
 
+test('a class built for an existing race names that race and its milestones', async () => {
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const messages = [{ role: 'user', content: 'сделай класс под готовую расу Пепельники' }];
+  const first = await answerInterview({ messages, lang: 'ru' });
+  assert.equal(first.application['Под расу'], 'Пепельники', 'the class is tied to the named race');
+  assert.match(first.reply, /Специализации \(выбор на 16 уровне\)/, 'the milestones are explained');
+  // One ability per intermediate level, three specializations.
+  for (const level of [16, 19, 21, 29, 31, 39, 41, 49]) {
+    const hits = first.reply.split(`Ур. ${level}:`).length - 1;
+    assert.equal(hits, 3, `level ${level} grants one ability in each of the three specializations`);
+  }
+  assert.equal(first.reply.split('Специализация «').length - 1, 3, 'three specializations');
+
+  messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
+  const second = await answerInterview({ messages, lang: 'ru', application: first.application });
+  assert.match(second.reply, /ОДОБРЕНО/, 'the race-based class passes the check');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].kind, 'class');
+  setNotifier(null);
+});
+
+test('a ready sheet pasted by the player is checked as its own kind', async () => {
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const race = 'Название: Пепельники\nСамоназвание: Тлеющие\nГде живут: выжженные пустоши\nЧем занимаются: собирают пепел\nБоевые навыки: швыряют обломки\nСпособности: Жар ядра\nУязвимости: вода и холод\nМагия: Огонь и Руны';
+  const out = await answerInterview({ messages: [{ role: 'user', content: race }, { role: 'user', content: 'проверь' }], lang: 'ru' });
+  assert.match(out.reply, /ОДОБРЕНО/, 'a pasted race sheet is approved');
+  assert.equal(sent[0].kind, 'race', 'the owner gets it as a race, not a character');
+
+  const cls = 'Название класса: Гробовый певец\nРоль: призыватель\nРесурс: Кости\nБазовая атака: 3 кости\nУльтимейт: Зов гробницы\nИстощение ресурса: кости = 0';
+  const out2 = await answerInterview({ messages: [{ role: 'user', content: cls }, { role: 'user', content: 'проверь' }], lang: 'ru' });
+  assert.match(out2.reply, /ОДОБРЕНО/, 'a pasted class sheet is approved');
+  assert.equal(sent[1].kind, 'class', 'the owner gets it as a class');
+  setNotifier(null);
+});
+
 test('asking twice gives a stable sheet, and a different request a different one', () => {
   const a = localInterview({ messages: [{ role: 'user', content: 'придумай мне расу сам' }], lang: 'ru', application: {} });
   const b = localInterview({ messages: [{ role: 'user', content: 'придумай мне расу сам' }], lang: 'ru', application: {} });

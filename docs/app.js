@@ -24,6 +24,7 @@ const I18N = {
     'classes.title': 'Классы',
     'classes.base': 'Базовые классы',
     'classes.specs': 'Специализации',
+    'classes.milestones': 'Вехи и специализации',
     'classes.player': 'Классы игроков',
     'classes.balance': 'Правила баланса классов',
     'classes.levelPass': 'Пасс уровней',
@@ -105,6 +106,7 @@ const I18N = {
     'classes.title': 'Classes',
     'classes.base': 'Base classes',
     'classes.specs': 'Specializations',
+    'classes.milestones': 'Milestones and specializations',
     'classes.player': 'Player-made classes',
     'classes.balance': 'Class balance rules',
     'classes.levelPass': 'Level pass',
@@ -649,6 +651,13 @@ function renderKnowledge() {
         return `<p><strong>${esc(cls)}:</strong> ${specs.map((s) => tagOrLink(s, specLinks[s])).join('')}</p>`;
       }).join('')}
     </div>
+    ${k.classes.milestones ? `<div class="card"><h3>${esc(t('classes.milestones'))}</h3>
+      <p>${esc(k.classes.milestones.note)}</p>
+      <p class="hint">${esc(state.lang === 'ru'
+        ? `Специализацию игрок выбирает на ${k.classes.milestones.specialization_choice_level} уровне. На каждом промежуточном уровне — одна способность.`
+        : `The specialization is chosen at level ${k.classes.milestones.specialization_choice_level}. Each intermediate level grants one ability.`)}</p>
+      <ul>${(k.classes.milestones.structure || []).map((s) => `<li>${esc(s.levels)} — ${esc(state.lang === 'ru' ? `до вехи ${s.milestone}` : `to milestone ${s.milestone}`)}, ${esc(String(s.count))} ${esc(state.lang === 'ru' ? 'способностей' : 'abilities')}</li>`).join('')}</ul>
+    </div>` : ''}
     <div class="card"><h3>${esc(t('classes.player'))}</h3>
       ${playerList(state.playerClasses, k.classes.playerBlogLink, k.classes.playerBlogLink ? t('classes.playerBlog') : '')}
     </div>

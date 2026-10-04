@@ -128,6 +128,8 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Анкетолог чата Deepr
 10. Если анкета расы или класса заполнена полностью и нарушений баланса нет — СРАЗУ пиши пометку "ОДОБРЕНО ✅" и завершай проверку. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали: статья для сайта будет опубликована автоматически. Никаких вопросов после одобрения.
 11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце проверяешь по правилам. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
 11а. Если игрок просит придумать расу или класс ЗА НЕГО ("создай сам", "придумай за меня", "сделай сам") — не задавай вопросов и не отказывайся: придумай расу или класс целиком и сразу, по правилам баланса, со способностями и слабостями, и выведи готовую анкету. Встроенный движок уже умеет это и без тебя; если ты пишешь ответ сам, сделай то же самое.
+11б. ГОТОВЫЕ АНКЕТЫ. Игрок может прислать уже заполненную анкету расы или класса (например, вставил текст из блога) и попросить проверить её. Не заставляй его заполнять заново: прими присланный текст как черновик, проверь по правилам баланса и при отсутствии нарушений сразу пиши "ОДОБРЕНО ✅". Если игрок просит создать класс по уже готовой расе — собери класс под названную расу, указав "Под расу: <название>" и строку совместимости с её природой.
+11в. СПЕЦИАЛИЗАЦИИ И ВЕХИ. У класса 15 начальных уровней, затем на 16 уровне игрок выбирает одну из трёх специализаций. Вехи — 20, 30, 40 и 50. Между вехами промежуточные уровни (16–19, 21–29, 31–39, 41–49), и на каждом — ровно одна способность специализации. Если игрок заполняет класс, спроси про три специализации и напомни про способности на промежуточных уровнях.
 12. ПЕРЕЗАРЯДКА СПОСОБНОСТЕЙ измеряется в ходах. У каждой способности класса должна быть указана перезарядка в ходах (например, «перезарядка: 2 хода»). Если игрок её не указал — спроси.
 
 ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ:
@@ -385,7 +387,10 @@ function finaleText(type, lang, { approved = false } = {}) {
 // ("ОДОБРЕНО ✅", "заявка одобрена", "официально одобряю"), so the verdict is matched
 // loosely while the sheet itself is checked against the dialogue and the draft.
 const APPROVAL_RE = /одобр|принят|approv|accept/i;
-const SHEET_FIELDS = [/имя\s*[:\-—]/i, /раса\s*[:\-—]/i, /класс\s*[:\-—]/i, /"name"/i, /"race"/i, /"class"/i, /название\s*[:\-—]/i, /самоназвание/i, /уязвимост/i];
+const SHEET_FIELDS = [/имя\s*[:\-—]/i, /раса\s*[:\-—]/i, /класс\s*[:\-—]/i, /"name"/i, /"race"/i, /"class"/i, /название\s*[:\-—]/i, /самоназвание/i, /уязвимост/i,
+  // A class sheet has its own labels, so a player who pastes a finished class from
+  // the blog is recognised as a filled sheet instead of being asked to fill it again.
+  /название класса/i, /ресурс\s*[:\-—]/i, /базов\w*\s*атака/i, /ультимейт/i, /истощени/i, /боевые навыки/i, /где живут/i];
 
 function hasFilledSheet(messages, application = {}) {
   if (sheetDetector(messages, application)) return true;
@@ -860,12 +865,89 @@ function classAbilityLines(t) {
   });
 }
 
+// The levels between the milestones. At level 16 a class picks one of three
+// specializations, and every level below grants exactly one ability of that
+// specialization. The list is fixed by the owner: 16-19, 21-29, 31-39, 41-49.
+const SPECIALIZATION_LEVELS = [16, 17, 18, 19, ...Array.from({ length: 9 }, (_, i) => 21 + i),
+  ...Array.from({ length: 9 }, (_, i) => 31 + i), ...Array.from({ length: 9 }, (_, i) => 41 + i)];
+
+// Which of the three directions a specialization leans to, read from its own
+// wording so the generated abilities match the name rather than an index.
+function specRole(focus) {
+  const f = String(focus || '').toLowerCase();
+  if (/(леч|исцел|поддерж|союзник|щит|защищ|броня|брон)/.test(f)) return 'guard';
+  if (/(бьёт|бьет|урон|неудержим|убийц|разруш|гнев|клинок|режет)/.test(f)) return 'blade';
+  return 'craft';
+}
+
+// One ability per level. The numbers grow with the level and stay inside the class
+// balance rules: the last specialization ability is about as strong as the level-15
+// ultimate, and nothing reaches the ultimate-2 ceiling of 60.
+function specAbility(specName, role, level, index) {
+  const step = level - 16;
+  const cost = Math.min(50, 15 + Math.round(step * 1.15));
+  const cd = Math.min(8, 3 + Math.round(step / 5));
+  if (role === 'guard') {
+    const shield = 25 + step;
+    const heal = 20 + step;
+    const variants = [
+      `щит на ${shield} урона союзнику`,
+      `восстанавливает ${heal} ХП союзнику и себе`,
+      `снимает оглушение и страх с союзника`,
+      `+${5 + Math.round(step / 3)} к защите всем рядом на 2 хода`
+    ];
+    return { name: `${specName}: опора ${index + 1}`, effect: variants[index % variants.length] };
+  }
+  if (role === 'blade') {
+    const dmg = Math.min(55, 22 + step);
+    const variants = [
+      `${dmg} урона одной цели`,
+      `${dmg} урона по области и −${2 + Math.round(step / 10)} к защите врагов`,
+      `${dmg} урона цели; при её смерти способность готова снова`,
+      `${dmg} урона и −${2 + Math.round(step / 12)} к скорости цели до конца боя`
+    ];
+    return { name: `${specName}: натиск ${index + 1}`, effect: variants[index % variants.length] };
+  }
+  const dmg = Math.min(48, 20 + step);
+  const variants = [
+    `${dmg} урона и −2 к точности врагов на 2 хода`,
+    `${dmg} урона по области и замедление врагов`,
+    `щит на ${18 + step} урона союзнику и ${Math.round(dmg / 2)} урона рядом`,
+    `отражает ${20 + step} урона тому, кто бьёт в упор, 2 хода`
+  ];
+  return { name: `${specName}: приём ${index + 1}`, effect: variants[index % variants.length] };
+}
+
+// The three specializations a class offers at level 16, each with one ability on
+// every level between the milestones.
+function specializationLines(t) {
+  const specs = t.evolutions.map((evo) => {
+    const [name, ...rest] = String(evo).split('—');
+    return { name: name.trim(), focus: rest.join('—').trim() };
+  });
+  const out = [];
+  for (const spec of specs) {
+    const role = specRole(spec.focus);
+    out.push(`Специализация «${spec.name}» — ${spec.focus}`);
+    SPECIALIZATION_LEVELS.forEach((level, i) => {
+      const a = specAbility(spec.name, role, level, i);
+      const cost = Math.min(50, 15 + Math.round((level - 16) * 1.15));
+      const cd = Math.min(8, 3 + Math.round((level - 16) / 5));
+      out.push(`  Ур. ${level}: ${a.name} — ${a.effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`);
+    });
+  }
+  return out;
+}
+
 function classDraft(lang, seed) {
   const t = CLASS_THEMES[seed % CLASS_THEMES.length];
   const name = t.names[(seed >>> 5) % t.names.length];
   const abilities = classAbilityLines(t).join('\n');
   const [u1n, u1cd, u1cost, u1e] = t.ult1;
   const [u2n, u2cd, u2cost, u2e] = t.ult2;
+  const specs = specializationLines(t).join('\n');
+  const specIntro = `Специализации (выбор на 16 уровне): 3 на класс. На каждом промежуточном уровне `
+    + `(16–19, 21–29, 31–39, 41–49) — ровно одна способность специализации.`;
   const lines = [
     `Название класса: ${name}`,
     `Роль: ${t.role}`,
@@ -876,7 +958,8 @@ function classDraft(lang, seed) {
     abilities,
     `Ультимейт (10 уровень): ${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
     `Ультимейт 2 (15 уровень): ${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
-    `Эволюции (после 15): ${t.evolutions.join('; ')}`,
+    specIntro,
+    specs,
     `Ограничения: ${t.limits}`,
     `Слабости: ${t.weak}`,
     `Истощение ресурса: ${t.exhaust}`
@@ -899,7 +982,7 @@ function classDraft(lang, seed) {
       'Способности': abilityText,
       'Ультимейт': `${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
       'Ультимейт 2': `${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
-      'Эволюции': t.evolutions.join('; '),
+      'Специализации и вехи': `${specIntro}\n${specs}`,
       'Ограничения и слабости': `${t.limits}; ${t.weak}`,
       'Истощение ресурса': t.exhaust
     },
@@ -909,6 +992,20 @@ function classDraft(lang, seed) {
 
 function generateRace(lang, seed) { return raceDraft(lang, seed); }
 function generateClass(lang, seed) { return classDraft(lang, seed); }
+
+// A class built for an existing, ready race. The player hands over a race they
+// already made (or a base race) and asks for a class to match it, so the kit keeps
+// the standard balance but is tied to that race by name and a compatibility line.
+function generateClassForRace(lang, seed, raceName) {
+  const draft = classDraft(lang, seed);
+  const race = String(raceName || '').trim();
+  if (!race) return draft;
+  draft.app['Под расу'] = race;
+  draft.app['Совместимость с расой'] = `Класс создан под готовую расу «${race}»: его ресурс и способности опираются на её природу, а магия класса не спорит с её школами.`;
+  draft.text = `Класс под готовую расу «${race}»\n${draft.text}`;
+  draft.forRace = race;
+  return draft;
+}
 
 // A stable seed from the dialogue, so the same request twice in a row gives the
 // same sheet (the player sees one answer, not a slot machine), while a different
@@ -1087,6 +1184,16 @@ function buildDocs(k) {
     if (list.length) add(`spec:${name}`, pick('ru', `Специализации ${name}`, `${name} specializations`), `${name}: ${list.join(', ')}.`, 'class', ['специализация', name]);
   }
   if (classes.class_system) add('class-system', pick('ru', 'Система классов', 'Class system'), classes.class_system, 'class', ['класс', 'система', 'уровни']);
+  if (classes.milestones) {
+    const ms = classes.milestones;
+    add('milestones', pick('ru', 'Вехи и специализации', 'Milestones and specializations'), pick('ru',
+      `Вехи: 20, 30, 40, 50. На 16 уровне игрок выбирает одну из ${ms.specializations_per_class || 3} специализаций класса. `
+        + `Между вехами промежуточные уровни — ${(ms.structure || []).map((s) => `${s.levels} (до ${s.milestone})`).join(', ')} — `
+        + `и на каждом ровно одна способность специализации. Всего ${ms.total_specialization_levels} уровней специализации.`,
+      `Milestones: 20, 30, 40, 50. At level 16 a player picks one of the class's ${ms.specializations_per_class || 3} specializations. `
+        + `Between milestones: ${(ms.structure || []).map((s) => `${s.levels} (to ${s.milestone})`).join(', ')}, one specialization ability each.`
+    ), 'class', ['веха', 'вехи', 'специализация', 'специализации', 'уровни', '16 уровень']);
+  }
   if (classes.class_balance_rules) add('class-rules', pick('ru', 'Правила баланса классов', 'Class balance rules'), classes.class_balance_rules.map((r) => `— ${r}`).join('\n'), 'class', ['класс', 'баланс', 'правила']);
   if ((classes.player_classes || []).length) {
     add('class-players', pick('ru', 'Классы игроков', 'Player classes'), classes.player_classes.map((c) => `${c.name} — ${c.author}${c.url ? ` (${c.url})` : ''}`).join('\n'), 'class', ['классы', 'игроки']);
@@ -1265,8 +1372,8 @@ function interviewerReaction(text, lang) {
 // told when they ask how it works, instead of being asked for a field again.
 function howToMake(lang) {
   return pick(lang,
-    'Расу или класс можно сделать двумя путями. Первый — рассказываешь сам: я задаю по одному вопросу, ты отвечаешь, я собираю анкету. Второй — говоришь «придумай мне расу сам» или «придумай мне класс сам», и я придумываю всё целиком: название, внешность, способности и слабости по правилам баланса. Как хочешь?',
-    'You can get a race or a class two ways. First, you describe it yourself: I ask one question at a time, you answer, I build the sheet. Second, say "make a race for me" or "make a class for me" and I make the whole thing: name, look, powers and weaknesses, all balanced. Which do you want?');
+    'Расу или класс можно сделать двумя путями. Первый — рассказываешь сам: я задаю по одному вопросу, ты отвечаешь, я собираю анкету. Второй — говоришь «придумай мне расу сам» или «придумай мне класс сам», и я придумываю всё целиком: название, внешность, способности и слабости по правилам баланса. А если раса у тебя уже готова — вставь её и скажи «сделай класс под мою расу», я соберу класс под неё. Как хочешь?',
+    'You can get a race or a class two ways. First, you describe it yourself: I ask one question at a time, you answer, I build the sheet. Second, say "make a race for me" or "make a class for me" and I make the whole thing: name, look, powers and weaknesses, all balanced. And if your race is already done — paste it and say "make a class for my race", and I will build a class to match it. Which do you want?');
 }
 
 // The character interview walks the fields of the chat's own template, in order,
@@ -1319,6 +1426,7 @@ function hasFieldText(history, field) {
     'хп': /(?<![а-яёa-z])(хп|hp|здоровь|хитпоинт)/i,
     'базовая атака': /(базовая атака|базов\w*\s*урон|обычная атака|автоатак)/i,
     'ультимейт': /(ультимейт|ульт\b)/i,
+    'специализации и вехи': /(специализац|вех|эволюц|16 уровень)/i,
     'ограничения и слабости': /(ограничен|слабост|минус|недостатк)/i,
     'истощение ресурса': /(истощен|истоща|обнулен)/i
   };
@@ -1369,7 +1477,7 @@ const INTERVIEW_FIELDS = {
   character: ['Имя', 'Раса', 'Класс', 'Характер', 'Внешность', 'Происхождение'],
   story: ['Название сюжета', 'Жанр', 'Завязка', 'Главная проблема', 'Антагонист', 'Локации'],
   race: ['Название', 'Самоназвание', 'Внешность', 'Где живут', 'Чем занимаются', 'Боевые навыки', 'Способности', 'Уязвимости', 'Общественное устройство', 'Магия'],
-  class: ['Название класса', 'Роль', 'Ресурс', 'ХП', 'Базовая атака', 'Способности', 'Ультимейт', 'Ограничения и слабости', 'Истощение ресурса']
+  class: ['Название класса', 'Роль', 'Ресурс', 'ХП', 'Базовая атака', 'Способности', 'Ультимейт', 'Специализации и вехи', 'Ограничения и слабости', 'Истощение ресурса']
 };
 
 const STORY_INTENT = /заявк[а-яё]*\s+на\s+сюжет|предложить\s+сюжет|придума[а-яё]*\s+сюжет|созда[а-яё]*\s+сюжет|мой\s+сюжет|сюжет\s+для\s+гм|new plot|create a plot|propose a plot|название\s+сюжета|завязка|главная\s+проблема|тэглайн|теглайн|крючок/i;
@@ -1398,6 +1506,19 @@ const CLASS_INTENT = new RegExp(
 );
 const CHARACTER_INTENT = /созда[а-яё]*\s+персонаж|хочу\s+персонаж|новый\s+персонаж|new character|create a character/i;
 
+// A ready sheet the player pasted in (for example copied from the blog) carries the
+// template's own field labels. Reading the kind from them lets a pasted race or class
+// be checked against its own rules instead of being mistaken for a character sheet.
+function kindFromSheetText(text) {
+  const s = String(text || '').toLowerCase();
+  const has = (list) => list.filter((w) => s.includes(w)).length;
+  const classHits = has(['название класса', 'базовая атака', 'ультимейт', 'истощение ресурса', 'специализац', 'роль:', 'ресурс:']);
+  const raceHits = has(['самоназвание', 'где живут', 'чем занимаются', 'боевые навыки', 'уязвимост', 'общественное устройство', 'форма правления', 'какой магией']);
+  if (classHits >= 2) return 'class';
+  if (raceHits >= 2) return 'race';
+  return null;
+}
+
 // Which checklist the interview is walking. A plot, a race and a class are recognised
 // by what the player asked for, and remembered in the draft so the walk continues on
 // later turns. An explicit request in the newest message always wins, so a player who
@@ -1411,6 +1532,13 @@ function interviewKind(application = {}, history = []) {
   if (RACE_INTENT.test(lastText)) return 'race';
   if (CLASS_INTENT.test(lastText)) return 'class';
   if (STORY_INTENT.test(lastText)) return 'story';
+  // A pasted ready sheet wins over the remembered kind, so a player can bring an
+  // already-finished race or class and have it checked on the spot. The sheet is not
+  // always the newest message (the check command may follow it), so the last few
+  // player messages are scanned rather than only the last one.
+  const recent = msgs.slice(-4).map((m) => String(m.content || '')).join('\n');
+  const fromSheet = kindFromSheetText(recent);
+  if (fromSheet) return fromSheet;
   if (['race', 'class', 'story', 'character'].includes(app._kind)) return app._kind;
   const text = msgs.map((m) => String(m.content || '')).join('\n');
   if (RACE_INTENT.test(text)) return 'race';
@@ -1521,12 +1649,48 @@ function generatedSheet(history, application = {}, lang = 'ru') {
   const msgs = Array.isArray(history) ? history : [];
   const last = [...msgs].reverse().find((m) => m && m.role !== 'assistant');
   const text = String(last?.content || '');
-  if (!isSelfMade(text)) return null;
+  const hasClassWord = new RegExp(CLASS_WORD, 'i').test(text);
+  const forRace = hasClassWord && isClassForRace(text);
+  if (!isSelfMade(text) && !forRace) return null;
+  const seed = seedFrom(msgs);
+  // A class for an already-made race: the player names the race, so the class is
+  // tied to it instead of being a free-floating kit. Checked first because such a
+  // request names both a race and a class.
+  if (forRace) return generateClassForRace(lang, seed, raceNameFor(text, application, msgs));
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
   if (!wantsRace && !wantsClass) return null;
-  const seed = seedFrom(msgs);
-  return wantsRace ? generateRace(lang, seed) : generateClass(lang, seed);
+  return wantsRace && !wantsClass ? generateRace(lang, seed) : generateClass(lang, seed);
+}
+
+// "Класс под готовую расу X", "сделай класс для расы X", "класс по расе X". A class
+// requested together with a race is a different request from a free-standing class.
+function isClassForRace(text) {
+  const s = String(text || '');
+  return /класс[а-яё]{0,3}\s*(?:под|для|по)\s*(?:(?:готов[а-яё]*|мою|свою|эту|ту)\s+)?рас|рас[а-яё]{0,3}\s*(?:под|для)\s*класс|class\s+(?:for|to)\s+(?:the\s+|my\s+)?race/i.test(s);
+}
+
+// The race the class is built for. The newest message wins, then a ready race the
+// player pasted in (the "Название" line of a race sheet), then the draft the race
+// interview left behind, then any race named in the dialogue.
+function raceNameFor(text, application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  const quoted = String(text || '').match(/[«"']([^»"']{2,60})[»"']/);
+  if (quoted) return quoted[1].trim();
+  // A pasted race sheet carries its own "Название: X" line. The lookbehind keeps
+  // "Самоназвание: X" from being read as the race name.
+  const labelled = String(text || '').match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)/i);
+  if (labelled) return labelled[1].trim().split(/[.\n]/)[0].slice(0, 60);
+  const named = String(text || '').match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+  if (named) return named[1].trim();
+  for (const key of ['Название', 'Название расы']) {
+    if (typeof app[key] === 'string' && app[key].trim()) return app[key].trim();
+  }
+  const msgs = Array.isArray(history) ? history : [];
+  const mentioned = msgs.filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || '')).join('\n')
+    .match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)|(?<![а-яё])(?:расу|расы|раса|расе)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/i);
+  return mentioned ? String(mentioned[1] || mentioned[2] || '').trim().split(/[.\n]/)[0].slice(0, 60) : '';
 }
 
 function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {

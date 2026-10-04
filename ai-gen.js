@@ -364,12 +364,89 @@ function classAbilityLines(t) {
   });
 }
 
+// The levels between the milestones. At level 16 a class picks one of three
+// specializations, and every level below grants exactly one ability of that
+// specialization. The list is fixed by the owner: 16-19, 21-29, 31-39, 41-49.
+const SPECIALIZATION_LEVELS = [16, 17, 18, 19, ...Array.from({ length: 9 }, (_, i) => 21 + i),
+  ...Array.from({ length: 9 }, (_, i) => 31 + i), ...Array.from({ length: 9 }, (_, i) => 41 + i)];
+
+// Which of the three directions a specialization leans to, read from its own
+// wording so the generated abilities match the name rather than an index.
+function specRole(focus) {
+  const f = String(focus || '').toLowerCase();
+  if (/(леч|исцел|поддерж|союзник|щит|защищ|броня|брон)/.test(f)) return 'guard';
+  if (/(бьёт|бьет|урон|неудержим|убийц|разруш|гнев|клинок|режет)/.test(f)) return 'blade';
+  return 'craft';
+}
+
+// One ability per level. The numbers grow with the level and stay inside the class
+// balance rules: the last specialization ability is about as strong as the level-15
+// ultimate, and nothing reaches the ultimate-2 ceiling of 60.
+function specAbility(specName, role, level, index) {
+  const step = level - 16;
+  const cost = Math.min(50, 15 + Math.round(step * 1.15));
+  const cd = Math.min(8, 3 + Math.round(step / 5));
+  if (role === 'guard') {
+    const shield = 25 + step;
+    const heal = 20 + step;
+    const variants = [
+      `щит на ${shield} урона союзнику`,
+      `восстанавливает ${heal} ХП союзнику и себе`,
+      `снимает оглушение и страх с союзника`,
+      `+${5 + Math.round(step / 3)} к защите всем рядом на 2 хода`
+    ];
+    return { name: `${specName}: опора ${index + 1}`, effect: variants[index % variants.length] };
+  }
+  if (role === 'blade') {
+    const dmg = Math.min(55, 22 + step);
+    const variants = [
+      `${dmg} урона одной цели`,
+      `${dmg} урона по области и −${2 + Math.round(step / 10)} к защите врагов`,
+      `${dmg} урона цели; при её смерти способность готова снова`,
+      `${dmg} урона и −${2 + Math.round(step / 12)} к скорости цели до конца боя`
+    ];
+    return { name: `${specName}: натиск ${index + 1}`, effect: variants[index % variants.length] };
+  }
+  const dmg = Math.min(48, 20 + step);
+  const variants = [
+    `${dmg} урона и −2 к точности врагов на 2 хода`,
+    `${dmg} урона по области и замедление врагов`,
+    `щит на ${18 + step} урона союзнику и ${Math.round(dmg / 2)} урона рядом`,
+    `отражает ${20 + step} урона тому, кто бьёт в упор, 2 хода`
+  ];
+  return { name: `${specName}: приём ${index + 1}`, effect: variants[index % variants.length] };
+}
+
+// The three specializations a class offers at level 16, each with one ability on
+// every level between the milestones.
+function specializationLines(t) {
+  const specs = t.evolutions.map((evo) => {
+    const [name, ...rest] = String(evo).split('—');
+    return { name: name.trim(), focus: rest.join('—').trim() };
+  });
+  const out = [];
+  for (const spec of specs) {
+    const role = specRole(spec.focus);
+    out.push(`Специализация «${spec.name}» — ${spec.focus}`);
+    SPECIALIZATION_LEVELS.forEach((level, i) => {
+      const a = specAbility(spec.name, role, level, i);
+      const cost = Math.min(50, 15 + Math.round((level - 16) * 1.15));
+      const cd = Math.min(8, 3 + Math.round((level - 16) / 5));
+      out.push(`  Ур. ${level}: ${a.name} — ${a.effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`);
+    });
+  }
+  return out;
+}
+
 function classDraft(lang, seed) {
   const t = CLASS_THEMES[seed % CLASS_THEMES.length];
   const name = t.names[(seed >>> 5) % t.names.length];
   const abilities = classAbilityLines(t).join('\n');
   const [u1n, u1cd, u1cost, u1e] = t.ult1;
   const [u2n, u2cd, u2cost, u2e] = t.ult2;
+  const specs = specializationLines(t).join('\n');
+  const specIntro = `Специализации (выбор на 16 уровне): 3 на класс. На каждом промежуточном уровне `
+    + `(16–19, 21–29, 31–39, 41–49) — ровно одна способность специализации.`;
   const lines = [
     `Название класса: ${name}`,
     `Роль: ${t.role}`,
@@ -380,7 +457,8 @@ function classDraft(lang, seed) {
     abilities,
     `Ультимейт (10 уровень): ${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
     `Ультимейт 2 (15 уровень): ${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
-    `Эволюции (после 15): ${t.evolutions.join('; ')}`,
+    specIntro,
+    specs,
     `Ограничения: ${t.limits}`,
     `Слабости: ${t.weak}`,
     `Истощение ресурса: ${t.exhaust}`
@@ -403,7 +481,7 @@ function classDraft(lang, seed) {
       'Способности': abilityText,
       'Ультимейт': `${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
       'Ультимейт 2': `${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
-      'Эволюции': t.evolutions.join('; '),
+      'Специализации и вехи': `${specIntro}\n${specs}`,
       'Ограничения и слабости': `${t.limits}; ${t.weak}`,
       'Истощение ресурса': t.exhaust
     },
@@ -413,6 +491,20 @@ function classDraft(lang, seed) {
 
 export function generateRace(lang, seed) { return raceDraft(lang, seed); }
 export function generateClass(lang, seed) { return classDraft(lang, seed); }
+
+// A class built for an existing, ready race. The player hands over a race they
+// already made (or a base race) and asks for a class to match it, so the kit keeps
+// the standard balance but is tied to that race by name and a compatibility line.
+export function generateClassForRace(lang, seed, raceName) {
+  const draft = classDraft(lang, seed);
+  const race = String(raceName || '').trim();
+  if (!race) return draft;
+  draft.app['Под расу'] = race;
+  draft.app['Совместимость с расой'] = `Класс создан под готовую расу «${race}»: его ресурс и способности опираются на её природу, а магия класса не спорит с её школами.`;
+  draft.text = `Класс под готовую расу «${race}»\n${draft.text}`;
+  draft.forRace = race;
+  return draft;
+}
 
 // A stable seed from the dialogue, so the same request twice in a row gives the
 // same sheet (the player sees one answer, not a slot machine), while a different
