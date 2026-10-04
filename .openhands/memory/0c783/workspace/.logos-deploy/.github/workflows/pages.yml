@@ -1,0 +1,49 @@
+name: Публикация на GitHub Pages
+
+# Сайт «Логос» — статическая сборка. Источник Pages — ветка gh-pages,
+# поэтому workflow пересобирает сайт из data/content.json и публикует
+# результат туда. Так контент и сайт не расходятся.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Зависимости
+        run: pip install -r requirements.txt
+
+      - name: Проверки приложения
+        run: python test_app.py
+
+      - name: Пересобрать статическую версию
+        run: python tools/build_static.py
+
+      - name: Опубликовать в ветку gh-pages
+        run: |
+          cd docs
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Пересборка сайта из ${GITHUB_SHA::7}"
+          git push -q -f \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

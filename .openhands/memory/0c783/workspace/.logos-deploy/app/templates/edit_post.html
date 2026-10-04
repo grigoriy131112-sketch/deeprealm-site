@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Правка: {{ post['title'] }} — Логос{% endblock %}
+
+{% block content %}
+<section class="editor">
+  <a class="back" href="{{ url_for('blog.post', post_id=post['id']) }}">← К публикации</a>
+  <h1>Правка публикации</h1>
+  <p class="lede">Измените текст и сохраните — дата правки обновится.</p>
+
+  <form method="post" class="editor-form">
+    <label>
+      <span>Заголовок</span>
+      <input type="text" name="title" value="{{ form.title }}" required
+             minlength="3" maxlength="160">
+    </label>
+
+    <div class="row">
+      <label>
+        <span>Автор</span>
+        <input type="text" name="author" value="{{ form.author }}" maxlength="60">
+      </label>
+      <label>
+        <span>Темы <em class="muted">(через запятую)</em></span>
+        <input type="text" name="tags" value="{{ form.tags }}" maxlength="200">
+      </label>
+    </div>
+
+    <label>
+      <span>Краткое описание <em class="muted">(необязательно)</em></span>
+      <input type="text" name="summary" value="{{ form.summary }}" maxlength="220">
+    </label>
+
+    <label>
+      <span>Текст публикации</span>
+      <textarea name="body" rows="14" required minlength="10"
+                maxlength="20000">{{ form.body }}</textarea>
+    </label>
+
+    <div class="editor-actions">
+      <button class="btn btn-primary" type="submit">Сохранить изменения</button>
+      <a class="btn btn-ghost" href="{{ url_for('blog.post', post_id=post['id']) }}">Отмена</a>
+    </div>
+  </form>
+
+  <form method="post" action="{{ url_for('blog.delete_post', post_id=post['id']) }}"
+        class="delete-form" data-confirm="Удалить публикацию «{{ post['title'] }}»? Это действие необратимо.">
+    <button class="btn btn-danger" type="submit">Удалить публикацию</button>
+  </form>
+</section>
+{% endblock %}
