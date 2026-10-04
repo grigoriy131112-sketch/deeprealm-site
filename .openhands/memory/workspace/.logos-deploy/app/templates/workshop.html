@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Мастерская — Логос{% endblock %}
+
+{% block content %}
+<section class="workshop" id="workshop"
+         data-can-publish="{{ 'true' if can_publish else 'false' }}"
+         data-publish-url="{{ url_for('blog.new_post') }}">
+  <p class="eyebrow">Личное</p>
+  <h1>Моя мастерская</h1>
+  <p class="lede">
+    Здесь ваши мысли: псевдоним, тексты и правки. Регистрация не нужна —
+    профиль живёт в этом браузере и никуда не отправляется.
+  </p>
+
+  <noscript>
+    <p class="flash flash-error">
+      Для мастерской нужен JavaScript: тексты хранятся в браузере.
+    </p>
+  </noscript>
+
+  <div class="panel ws-setup" id="ws-setup" hidden>
+    <h2>Придумайте псевдоним</h2>
+    <p class="muted">По нему вас увидят читатели. Настоящее имя не нужно.</p>
+    <form class="ws-form" id="ws-setup-form">
+      <label>
+        <span>Псевдоним</span>
+        <input type="text" name="nick" maxlength="60" required
+               placeholder="Например: Ночной читатель">
+      </label>
+      <label>
+        <span>Пара слов о себе <em class="muted">(необязательно)</em></span>
+        <input type="text" name="about" maxlength="120" placeholder="О чём вы пишете">
+      </label>
+      <button class="btn btn-primary" type="submit">Создать профиль</button>
+    </form>
+  </div>
+
+  <div class="panel ws-profile" id="ws-profile" hidden>
+    <div class="ws-head">
+      <div class="ws-identity">
+        <span class="author-avatar" id="ws-avatar">?</span>
+        <div>
+          <div class="ws-nick" id="ws-nick"></div>
+          <div class="muted" id="ws-about"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost" type="button" id="ws-edit-profile">Изменить профиль</button>
+    </div>
+
+    <dl class="stats ws-stats">
+      <div><dt id="ws-stat-posts">0</dt><dd>мыслей</dd></div>
+      <div><dt id="ws-stat-tags">0</dt><dd>тем</dd></div>
+      <div><dt id="ws-stat-min">0</dt><dd>минут чтения</dd></div>
+    </dl>
+
+    <form class="ws-form" id="ws-profile-form" hidden>
+      <label><span>Псевдоним</span>
+        <input type="text" name="nick" maxlength="60" required></label>
+      <label><span>О себе</span>
+        <input type="text" name="about" maxlength="120"></label>
+      <div class="ws-actions">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <button class="btn btn-ghost" type="button" id="ws-profile-cancel">Отмена</button>
+      </div>
+    </form>
+
+    <div class="ws-actions">
+      <button class="btn btn-primary" type="button" id="ws-new">Написать мысль</button>
+      <button class="btn btn-ghost" type="button" id="ws-export">Сохранить копию</button>
+      <label class="btn btn-ghost ws-import">
+        Загрузить копию
+        <input type="file" id="ws-import" accept="application/json,.json" hidden>
+      </label>
+    </div>
+  </div>
+
+  <div class="panel ws-editor" id="ws-editor" hidden>
+    <h2 id="ws-editor-title">Новая мысль</h2>
+    <form class="ws-form" id="ws-form">
+      <label><span>Заголовок</span>
+        <input type="text" name="title" maxlength="160" required minlength="3"
+               placeholder="О чём эта мысль?">
+      </label>
+      <label><span>Темы <em class="muted">(через запятую)</em></span>
+        <input type="text" name="tags" maxlength="200" placeholder="философия, книги">
+      </label>
+      <label><span>Краткое описание <em class="muted">(необязательно)</em></span>
+        <input type="text" name="summary" maxlength="220" placeholder="Одно предложение">
+      </label>
+      <label><span>Текст</span>
+        <textarea name="body" rows="10" maxlength="20000" required minlength="10"
+                  placeholder="Пишите свободно. **Жирный**, *курсив*, # заголовки — всё работает."></textarea>
+      </label>
+      <div class="ws-actions">
+        <button class="btn btn-primary" type="submit">Сохранить мысль</button>
+        <button class="btn btn-ghost" type="button" id="ws-cancel">Отмена</button>
+      </div>
+    </form>
+  </div>
+
+  <section class="ws-thoughts">
+    <div class="feed-head">
+      <h2>Мои мысли</h2>
+      <span class="muted" id="ws-thoughts-count"></span>
+    </div>
+    <ul class="post-list" id="ws-list"></ul>
+    <p class="empty" id="ws-empty" hidden>Пока ни одной мысли. Начните с первой.</p>
+  </section>
+
+  <p class="muted ws-note">
+    Мысли хранятся в этом браузере: их видите только вы. Кнопка «Сохранить
+    копию» выгружает их в файл — так текст не потеряется при очистке данных
+    браузера или переустановке системы.
+  </p>
+</section>
+{% endblock %}

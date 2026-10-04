@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1280px; height:720px; }
+  body { font-family:"DejaVu Sans",sans-serif; background:#0b1020; color:#fff; overflow:hidden; position:relative; }
+  .glow1,.glow2,.glow3 { position:absolute; border-radius:50%; filter:blur(95px); }
+  .glow1 { width:660px; height:660px; background:#5b3cff; opacity:.58; top:-250px; left:-180px; }
+  .glow2 { width:580px; height:580px; background:#00d4b8; opacity:.36; bottom:-260px; right:-140px; }
+  .glow3 { width:360px; height:360px; background:#ff4d8d; opacity:.22; top:300px; right:300px; }
+  .grid { position:absolute; inset:0;
+    background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
+    background-size:64px 64px;
+    -webkit-mask-image:radial-gradient(circle at 32% 42%,#000 0%,transparent 76%);
+    mask-image:radial-gradient(circle at 32% 42%,#000 0%,transparent 76%); }
+  .wrap { position:relative; z-index:5; padding:70px 84px; height:100%;
+    display:flex; flex-direction:column; justify-content:center; }
+  .badge { display:inline-flex; align-items:center; gap:12px; align-self:flex-start;
+    padding:11px 24px; border:1px solid rgba(255,255,255,.22); background:rgba(255,255,255,.06);
+    border-radius:100px; font-size:21px; color:#d7dcff; margin-bottom:30px; }
+  .dot { width:12px; height:12px; border-radius:50%; background:#00e6a8; box-shadow:0 0 16px #00e6a8; }
+  h1 { font-size:104px; line-height:1.0; font-weight:700; letter-spacing:-3px; margin-bottom:18px; }
+  .grad { background:linear-gradient(100deg,#7c6bff 0%,#00d4b8 58%,#ffd166 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .sub { font-size:29px; line-height:1.42; color:#b7bedd; max-width:900px; margin-bottom:40px; }
+  .chips { display:flex; flex-wrap:wrap; gap:14px; max-width:1000px; }
+  .chip { font-size:21px; color:#e8ebff; padding:13px 24px; border-radius:13px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.13); }
+  .foot { position:absolute; bottom:48px; left:84px; right:84px; display:flex;
+    align-items:center; justify-content:space-between; font-size:22px; color:#9aa2c6; }
+  .foot b { color:#eef0ff; }
+</style>
+</head>
+<body>
+  <div class="glow1"></div><div class="glow2"></div><div class="glow3"></div>
+  <div class="grid"></div>
+
+  <div class="wrap">
+    <div class="badge"><span class="dot"></span>Сайты на заказ</div>
+    <h1>Нужен <span class="grad">сайт</span>?<br>Сделаю.</h1>
+    <div class="sub">От визитки до магазина. Для бизнеса и для себя — аккуратно, быстро и по делу.</div>
+    <div class="chips">
+      <div class="chip">Лендинг</div>
+      <div class="chip">Визитка</div>
+      <div class="chip">Портфолио</div>
+      <div class="chip">Блог</div>
+      <div class="chip">Магазин</div>
+      <div class="chip">Приглашение</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>Заполните бриф за 2 минуты</span>
+    <span><b>Пишите в личку</b></span>
+  </div>
+</body>
+</html>
