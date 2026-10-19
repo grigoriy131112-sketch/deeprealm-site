@@ -290,6 +290,15 @@ permission is missing. Probe that way before starting any long operation.
   matches, and the idea is quoted as an `Идея игрока` line in the sheet and the
   draft. A bare "хочу расу" has no nature word, so it still opens the walk, now
   with an added "опиши идею одной фразой" hint.
+- The player can revise the sheet mid-walk (added 2026-10-19). "Давай поменяем
+  название на «лёд»" used to fall into the generic reaction, so the bot answered
+  "Хороший вопрос" and asked the next field — the edit was silently dropped, the
+  "он не слушает игрока" complaint again. `parseFieldEdit` (exported from
+  `ai-engine.js`) reads the edit verb, the field alias and the new value, the
+  `localInterview` branch confirms it ("Записал: Название → «лёд»"), and
+  `answerInterview` stores the value in the draft, so the next "проверь" hands off
+  the renamed sheet. The preposition must sit right after the field name, so an
+  ordinary answer that merely mentions a place is not mistaken for a revision.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

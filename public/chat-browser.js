@@ -127,6 +127,7 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Регистратор чата D
 9. Ты не сохраняешь ничего в базах и не запускаешь игру. Твоё финальное действие — резюме заявки, которую сайт передаёт владельцу.
 10. Если анкета расы или класса заполнена и нарушений баланса нет — подведи короткое резюме и заверши: сайт сам отправит её владельцу. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали. Никаких вопросов после готовой заявки.
 11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце собираешь заявку. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
+11д. ПРАВКИ АНКЕТЫ. Если игрок просит что-то поменять — «давай поменяем название на «Лёд»», «переименуй расу», «смени внешность», «поменяй уязвимости» — ты не отвечаешь «хороший вопрос» и не спрашиваешь дальше то же самое. Прими правку, коротко подтверди («Записал: Название → «Лёд»») и продолжай. Никогда не пропускай изменение, которое игрок прямо назвал.
 11г. ИДЕЯ ИГРОКА ГЛАВНЕЕ ТВОЕЙ. Если игрок уже назвал задумку — «полулюди-полунежить», «ледяные, что живут в горах», «раса кузнецов-изгнанников» — ты ОБЯЗАН строить расу вокруг неё, а не начинать с чистого листа и не спрашивать заново то, что он уже сказал. Повтори идею его словами и задавай только те вопросы, которые её уточняют. Если он просит «сделай такую» — собери расу по его описанию сразу и выведи готовую анкету.
 11а. Если игрок просит придумать расу или класс ЗА НЕГО ("создай сам", "придумай за меня", "сделай сам") — не задавай вопросов и не отказывайся: придумай расу или класс целиком и сразу, по правилам баланса, со способностями и слабостями, и выведи готовую анкету. Встроенный движок уже умеет это и без тебя; если ты пишешь ответ сам, сделай то же самое.
 11б. ГОТОВЫЕ АНКЕТЫ. Игрок может прислать уже заполненную анкету расы или класса (например, вставил текст из блога) и попросить принять её. Не заставляй его заполнять заново: прими присланный текст как черновик и подведи короткое резюме. Если игрок просит создать класс по уже готовой расе — собери класс под названную расу, указав "Под расу: <название>" и строку совместимости с её природой.
@@ -1824,6 +1825,79 @@ function interviewMinFields(kind) {
   return KIND_MIN_FIELDS[kind] || INTERVIEW_MIN_FIELDS;
 }
 
+// ------------------------------------------------------------- field edits
+
+// Players revise the sheet as they go ("давай поменяем название на «лёд»",
+// "переименуй расу в Морозники", "смени внешность на бледную"). Without a handler
+// the request fell into the generic reaction, the bot answered "Хороший вопрос" and
+// asked the next field, so the edit was silently dropped - the "он не слушает
+// игрока" complaint again. This recognises the edit, names the field and the new
+// value, and the caller stores it in the draft.
+const EDIT_VERB = /(помен|измен|смен|замен|переимен|назов|исправ|поправ|передела|запиш)/i;
+
+function fieldAlias(field) {
+  const f = String(field || '').toLowerCase();
+  if (f === 'название') return /(?<![а-яё])название(?![а-яё])/i;
+  if (f === 'самоназвание') return /самоназвание/i;
+  if (f === 'название класса') return /название\s+класса/i;
+  if (f === 'название сюжета') return /название\s+сюжета/i;
+  if (f === 'имя') return /(?<![а-яё])имя(?![а-яё])|зовут/i;
+  if (f === 'внешность' || f === 'особенности внешности') return /внешност/i;
+  if (f === 'где живут') return /(где\s+живут|место\s+обитан|обитан|ареал)/i;
+  if (f === 'чем занимаются') return /(чем\s+занимаются|занят|деятельност|ремесл|промысел)/i;
+  if (f === 'боевые навыки') return /(боев\w*\s+навык|боев)/i;
+  if (f === 'способности') return /способност/i;
+  if (f === 'уязвимости' || f === 'ограничения и слабости') return /(уязвим|слабост|ограничен)/i;
+  if (f === 'общественное устройство') return /(общественн\w*\s+устройств|устройств|иерарх|социум)/i;
+  if (f === 'магия') return /маги/i;
+  if (f === 'роль') return /(?<![а-яё])роль(?![а-яё])/i;
+  if (f === 'ресурс') return /ресурс/i;
+  if (f === 'ультимейт') return /ультимейт|ульт(?![а-яё])/i;
+  return null;
+}
+
+function implicitFieldName(kind) {
+  if (kind === 'class') return 'Название класса';
+  if (kind === 'story') return 'Название сюжета';
+  if (kind === 'character') return 'Имя';
+  return 'Название';
+}
+
+// The new value after the field name: the quoted part if there is one ("на «лёд»"),
+// otherwise what follows a preposition or dash ("на Морозники", "— Морозники").
+// The preposition must sit just after the field name, so an ordinary answer that
+// merely mentions a place ("название, живут в горах") is not read as a new value.
+function editValueAfter(text, from) {
+  const rest = String(text || '').slice(Math.max(0, from), from + 140);
+  const quoted = rest.match(/[«"']([^»"']{1,120})[»"']/);
+  if (quoted) return quoted[1].trim();
+  const after = rest.match(/(?:^|\s)(?:на|в|—|–|-|:)\s*(.+?)\s*[?.!]*$/i);
+  if (after && after.index <= 24) return after[1].trim().slice(0, 120);
+  return '';
+}
+
+// The field the player wants to change and the value they want, or null. Only a
+// real edit verb counts, so a plain answer ("Название: Тени") is not mistaken for
+// a revision.
+function parseFieldEdit(text, application = {}) {
+  const s = String(text || '').trim();
+  if (!s || !EDIT_VERB.test(s)) return null;
+  const kind = interviewKind(application, []);
+  const fields = INTERVIEW_FIELDS[kind] || INTERVIEW_FIELDS.character;
+  for (const field of fields) {
+    const alias = fieldAlias(field);
+    if (!alias) continue;
+    const m = s.match(alias);
+    if (!m) continue;
+    const value = editValueAfter(s, m.index + m[0].length);
+    if (value) return { field, value };
+  }
+  // No field named but a value given ("переименуй расу в «Лёд»"): the name is meant.
+  const value = editValueAfter(s, 0);
+  if (value) return { field: implicitFieldName(kind), value };
+  return null;
+}
+
 // Whether the sheet is complete enough to be handed to the owner. Exported so the
 // caller can decide to send without re-deriving the rule, and so the decision does
 // not depend on the model's wording: the site no longer judges the sheet, it only
@@ -2010,6 +2084,17 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
     return pick(lang,
       'Привет. Я Регистратор Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
       'Hi. I am the Deeprealm Registrar. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
+  }
+  // The player revises the sheet ("давай поменяем название на «лёд»"). This is
+  // checked before the generic reaction, so the change is stored and confirmed
+  // instead of being answered with "Хороший вопрос" and dropped.
+  const edit = parseFieldEdit(text, app);
+  if (edit) {
+    const note = pick(lang,
+      `Записал: ${edit.field} → «${edit.value}».`,
+      `Noted: ${edit.field} → "${edit.value}".`);
+    const kind = interviewKind(app, history);
+    return [note, nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
   }
   // Otherwise react to what was just said, then ask for the next thing. The
   // reaction is what makes the walk feel like a conversation instead of a form.
@@ -2718,7 +2803,12 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   // the generated sheet would be shown but never stored, and the check would find
   // an empty draft.
   const made = generatedSheet(history, appState, lang);
-  const nextApp = made ? { ...appState, ...made.app, _kind: made.kind } : { ...appState, _kind: kind };
+  // A revision of the sheet ("давай поменяем название на «лёд»") is stored in the
+  // draft, so the change the player asked for survives into the hand-off. It is
+  // applied before the nextApp is built, and the reply is the engine's own wording.
+  const edit = made ? null : parseFieldEdit(lastUserText(history), appState);
+  const baseApp = edit ? { ...appState, [edit.field]: edit.value } : appState;
+  const nextApp = made ? { ...appState, ...made.app, _kind: made.kind } : { ...baseApp, _kind: kind };
   // A caller-supplied notifier wins; otherwise the shared one is used, so the
   // browser bundle sends notifications without the page having to pass anything.
   const send = typeof notify === 'function' ? notify : notifierFn;

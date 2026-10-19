@@ -12,7 +12,7 @@ import {
   STAFF_MAX_QUESTIONS, setSheetDetector
 } from '../chat-core.js';
 import { setNotifier, answerInterview, answerStaff, setLiveCaller, answerGuide } from '../chat-answers.js';
-import { localInterview } from '../ai-engine.js';
+import { localInterview, parseFieldEdit } from '../ai-engine.js';
 import { detectSheetKind } from '../publish.js';
 
 // These tests run against the real knowledge base, so the reply texts and the
@@ -585,6 +585,41 @@ test('the interviewer offers to finish the sheet itself partway through', () => 
   // And the offer leads straight to a generated sheet.
   history.push({ role: 'assistant', content: reply }, { role: 'user', content: 'придумай мне рассу сам' });
   assert.match(localInterview({ messages: history, lang: 'ru', application: app }), /Готово/);
+});
+
+test('a rename request changes the sheet instead of being ignored', async () => {
+  // The owner's exact complaint: "Давай поменяем название на «лёд»?" was answered
+  // with "Хороший вопрос" and the next field, so nothing changed. The edit must be
+  // stored and confirmed.
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const app = {
+    _kind: 'race', 'Название': 'Костяные', 'Самоназвание': 'Сухие', 'Внешность': 'сухая кожа',
+    'Где живут': 'склепы', 'Чем занимаются': 'охраняют могилы', 'Боевые навыки': 'медленно',
+    'Способности': 'шёпот мёртвых', 'Уязвимости': 'свет; серебро'
+  };
+  const messages = [{ role: 'user', content: 'Давай поменяем название на «лёд»?' }];
+  const first = await answerInterview({ messages, lang: 'ru', application: app });
+  assert.match(first.reply, /Записал: Название → «лёд»/, 'the rename is confirmed');
+  assert.doesNotMatch(first.reply, /Хороший вопрос/, 'not the generic non-answer');
+  assert.equal(first.application['Название'], 'лёд', 'the new name is stored in the draft');
+
+  messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
+  const second = await answerInterview({ messages, lang: 'ru', application: first.application });
+  assert.match(second.reply, /передан[а]? владельцу/, 'the renamed sheet is handed off');
+  assert.equal(sent[0].title, 'лёд', 'the owner receives the renamed sheet');
+  setNotifier(null);
+});
+
+test('a field edit names the field and the value, and leaves answers alone', () => {
+  const race = { _kind: 'race', 'Название': 'Костяные' };
+  assert.deepEqual(parseFieldEdit('переименуй расу в Морозники', race), { field: 'Название', value: 'Морозники' });
+  assert.deepEqual(parseFieldEdit('смени внешность на бледную кожу', race), { field: 'Внешность', value: 'бледную кожу' });
+  assert.deepEqual(parseFieldEdit('поменяй уязвимости на огонь и соль', race), { field: 'Уязвимости', value: 'огонь и соль' });
+  // A plain answer or a question is not a revision.
+  assert.equal(parseFieldEdit('Название: Тени', race), null);
+  assert.equal(parseFieldEdit('а какая магия им подойдёт?', race), null);
+  assert.equal(parseFieldEdit('Они живут на севере и охотятся на льду', race), null);
 });
 
 test('a race idea the player brings is built around that idea, not ignored', () => {
