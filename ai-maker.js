@@ -48,6 +48,13 @@ export function keepsEssentials(candidate, local) {
   if (/ОДОБРЕНО|РЕКОМЕНДОВАН/i.test(base) && !/ОДОБРЕНО|РЕКОМЕНДОВАН/i.test(got)) return false;
   // The owner forbids markdown in the chats; a rewrite that adds it is rejected.
   if (/[*#`]/.test(got.replace(/https?:\/\/\S+/g, ''))) return false;
+  // A rewrite must not invent a new question. The engine asks one field at a time,
+  // and a closing answer ("Анкета передана владельцу") has no question at all;
+  // when the rewrite appends one, the player sees "it approved me and then asked
+  // something else" - the exact "он опять спрашивает" complaint. So a question in
+  // the rewrite that the engine did not ask is a reason to keep the engine's text.
+  const askCount = (s) => (String(s).match(/\?/g) || []).length;
+  if (askCount(got) > askCount(base)) return false;
   return true;
 }
 

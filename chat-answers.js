@@ -2,11 +2,11 @@
 // run the very same rules when no server is reachable. Only the model call is
 // injected, because that differs per environment.
 import {
-  withEnd, stripMarkdown, finaleText, isEndCommand, approvedWithSheet, handoffText,
+  withEnd, stripMarkdown, finaleText, isEndCommand, handoffText,
   sentToOwnerText, applicationTitle, staffAnswerPairs, detectSheet,
   staffTurn, matchActivityFaq, GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM
 } from './chat-core.js';
-import { localGuide, localInterview, localStaff, interviewKind, generatedSheet } from './ai-engine.js';
+import { localGuide, localInterview, localStaff, interviewKind, generatedSheet, interviewReady, isCheckCommand } from './ai-engine.js';
 import { keepsEssentials } from './ai-maker.js';
 
 let modelCaller = null;
@@ -121,12 +121,13 @@ function liveMessages(history, local, options) {
   const rules = [
     'Ты — голос ИИ-помощника тёмного фэнтези-РП чата Deeprealm.',
     options.role === 'interview'
-      ? 'Ты Анкетолог: помогаешь собрать и проверить анкету персонажа, расы или класса.'
+      ? 'Ты Регистратор: помогаешь собрать анкету персонажа, расы или класса и передаёшь готовую заявку владельцу.'
       : options.role === 'staff'
-        ? 'Ты Анкетолог по кандидатам в команду: собеседуешь и задаёшь вопросы по одному.'
+        ? 'Ты Регистратор по кандидатам в команду: собеседуешь и задаёшь вопросы по одному.'
         : 'Ты Проводник: справочный гид по чату — правила, лор, расы, классы, пасс уровней, администрация, как вступить.',
     'Перепиши готовый ответ своими словами, живо и по-дружески. Обращайся к собеседнику на «ты».',
     'Сохрани ВСЕ факты, числа, названия, ссылки и концовку. Ничего не выдумывай и не добавляй от себя.',
+    'Если в готовом ответе нет вопроса — не заканчивай свой ответ вопросом. Игрок не должен видеть новый вопрос, которого не было.',
     'Не используй звёздочки, решётки, обратные кавычки и таблицы. Списки — только тире.',
     'Ответ должен заканчиваться словом «конец».',
     'Длина — примерно как у исходного ответа. Не добавляй вопросов и предложений, которых не было.'
@@ -159,7 +160,7 @@ export async function answerGuide({ messages = [], lang = 'ru', onLive = null } 
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-export async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
+export async function answerInterview({ messages = [], lang = 'ru', application = {}, nick = '', notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // The checklist the walk is on is remembered in the draft, so a race or class
@@ -167,7 +168,7 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // to the character one once the opening request is no longer the newest message.
   const kind = interviewKind(appState, history);
   // A self-authored race or class arrives as a finished sheet, so its fields join
-  // the draft and the very next "проверь" can approve and forward it. Without this
+  // the draft and the very next "проверь" can accept and forward it. Without this
   // the generated sheet would be shown but never stored, and the check would find
   // an empty draft.
   const made = generatedSheet(history, appState, lang);
@@ -201,16 +202,20 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   const by = asked.by;
   const livePending = asked.livePending;
   const clean = raw;
-  // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
-  // so the destination and the owner's username are never paraphrased.
-  const approved = approvedWithSheet(clean, history, nextApp);
+  // The sheet is handed to the owner on an explicit "проверь", and only when the
+  // sheet is actually filled in. The site does not judge it any more, so this is a
+  // readiness check, not an approval: a false "ОДОБРЕНО" would be a verdict nobody
+  // gave, and sending a half-empty sheet would waste the owner's time.
+  const wantsSend = isCheckCommand(lastUserText(history)) && !made;
+  const ready = wantsSend && interviewReady(nextApp, history);
   let delivered = false;
   let sheetKind = null;
-  if (approved) {
+  if (ready) {
     sheetKind = detectSheet(history, nextApp) || kind;
     if (typeof send === 'function') {
       const result = await deliverWithin(send, {
         kind: sheetKind,
+        nick: cleanNick(nick),
         title: applicationTitle(nextApp, sheetKind, history),
         text: sheetText(history, nextApp),
         lang
@@ -221,17 +226,26 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // The player is told the sheet went to the owner. When delivery failed the line
   // says so and repeats the owner's contact, so an application is never lost to a
   // silent failure.
-  const closing = approved ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
-  const handoff = handoffText('interview', lang, { approved, kind: sheetKind });
-  decorate = (body) => withEnd(approved ? `${body}\n\n${closing}\n\n${handoff}` : body);
+  const closing = ready ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
+  const handoff = ready ? handoffText('interview', lang, { approved: false, kind: sheetKind }) : '';
+  decorate = (body) => withEnd(ready ? `${body}\n\n${closing}\n\n${handoff}` : body);
   return {
     reply: decorate(clean),
     application: nextApp,
     delivered,
     source: by,
     livePending: Boolean(livePending),
-    finale: approved
+    finale: ready
   };
+}
+
+// The nick is a Telegram handle the player typed once. It is normalised to a single
+// @handle and capped, so nothing else a player typed can ride into the owner's
+// notification, and it is dropped entirely when it is not a valid handle.
+export function cleanNick(nick) {
+  const raw = String(nick || '').trim();
+  const match = raw.match(/@?([A-Za-z0-9_]{5,32})/);
+  return match ? `@${match[1]}` : '';
 }
 
 // The full sheet as plain text for the owner: the collected draft first, then the
@@ -252,7 +266,7 @@ function sheetText(history, application) {
   ].filter(Boolean).join('\n\n');
 }
 
-export async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
+export async function answerStaff({ messages = [], lang = 'ru', application = {}, nick = '', notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   const send = typeof notify === 'function' ? notify : notifierFn;
@@ -299,6 +313,7 @@ export async function answerStaff({ messages = [], lang = 'ru', application = {}
       const result = await deliverWithin(send, {
         role: role.name,
         branch: role.key,
+        nick: cleanNick(nick),
         answers: staffAnswerPairs(history, { ...appState, branch: role.key }, lang),
         verdict: 'РЕКОМЕНДОВАН',
         lang

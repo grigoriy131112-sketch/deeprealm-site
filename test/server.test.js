@@ -96,15 +96,15 @@ test('the built-in engine answers about rules and lore', () => {
   assert.match(lore, /Подземелье/);
 });
 
-test('the built-in interviewer walks the template and approves a filled sheet', () => {
+test('the built-in interviewer accepts a filled sheet for hand-off', () => {
   const draft = { Имя: 'Лира', Раса: 'Эльф', Класс: 'Маг' };
   const reply = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: draft });
-  assert.match(reply, /ОДОБРЕНО/);
+  assert.match(reply, /передаю её владельцу/);
 });
 
-test('the built-in interviewer refuses to approve an empty sheet', () => {
+test('the built-in interviewer refuses to accept an empty sheet', () => {
   const reply = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: {} });
-  assert.doesNotMatch(reply, /ОДОБРЕНО/);
+  assert.doesNotMatch(reply, /передаю её владельцу/);
   assert.match(reply, /не заполнена/);
 });
 
@@ -135,7 +135,7 @@ test('the built-in staff interviewer answers a clarifying question and moves on'
 
 test('staff context lists every branch with its questions', () => {
   const ctx = buildStaffContext();
-  for (const role of ['Зам владельца', 'Пиарщик', 'Модератор', 'Разработчик', 'Гейм-мастер', 'Анкетолог', 'Ивентолог']) {
+  for (const role of ['Зам владельца', 'Пиарщик', 'Модератор', 'Разработчик', 'Гейм-мастер', 'Регистратор', 'Ивентолог']) {
     assert.match(ctx, new RegExp(role));
   }
   assert.match(ctx, /Сколько готов активить/);
@@ -238,7 +238,7 @@ test('interview endpoint answers from the built-in engine without a key', async 
   server.close();
   assert.equal(res.status, 200);
   const data = await res.json();
-  assert.match(data.reply, /Анкетолог/);
+  assert.match(data.reply, /Регистратор/);
 });
 
 test('status endpoint reports configuration state', async () => {
@@ -331,9 +331,9 @@ test('the end command is recognised in both languages', () => {
 test('each assistant ends with its own hand-off wording', () => {
   const interview = finaleText('interview', 'ru', { approved: true });
   assert.match(interview, /Анкета уже у владельца/);
-  assert.match(interview, /ОДОБРЕНО/);
+  assert.doesNotMatch(interview, /ОДОБРЕНО/, 'the site accepts the sheet, it does not judge it');
   assert.match(interview, /@Omega_Gribcha/);
-  assert.match(interview, /ты принят/, 'an approved sheet still routes custom races through the owner');
+  assert.match(interview, /ты принят/, 'an accepted sheet still routes custom races through the owner');
 
   const staff = finaleText('staff', 'ru', { approved: true });
   assert.match(staff, /Вот юз владельца/);

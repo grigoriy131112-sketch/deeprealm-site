@@ -621,3 +621,52 @@ nav.tabs button.active::after {
 @media (prefers-reduced-motion: reduce) {
   .doorway { display: none; }
 }
+
+/* --- nick gate ----------------------------------------------------------- */
+/* The first-visit window. It must not be dismissible, so it has no close button,
+   no backdrop click handler and no Escape handler: the only way past it is a
+   valid Telegram handle. The page behind is locked from scrolling. */
+.nick-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(6, 5, 9, 0.82);
+  backdrop-filter: blur(6px);
+}
+.nick-gate[hidden] { display: none; }
+.nick-card {
+  width: min(460px, 100%);
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  padding: 30px 28px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 40px rgba(201, 162, 75, 0.12);
+  text-align: center;
+}
+.nick-card .nick-sigil { font-size: 30px; color: var(--gold-bright); margin-bottom: 8px; }
+.nick-card h2 { font-family: var(--font-title); margin: 0 0 10px; color: var(--gold-bright); font-size: 24px; }
+.nick-card .hint { color: var(--ink-dim); font-size: 15px; margin: 0 0 16px; }
+.nick-card input {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--font-body);
+  font-size: 18px;
+  color: var(--ink);
+  background: #0c0a12;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.nick-card input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 2px rgba(201, 162, 75, 0.18); }
+.nick-warn { color: var(--blood-bright); font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
+.nick-error { color: var(--blood-bright); font-size: 14px; margin: 0 0 12px; }
+.nick-card .btn { width: 100%; }
+.nick-change { margin-right: 10px; }
+
+/* While the gate is open the page must not scroll behind it. */
+body.nick-locked { overflow: hidden; }
+

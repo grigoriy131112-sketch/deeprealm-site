@@ -111,26 +111,28 @@ const GUIDE_SYSTEM = (lang) => `Ты — Проводник чата Deeprealm: 
 ИНФОРМАЦИЯ О ЧАТЕ:
 ${buildKnowledgeContext(lang)}`;
 
-const INTERVIEWER_SYSTEM = (lang) => `Ты — Анкетолог чата Deeprealm: проверяющий персонажей, рас и классов для тёмного фэнтези-РП чата.
+const INTERVIEWER_SYSTEM = (lang) => `Ты — Регистратор чата Deeprealm: принимаешь и сохраняешь заявки игроков — персонажей, рас и классов — для тёмного фэнтези-РП чата.
 Общайся на ${languageName(lang)}.
 
-ТВОЯ РОЛЬ: ты ведёшь живой диалог с новым игроком, помогаешь ему создать персонажа и проверяешь его.
+ТВОЯ РОЛЬ: ты ведёшь живой диалог с новым игроком, помогаешь ему создать персонажа, расу или класс и принимаешь готовую заявку, чтобы передать её владельцу.
 ПРАВИЛА ПОВЕДЕНИЯ:
 1. Задавай вопросы свободно и по смыслу, не обязательно строго по шаблону — уточняй то, что важно: баланс, лор, логику, слабости, мотивацию.
 2. Когда игрок говорит "добавь в анкету" (или "add to the application"), ты ОБЯЗАТЕЛЬНО подтверждаешь: "Добавил в анкету: ..." и перечисляешь, что именно записал.
 3. Когда игрок говорит "покажи анкету"/"show application" — выводи текущую собранную анкету по шаблону.
-4. Проверяй заявку по правилам баланса (см. информацию). Если что-то не так — вежливо объясни, что исправить.
-5. Когда всё заполнено и проверено и нарушений нет — напиши краткое резюме проверки и пометку "ОДОБРЕНО ✅". Финальную фразу про отправку анкеты и контакт владельца сайт добавит сам, поэтому тебе её писать не нужно. Не выдавай ссылку на чат раньше окончания проверки.
+4. Принимай заявку: собери данные по правилам баланса (см. информацию). Если что-то не так — вежливо объясни, что исправить. Ты не выносишь вердикт "одобрено": готовую заявку сайт сам отправляет владельцу, и он решает.
+5. Когда всё заполнено и нарушений нет — напиши краткое резюме заявки. Финальную фразу про отправку владельцу и контакт владельца сайт добавит сам, поэтому тебе её писать не нужно. Не выдавай ссылку на чат.
 6. Персонаж не может быть неуязвимым: обязательно должны быть сильные и слабые стороны. Если игрок делает "имбу" — укажи на это.
 7. Будь дружелюбным, но требовательным к балансу и логике лора.
-8. ЕДИНСТВЕННАЯ ссылка, которую ты можешь давать — на чат Telegram: ${knowledge.chat.telegram}. НИКОГДА не придумывай другие ссылки, кнопки, файлы, "базы данных" или адреса сайтов. Если ссылка на чат ещё не положена по проверке — не давай никаких ссылок вообще.
-9. Ты не сохраняешь ничего в базах и не запускаешь игру. Единственное финальное действие — резюме проверки, пометка "ОДОБРЕНО ✅" и ссылка на Telegram-чат.
-10. Если анкета расы или класса заполнена полностью и нарушений баланса нет — СРАЗУ пиши пометку "ОДОБРЕНО ✅" и завершай проверку. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали: статья для сайта будет опубликована автоматически. Никаких вопросов после одобрения.
-11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце проверяешь по правилам. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
+8. ЕДИНСТВЕННАЯ ссылка, которую ты можешь давать — на чат Telegram: ${knowledge.chat.telegram}. НИКОГДА не придумывай другие ссылки, кнопки, файлы, "базы данных" или адреса сайтов.
+9. Ты не сохраняешь ничего в базах и не запускаешь игру. Твоё финальное действие — резюме заявки, которую сайт передаёт владельцу.
+10. Если анкета расы или класса заполнена и нарушений баланса нет — подведи короткое резюме и заверши: сайт сам отправит её владельцу. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали. Никаких вопросов после готовой заявки.
+11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце собираешь заявку. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
 11а. Если игрок просит придумать расу или класс ЗА НЕГО ("создай сам", "придумай за меня", "сделай сам") — не задавай вопросов и не отказывайся: придумай расу или класс целиком и сразу, по правилам баланса, со способностями и слабостями, и выведи готовую анкету. Встроенный движок уже умеет это и без тебя; если ты пишешь ответ сам, сделай то же самое.
-11б. ГОТОВЫЕ АНКЕТЫ. Игрок может прислать уже заполненную анкету расы или класса (например, вставил текст из блога) и попросить проверить её. Не заставляй его заполнять заново: прими присланный текст как черновик, проверь по правилам баланса и при отсутствии нарушений сразу пиши "ОДОБРЕНО ✅". Если игрок просит создать класс по уже готовой расе — собери класс под названную расу, указав "Под расу: <название>" и строку совместимости с её природой.
+11б. ГОТОВЫЕ АНКЕТЫ. Игрок может прислать уже заполненную анкету расы или класса (например, вставил текст из блога) и попросить принять её. Не заставляй его заполнять заново: прими присланный текст как черновик и подведи короткое резюме. Если игрок просит создать класс по уже готовой расе — собери класс под названную расу, указав "Под расу: <название>" и строку совместимости с её природой.
 11в. СПЕЦИАЛИЗАЦИИ И ВЕХИ. У класса 15 начальных уровней, затем на 16 уровне игрок выбирает одну из трёх специализаций. Вехи — 20, 30, 40 и 50. Между вехами промежуточные уровни (16–19, 21–29, 31–39, 41–49), и на каждом — ровно одна способность специализации. Если игрок заполняет класс, спроси про три специализации и напомни про способности на промежуточных уровнях.
 12. ПЕРЕЗАРЯДКА СПОСОБНОСТЕЙ измеряется в ходах. У каждой способности класса должна быть указана перезарядка в ходах (например, «перезарядка: 2 хода»). Если игрок её не указал — спроси.
+13. ИГРОК МОЖЕТ СОВЕТОВАТЬСЯ. Вопросы вида «может, ослабить его способности?», «может, добавить что-нибудь?», «а это не имба?», «стоит ли усилить?», «что улучшить?», «нормально ли это?» — это нормально, таких вопросов может быть очень много. На ЛЮБОЙ такой вопрос отвечай по существу, опираясь на правила баланса и лор: скажи, что именно ослабить или добавить, почему так честнее и как это скажется на игре. Не повторяй вопрос анкеты вместо ответа. Если совет не нужен — коротко объясни почему.
+14. Твой ответ должен помогать игроку решить, что писать в анкете: предлагай конкретные формулировки, числа, слабости и ограничения, а не общие слова.
 
 ЗАЯВКИ НА СЮЖЕТ ДЛЯ ГМ:
 Если игрок хочет предложить сюжет, приключение или квест для ГМ — помоги оформить заявку по шаблону ниже. Не требуй заполнить всё сразу: задавай по 2–3 вопроса за раз и в конце собери заявку целиком. Если игрок не знает, что написать — предложи пример и объясни, почему для ГМ это важно. Напоминай правила: не пиши сценарий, пиши ситуацию; давай личный крючок под персонажей; согласуй идеи с лором мира.
@@ -140,7 +142,7 @@ ${knowledge.story_template ? knowledge.story_template : '(шаблон заяв�
  ИНФОРМАЦИЯ О ЧАТЕ:
 ${buildKnowledgeContext(lang)}`;
 
-const STAFF_SYSTEM = (lang) => `Ты — Анкетолог по кандидатам в команду Telegram-чата Deeprealm (текстовое тёмное фэнтези-РП).
+const STAFF_SYSTEM = (lang) => `Ты — Регистратор по кандидатам в команду Telegram-чата Deeprealm (текстовое тёмное фэнтези-РП).
 Отвечай на ${languageName(lang)}. Пиши обычным текстом, без звёздочек, решёток, подчёркиваний и нумерации "1." Списки — только тире. Очень коротко.
 
 ГЛАВНОЕ: ты собеседуешь кандидата в команду ИМЕННО ЭТОГО Telegram-РП-проекта. Ты НЕ общий ассистент. Запрещены темы Discord, VK, Roll20, Foundry, D&D, настольных игр, грантов, возраста, города, часового пояса, реального имени и контактов. Не предлагай гайды, стратегии и «чем я могу помочь».
@@ -148,7 +150,7 @@ const STAFF_SYSTEM = (lang) => `Ты — Анкетолог по кандида�
 Ты задаёшь кандидату вопросы СТРОГО по одному, в заданном порядке. Не придумывай свои вопросы.
 
 ПРАВИЛА:
-1. При выборе направления задай ровно один вопрос: "В какое направление хочешь: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, анкетолог или ивентолог?" Больше ничего.
+1. При выборе направления задай ровно один вопрос: "В какое направление хочешь: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, регистратор или ивентолог?" Больше ничего.
 2. В остальных случаях тебе дают ГОТОВЫЙ вопрос. Ты должен: коротко (в одну фразу) отреагировать на предыдущий ответ кандидата, если он был, и задать этот готовый вопрос. Не добавляй других вопросов, не перечисляй пункты, не давай советов.
 3. Если ответ кандидата пустой или уклончивый — мягко переспроси тот же вопрос.
 4. Если кандидат просит показать заявку — выведи то, что собрано.
@@ -159,8 +161,8 @@ const STAFF_SYSTEM = (lang) => `Ты — Анкетолог по кандида�
 
 function branchPrompt(lang) {
   return lang === 'en'
-    ? 'Hi. Which branch do you want to join: deputy owner, PR, moderator, developer, game master, application reviewer or event manager?'
-    : 'Привет. В какое направление хочешь вступить: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, анкетолог или ивентолог?';
+    ? 'Hi. Which branch do you want to join: deputy owner, PR, moderator, developer, game master, registrar or event manager?'
+    : 'Привет. В какое направление хочешь вступить: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, регистратор или ивентолог?';
 }
 
 // Direct, sourced answers to the questions candidates actually ask, so the reply
@@ -345,31 +347,34 @@ function sentToOwnerText(type, lang, { delivered = true, kind = null } = {}) {
   if (type === 'staff') {
     if (!delivered) {
       return lang === 'en'
-        ? `✅ All checked. I could not reach the owner automatically — write to ${owner} so your answers are not lost.`
-        : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — напиши ему сам ${owner}, чтобы ответы не потерялись.`;
+        ? `✅ Done. I could not reach the owner automatically — write to ${owner} so your answers are not lost.`
+        : `✅ Готово. Отправить владельцу автоматически не удалось — напиши ему сам ${owner}, чтобы ответы не потерялись.`;
     }
     return lang === 'en'
-      ? '✅ All checked. All your answers have been sent to the owner.'
-      : '✅ Всё одобрено. Все ответы отправлены владельцу.';
+      ? '✅ Done. All your answers have been passed to the owner.'
+      : '✅ Готово. Все ответы переданы владельцу.';
   }
-  const what = kind === 'story' ? 'Сюжет' : 'Анкета';
   const whatEn = kind === 'story' ? 'plot' : 'sheet';
+  const what = kind === 'story' ? 'Сюжет' : 'Анкета';
   if (!delivered) {
     return lang === 'en'
-      ? `✅ All checked. I could not reach the owner automatically — send the ${whatEn} to ${owner} so it is not lost.`
-      : `✅ Всё одобрено. Отправить владельцу автоматически не удалось — скинь ${kind === 'story' ? 'сюжет' : 'анкету'} ему сам ${owner}, чтобы ${kind === 'story' ? 'он' : 'она'} не потерял${kind === 'story' ? 'ся' : 'ась'}.`;
+      ? `✅ Done. I could not reach the owner automatically — send the ${whatEn} to ${owner} so it is not lost.`
+      : `✅ Готово. Отправить владельцу автоматически не удалось — скинь ${kind === 'story' ? 'сюжет' : 'анкету'} ему сам ${owner}, чтобы ${kind === 'story' ? 'он' : 'она'} не потерял${kind === 'story' ? 'ся' : 'ась'}.`;
   }
   return lang === 'en'
-    ? `✅ All checked. Your ${whatEn} has been sent to the owner.`
-    : `✅ Всё одобрено. ${what} отправлен${kind === 'story' ? '' : 'а'} владельцу.`;
+    ? `✅ Done. Your ${whatEn} has been passed to the owner.`
+    : `✅ Готово. ${what} передан${kind === 'story' ? '' : 'а'} владельцу.`;
 }
 
 // `approved` marks a completed check. Ending early still gives the hand-off, but
 // without the approval mark, which would be a false claim.
 function finaleText(type, lang, { approved = false } = {}) {
   if (type === 'interview') {
+    // The site no longer judges the sheet: it accepts it and hands it to the owner,
+    // who decides. So the closing line must not claim an approval the site cannot
+    // make — "ОДОБРЕНО" here would be a verdict nobody gave.
     const head = approved
-      ? (lang === 'en' ? 'That is the end of the check. ОДОБРЕНО ✅' : 'На этом проверка закончена. ОДОБРЕНО ✅')
+      ? (lang === 'en' ? 'That is the end of the intake.' : 'На этом приём заявки закончен.')
       : (lang === 'en' ? 'That is the end.' : 'На этом всё.');
     return `${head}\n\n${handoffText('interview', lang, { approved })}`;
   }
@@ -432,7 +437,7 @@ const ROLE_KEYWORDS = {
   moderator: ['модерат', 'модер', 'moderator'],
   developer: ['разраб', 'программист', 'кодер', 'developer', 'dev '],
   gm: ['гейм-мастер', 'гейм мастер', 'гм', 'game master', 'gm '],
-  reviewer: ['анкетолог', 'анкеты', 'reviewer'],
+  reviewer: ['регистратор', 'анкетолог', 'анкеты', 'reviewer'],
   event: ['ивент', 'event', 'мероприят']
 };
 
@@ -1361,11 +1366,147 @@ function isHelpAsk(text) {
 function interviewerReaction(text, lang) {
   const s = String(text || '').trim();
   if (!s) return '';
+  if (isAdviceAsk(s)) return pick(lang, 'Хорошая мысль, давай разберём.', 'Good thought, let us look at it.');
   if (/\?\s*$/.test(s)) return pick(lang, 'Хороший вопрос.', 'Good question.');
   if (/не\s+знаю|не\s+уверен|затрудня|не\s+понимаю/i.test(s)) return pick(lang, 'Ничего, помогу разобраться.', 'No worries, I will help you figure it out.');
   if (s.length < 12) return pick(lang, 'Коротко и ясно.', 'Short and clear.');
   if (s.length >= 40) return pick(lang, 'Отлично, вот это уже деталь.', 'Nice, that is a real detail.');
   return pick(lang, 'Записал.', 'Noted.');
+}
+
+// ------------------------------------------------------------- advice (советы)
+
+// Players ask the interviewer for advice all the time: "может, ослабить его
+// способности?", "может, добавить что-нибудь?", "а это не имба?", "что улучшить?".
+// There are far too many phrasings to enumerate, so this recognises the *shape* of
+// an advice question — a nudge, an evaluation, or an open ask — and answers from the
+// balance rules below. Anything that slips through still lands in the interviewer's
+// free-form reply, which keeps the conversation useful.
+function isAdviceAsk(text) {
+  const s = String(text || '').trim().toLowerCase();
+  if (!s) return false;
+  return /может[,\s]|может\s+быть|стоит\s+ли|не\s+стоит|следует\s+ли|не\s+лучше\s+ли|лучше\s+ли|а\s+если|что\s+если|стоило\s+бы|надо\s+ли|нужно\s+ли|можно\s+ли|правильно\s+ли|нормально\s+ли|не\s+имба|имба\s+ли|слишком\s+(сильн|слаб|мощн|жирн|слабо)|чересчур|перебор|дисбаланс|сбалансиров|баланс|усил|ослабл|ослабь|ослабить|усиль|усилить|пониз|повыс|улучш|добав(ить|ь)|докин|убрать|убер|убрал|замен(ить|и)|поменять|исправить|поправить|дополнить|дополни|придумать\s+что|предложи|посоветуй|совет|подскажи|что\s+не\s+так|что\s+тут\s+не\s+так|в\s+чём\s+проблем|как\s+(сделать|улучшить|исправить|дополнить|усилить|ослабить)|помоги\s+с|оцени|проверь\s+баланс|норм\?|ок\?|или\s+нет/i.test(s);
+}
+
+// Whether the message is asking about the sheet rather than answering the current
+// field question. A plain "может, добавить что-нибудь?" during a race walk is about
+// the race, so the advice answers it and the walk continues.
+function adviceKind(text, app, history) {
+  const s = String(text || '').toLowerCase();
+  if (/сюжет|гм|квест|истори|приключен/i.test(s)) return 'story';
+  if (kindFromSheetText(s)) return kindFromSheetText(s);
+  return interviewKind(app, history);
+}
+
+// The balance rules the advice leans on, read from the knowledge base so a change
+// there is reflected here with no code edit.
+function balanceRules(kind) {
+  const k = getKnowledge() || {};
+  if (kind === 'race') {
+    return [
+      ...(k.races?.race_template_rules || []),
+      'минимум две серьёзные уязвимости;',
+      'максимум две школы магии;',
+      'никакого бессмертия и неуязвимости.'
+    ];
+  }
+  if (kind === 'class') {
+    return [
+      ...(k.classes?.class_balance_rules || []),
+      'у каждой способности перезарядка в ходах;',
+      'у ресурса — истощение;',
+      'минимум одно ограничение и одна слабость.'
+    ];
+  }
+  return [
+    'сильные стороны должны уравновешиваться слабостями;',
+    'у персонажа есть характер, мотивация и хотя бы одна уязвимость;',
+    'никакой неуязвимости и «бога из машины».'
+  ];
+}
+
+// A concrete, per-topic answer. The topic is matched loosely so the same advice
+// serves "ослабить", "слишком сильно", "имба", "убрать способность" and so on.
+function adviceTopic(text, kind) {
+  const s = String(text || '').toLowerCase();
+  if (/добав|докин|дополн|придумать\s+что|чего\s+не\s+хватает|не\s+хватает|что\s+ещё/i.test(s)) return 'add';
+  if (/убрать|убер|лишн|замен|поменять|переработ|переделать/i.test(s)) return 'remove';
+  if (/усил|повыс|слишком\s+слаб|мощн(ее|ее)|слаб(ый|о)|слабо|поднять/i.test(s)) return 'strengthen';
+  if (/ослаб|пониз|слишком\s+сильн|имба|перебор|дисбаланс|жирн|читер|неуязв|бессмерт/i.test(s)) return 'weaken';
+  if (/нормально|ок|окей|правильно|хорошо\s+ли|норм|сойдёт|сойдет/i.test(s)) return 'evaluate';
+  if (/что\s+не\s+так|в\s+чём\s+проблем|ошибк|проблем|замечан|замечани/i.test(s)) return 'problems';
+  if (/что\s+улучшить|улучш|доделать|доработ|как\s+лучше|идеи|посовет|совет|предложи|подскажи/i.test(s)) return 'improve';
+  return 'general';
+}
+
+// The advice body. Each topic says what to change and why, so the player can act on
+// it, and the balance rules are quoted back so the reasoning is the site's own.
+function adviceAnswer(text, app, history, lang = 'ru') {
+  const kind = adviceKind(text, app, history);
+  const topic = adviceTopic(text, kind);
+  const rules = balanceRules(kind);
+  const what = kind === 'race' ? 'расы' : kind === 'class' ? 'класса' : kind === 'story' ? 'сюжета' : 'персонажа';
+  const head = pick(lang, `Разберём по балансу ${what}.`, `Let us look at the ${what} balance.`);
+
+  const bodies = {
+    weaken: [
+      pick(lang, 'Да, ослабить стоит — если сила не уравновешена слабостью, это уже имба. Что убрать или урезать:', 'Yes, it is worth weakening — if a strength is not balanced by a weakness, it is already overpowered. What to cut:'),
+      pick(lang, '— снизь урон или длительность: например, «12 урона и −3 к точности на 2 хода» вместо большего;', '— lower the damage or duration: e.g. "12 damage and −3 accuracy for 2 turns" instead of more;'),
+      pick(lang, '— добавь перезарядку в ходах у сильной способности;', '— add a cooldown in turns to the strong ability;'),
+      pick(lang, '— добавь вторую уязвимость, которая бьёт по сильной стороне (сухость, страх, хрупкость).', '— add a second weakness that bites the strong side (drought, fear, fragility).')
+    ],
+    strengthen: [
+      pick(lang, 'Если наоборот слабовато — усилить можно, но так, чтобы осталось честно:', 'If it is too weak instead — you can strengthen it, but keep it fair:'),
+      pick(lang, '— подними одно число (урон, длительность, запас ресурса), а не всё сразу;', '— raise one number (damage, duration, resource pool), not everything at once;'),
+      pick(lang, '— дай способности вторую грань: не только урон, но и полезный эффект;', '— give the ability a second edge: not only damage but a useful effect;'),
+      pick(lang, '— взамен добавь условие или слабость, чтобы не вышло имбы.', '— add a condition or weakness in exchange, so it does not become overpowered.')
+    ],
+    add: [
+      pick(lang, 'Да, добавить есть что. Смотри, чего обычно не хватает:', 'Yes, there is room to add. What is usually missing:'),
+      pick(lang, '— ещё одна слабость (среда, страх, цена силы) — это первое, что просят добавить;', '— one more weakness (environment, fear, a price for the power) — the first thing to add;'),
+      pick(lang, '— общественное устройство и отношения с другими расами, если это раса;', '— a society and relations with other races, if this is a race;'),
+      pick(lang, '— для класса: перезарядки в ходах, истощение ресурса и одна специализация.', '— for a class: cooldowns in turns, resource exhaustion and one specialization.')
+    ],
+    remove: [
+      pick(lang, 'Убрать или заменить можно — если что-то дублируется или ломает баланс:', 'You can remove or replace it — if something duplicates or breaks balance:'),
+      pick(lang, '— убери повтор: две способности с одним эффектом — это одна способность;', '— cut the duplicate: two abilities with the same effect are one ability;'),
+      pick(lang, '— замени «бесплатную» силу на силу с ценой или перезарядкой;', '— replace a "free" power with one that has a cost or a cooldown;'),
+      pick(lang, '— вместо запрета добавь ограничение: «не работает под водой» лучше, чем «нельзя».', '— instead of a ban, add a limit: "does not work underwater" beats "never allowed".')
+    ],
+    improve: [
+      pick(lang, 'Что улучшить — по порядку:', 'What to improve, in order:'),
+      pick(lang, '— сначала закрой уязвимости: без них заявку вернут;', '— close the weaknesses first: without them the sheet comes back;'),
+      pick(lang, '— потом уточни числа (урон, ХП, перезарядка, ресурс);', '— then pin the numbers (damage, HP, cooldown, resource);'),
+      pick(lang, '— и допиши, как это играется в сцене, а не только в цифрах.', '— and describe how it plays in a scene, not just in numbers.')
+    ],
+    evaluate: [
+      pick(lang, 'Оцениваю честно, по правилам:', 'Honest verdict, by the rules:'),
+      pick(lang, '— если у сильной способности есть слабость и перезарядка, всё в порядке;', '— if the strong ability has a weakness and a cooldown, it is fine;'),
+      pick(lang, '— если сильных сторон больше, чем ограничений, — это имба, урежем;', '— if strengths outweigh limits, it is overpowered and we will trim it;'),
+      pick(lang, '— если сомневаешься, добавь ещё одну слабость: лишняя слабость не мешает игре.', '— if unsure, add one more weakness: an extra weakness never hurts play.')
+    ],
+    problems: [
+      pick(lang, 'Что не так и на что смотрят в первую очередь:', 'What is wrong and what gets checked first:'),
+      pick(lang, '— нет уязвимостей или они несерьёзные;', '— no weaknesses, or they are not serious;'),
+      pick(lang, '— способность без перезарядки;', '— an ability with no cooldown;'),
+      pick(lang, '— бессмертие, неуязвимость или владение всеми школами магии.', '— immortality, invulnerability, or mastery of every school of magic.')
+    ],
+    general: [
+      pick(lang, 'Отвечу по существу — опирайся на эти правила:', 'Straight answer — lean on these rules:'),
+      pick(lang, '— у каждой силы должна быть цена или слабость;', '— every strength needs a cost or a weakness;'),
+      pick(lang, '— числа важнее слов: урон, ХП, перезарядка, ресурс;', '— numbers matter more than words: damage, HP, cooldown, resource;'),
+      pick(lang, '— не бойся слабостей: они делают персонажа живым.', '— do not fear weaknesses: they make the character alive.')
+    ]
+  };
+
+  return [head, ...(bodies[topic] || bodies.general), pick(lang, 'Правила, на которые я смотрю:', 'The rules I am looking at:'), ...rules.map((r) => `— ${r}`)].join('\n');
+}
+
+// Whether the message reads like the player asking for advice rather than answering
+// the current field. A question mark alone is not enough ("как зовут твоего героя?"
+// is not advice), so the advice shape is required.
+function looksLikeAdvice(text) {
+  return isAdviceAsk(text);
 }
 
 // The two ways to get a race or a class, said plainly. This is what the player is
@@ -1626,6 +1767,22 @@ function interviewMinFields(kind) {
   return KIND_MIN_FIELDS[kind] || INTERVIEW_MIN_FIELDS;
 }
 
+// Whether the sheet is complete enough to be handed to the owner. Exported so the
+// caller can decide to send without re-deriving the rule, and so the decision does
+// not depend on the model's wording: the site no longer judges the sheet, it only
+// checks that there is something to send.
+function interviewReady(application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  const kind = interviewKind(app, history);
+  return countFilledFields(app, history) >= interviewMinFields(kind);
+}
+
+// The player asked for the sheet to be taken in. Exported so the sender can tell an
+// explicit check from a stray "проверь" that is part of a longer sentence.
+function isCheckCommand(text) {
+  return isCheckCmd(text);
+}
+
 function countFilledFields(app, history) {
   const names = interviewFields(app, history);
   const drafted = Object.keys(app || {}).filter((k) => !k.startsWith('_') && !k.startsWith('note_'));
@@ -1708,30 +1865,42 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   }
   if (isShowCmd(text)) return renderApplication(app, lang);
   if (isCheckCmd(text)) {
-    // A filled-in sheet is recognised from the draft and from the dialogue, so a
-    // player who never used "add to the application" can still be checked. A race
-    // and a class must carry their abilities and weaknesses, which is what the
-    // balance rules are about, so they need more covered fields than a character.
+    // The site does not judge the sheet any more: it accepts it and hands it to the
+    // owner, who decides. So a check either reports that the sheet is not ready, or
+    // accepts it. The fixed "передана владельцу" closing line is added by the caller.
     const kind = interviewKind(app, history);
     const filled = countFilledFields(app, history);
     if (filled < interviewMinFields(kind)) {
       return [
-        pick(lang, 'Анкета ещё не заполнена: мне нужно больше деталей, иначе проверять нечего.', 'The application is not filled in yet: I need more detail before checking.'),
+        pick(lang, 'Анкета ещё не заполнена: мне нужно больше деталей, иначе отправлять нечего.', 'The application is not filled in yet: I need more detail before sending it.'),
         nextFieldPrompt(app, lang, history)
       ].join('\n');
     }
-    const approved = pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅');
-    return approved;
+    return pick(lang, 'Принял заявку — передаю её владельцу.', 'Accepted — passing it to the owner.');
   }
   // The player asks the Interviewer to author the sheet itself ("создай сам",
   // "придумай за меня"). It builds a complete race or class from the balance rules
-  // and hands back the draft, so the very next "проверь" approves and forwards it.
+  // and hands back the draft, so the very next "проверь" accepts and forwards it.
   const made = generatedSheet(history, app, lang);
   if (made) return renderGenerated(made, lang);
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
-  // A question about how this works is explained instead of opening the walk, so
-  // "а как мне создать расу?" gets the two options and then the first question.
+  // "Как мне создать расу?" is a how-to, not advice about a sheet: the two options
+  // are explained, then the walk continues. Checked before the advice block so the
+  // word "подскажи" in a how-to question cannot turn it into balance advice.
+  const createHelp = /как\s+(мне\s+)?(создать|сделать|придумать|заполнить|начать|играть|быть)|с\s+чего\s+начать|what\s+(do|should)\s+i|how\s+(do|can)\s+i/i.test(text);
+  if (createHelp) {
+    const kind = wantsRace ? 'race' : wantsClass ? 'class' : interviewKind(app, history);
+    return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
+  }
+  // The player is thinking out loud about the sheet ("может, ослабить его
+  // способности?", "может, добавить что-нибудь?"). There are too many phrasings to
+  // list, so the shape of the question is recognised and answered from the balance
+  // rules, and then the walk continues from where it was. A plain creation request
+  // ("может, сделать расу?") is handled above, so it is not swallowed here.
+  if (isAdviceAsk(text)) {
+    return [adviceAnswer(text, app, history, lang), nextFieldPrompt(app, lang, history)].join('\n');
+  }
   if (isHelpAsk(text)) {
     const kind = wantsRace ? 'race' : wantsClass ? 'class' : interviewKind(app, history);
     return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
@@ -1756,8 +1925,8 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   }
   if (isGreeting(text) || !text.trim()) {
     return pick(lang,
-      'Привет. Я Анкетолог Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
-      'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
+      'Привет. Я Регистратор Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
+      'Hi. I am the Deeprealm Registrar. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
   }
   // Otherwise react to what was just said, then ask for the next thing. The
   // reaction is what makes the walk feel like a conversation instead of a form.
@@ -1863,6 +2032,13 @@ function keepsEssentials(candidate, local) {
   if (/ОДОБРЕНО|РЕКОМЕНДОВАН/i.test(base) && !/ОДОБРЕНО|РЕКОМЕНДОВАН/i.test(got)) return false;
   // The owner forbids markdown in the chats; a rewrite that adds it is rejected.
   if (/[*#`]/.test(got.replace(/https?:\/\/\S+/g, ''))) return false;
+  // A rewrite must not invent a new question. The engine asks one field at a time,
+  // and a closing answer ("Анкета передана владельцу") has no question at all;
+  // when the rewrite appends one, the player sees "it approved me and then asked
+  // something else" - the exact "он опять спрашивает" complaint. So a question in
+  // the rewrite that the engine did not ask is a reason to keep the engine's text.
+  const askCount = (s) => (String(s).match(/\?/g) || []).length;
+  if (askCount(got) > askCount(base)) return false;
   return true;
 }
 
@@ -2084,6 +2260,7 @@ function createNotifier(options = {}) {
       }
       const lines = [
         '🚪 Новый заход на сайт Deeprealm',
+        info.nick ? `Игрок: ${info.nick}` : '',
         info.page ? `Страница: ${info.page}` : '',
         info.from ? `Пришёл откуда: ${info.from}` : '',
         info.device ? `Устройство: ${info.device}` : '',
@@ -2095,6 +2272,7 @@ function createNotifier(options = {}) {
       const kind = { character: 'персонажа', race: 'расы', class: 'класса', story: 'сюжета' }[info.kind] || 'анкета';
       const head = `📋 Новая анкета ${kind} — Deeprealm`;
       const meta = [
+        info.nick ? `Игрок: ${info.nick}` : '',
         info.title ? `Название: ${info.title}` : '',
         info.contact ? `Контакт: ${info.contact}` : '',
         info.branch ? `Направление: ${info.branch}` : '',
@@ -2109,6 +2287,7 @@ function createNotifier(options = {}) {
         : String(info.text || '').trim();
       return send([
         '🧑‍💼 Собеседование в администрацию — Deeprealm',
+        info.nick ? `Игрок: ${info.nick}` : '',
         info.role ? `Направление: ${info.role}` : '',
         info.contact ? `Контакт: ${info.contact}` : '',
         info.verdict ? `Итог: ${info.verdict}` : '',
@@ -2405,12 +2584,13 @@ function liveMessages(history, local, options) {
   const rules = [
     'Ты — голос ИИ-помощника тёмного фэнтези-РП чата Deeprealm.',
     options.role === 'interview'
-      ? 'Ты Анкетолог: помогаешь собрать и проверить анкету персонажа, расы или класса.'
+      ? 'Ты Регистратор: помогаешь собрать анкету персонажа, расы или класса и передаёшь готовую заявку владельцу.'
       : options.role === 'staff'
-        ? 'Ты Анкетолог по кандидатам в команду: собеседуешь и задаёшь вопросы по одному.'
+        ? 'Ты Регистратор по кандидатам в команду: собеседуешь и задаёшь вопросы по одному.'
         : 'Ты Проводник: справочный гид по чату — правила, лор, расы, классы, пасс уровней, администрация, как вступить.',
     'Перепиши готовый ответ своими словами, живо и по-дружески. Обращайся к собеседнику на «ты».',
     'Сохрани ВСЕ факты, числа, названия, ссылки и концовку. Ничего не выдумывай и не добавляй от себя.',
+    'Если в готовом ответе нет вопроса — не заканчивай свой ответ вопросом. Игрок не должен видеть новый вопрос, которого не было.',
     'Не используй звёздочки, решётки, обратные кавычки и таблицы. Списки — только тире.',
     'Ответ должен заканчиваться словом «конец».',
     'Длина — примерно как у исходного ответа. Не добавляй вопросов и предложений, которых не было.'
@@ -2443,7 +2623,7 @@ async function answerGuide({ messages = [], lang = 'ru', onLive = null } = {}) {
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-async function answerInterview({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
+async function answerInterview({ messages = [], lang = 'ru', application = {}, nick = '', notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // The checklist the walk is on is remembered in the draft, so a race or class
@@ -2451,7 +2631,7 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   // to the character one once the opening request is no longer the newest message.
   const kind = interviewKind(appState, history);
   // A self-authored race or class arrives as a finished sheet, so its fields join
-  // the draft and the very next "проверь" can approve and forward it. Without this
+  // the draft and the very next "проверь" can accept and forward it. Without this
   // the generated sheet would be shown but never stored, and the check would find
   // an empty draft.
   const made = generatedSheet(history, appState, lang);
@@ -2485,16 +2665,20 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   const by = asked.by;
   const livePending = asked.livePending;
   const clean = raw;
-  // The model's own "ОДОБРЕНО" means the check passed; the fixed hand-off is attached
-  // so the destination and the owner's username are never paraphrased.
-  const approved = approvedWithSheet(clean, history, nextApp);
+  // The sheet is handed to the owner on an explicit "проверь", and only when the
+  // sheet is actually filled in. The site does not judge it any more, so this is a
+  // readiness check, not an approval: a false "ОДОБРЕНО" would be a verdict nobody
+  // gave, and sending a half-empty sheet would waste the owner's time.
+  const wantsSend = isCheckCommand(lastUserText(history)) && !made;
+  const ready = wantsSend && interviewReady(nextApp, history);
   let delivered = false;
   let sheetKind = null;
-  if (approved) {
+  if (ready) {
     sheetKind = detectSheet(history, nextApp) || kind;
     if (typeof send === 'function') {
       const result = await deliverWithin(send, {
         kind: sheetKind,
+        nick: cleanNick(nick),
         title: applicationTitle(nextApp, sheetKind, history),
         text: sheetText(history, nextApp),
         lang
@@ -2505,17 +2689,26 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   // The player is told the sheet went to the owner. When delivery failed the line
   // says so and repeats the owner's contact, so an application is never lost to a
   // silent failure.
-  const closing = approved ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
-  const handoff = handoffText('interview', lang, { approved, kind: sheetKind });
-  decorate = (body) => withEnd(approved ? `${body}\n\n${closing}\n\n${handoff}` : body);
+  const closing = ready ? sentToOwnerText('interview', lang, { delivered, kind: sheetKind }) : '';
+  const handoff = ready ? handoffText('interview', lang, { approved: false, kind: sheetKind }) : '';
+  decorate = (body) => withEnd(ready ? `${body}\n\n${closing}\n\n${handoff}` : body);
   return {
     reply: decorate(clean),
     application: nextApp,
     delivered,
     source: by,
     livePending: Boolean(livePending),
-    finale: approved
+    finale: ready
   };
+}
+
+// The nick is a Telegram handle the player typed once. It is normalised to a single
+// @handle and capped, so nothing else a player typed can ride into the owner's
+// notification, and it is dropped entirely when it is not a valid handle.
+function cleanNick(nick) {
+  const raw = String(nick || '').trim();
+  const match = raw.match(/@?([A-Za-z0-9_]{5,32})/);
+  return match ? `@${match[1]}` : '';
 }
 
 // The full sheet as plain text for the owner: the collected draft first, then the
@@ -2536,7 +2729,7 @@ function sheetText(history, application) {
   ].filter(Boolean).join('\n\n');
 }
 
-async function answerStaff({ messages = [], lang = 'ru', application = {}, notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
+async function answerStaff({ messages = [], lang = 'ru', application = {}, nick = '', notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   const send = typeof notify === 'function' ? notify : notifierFn;
@@ -2583,6 +2776,7 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, notif
       const result = await deliverWithin(send, {
         role: role.name,
         branch: role.key,
+        nick: cleanNick(nick),
         answers: staffAnswerPairs(history, { ...appState, branch: role.key }, lang),
         verdict: 'РЕКОМЕНДОВАН',
         lang

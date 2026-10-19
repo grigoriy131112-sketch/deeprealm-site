@@ -2,7 +2,13 @@ const I18N = {
   ru: {
     brand: 'Deeprealm',
     tagline: 'Тёмное фэнтези-РП · мир после Единого Королевства',
-    tabs: { home: 'Главная', lore: 'Лор', rules: 'Правила', races: 'Расы', classes: 'Классы', levelpass: 'Пасс уровней', admin: 'Администрация', application: 'Анкетолог', guide: 'Проводник' },
+    'nick.title': 'Как тебя зовут в Telegram?',
+    'nick.hint': 'Укажи свой ник в Telegram — по нему владелец напишет тебе, когда прочитает анкету.',
+    'nick.warn': 'Если указать чужой ник, владелец не сможет написать вам первым — связаться с ним придётся самостоятельно.',
+    'nick.save': 'Продолжить',
+    'nick.change': 'Сменить юз',
+    'nick.error': 'Укажи ник в Telegram: латиница, цифры и «_», от 5 символов. Например, @username.',
+    tabs: { home: 'Главная', lore: 'Лор', rules: 'Правила', races: 'Расы', classes: 'Классы', levelpass: 'Пасс уровней', admin: 'Администрация', application: 'Регистратор', guide: 'Проводник' },
     'home.title': 'Добро пожаловать в Deeprealm',
     'home.lead': 'Мир, переживший гибель Спасителя, раскол Единого Королевства и Грохот. Здесь игроки создают персонажей, расы и классы, а ГМ ведёт их через мрак и свет.',
     'home.create': 'Создать персонажа',
@@ -43,17 +49,17 @@ const I18N = {
     'admin.questions': 'Что спросят',
     'admin.pace': 'Обычная активность',
     'admin.faq': 'Частые вопросы кандидатов',
-    'staff.title': 'Анкетолог по кандидатам',
+    'staff.title': 'Регистратор по кандидатам',
     'staff.hint': 'Хочешь в команду? Расскажи, куда хочешь, и ответь на вопросы. Заявку посмотрит владелец.',
-    staffWelcome: 'Привет. Я Анкетолог по кандидатам в администрацию Deeprealm. Скажи, в какое направление хочешь: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, анкетолог или ивентолог. Если не определился — расскажу про каждое и помогу выбрать.',
-    chipsStaff: ['Хочу в модераторы', 'Хочу в гейм-мастера', 'Хочу в пиарщики', 'Расскажи про направления', 'Сколько нужно активить?', 'Добавь в заявку', 'Проверь мою заявку'],
+    staffWelcome: 'Привет. Я Регистратор по кандидатам в администрацию Deeprealm. Скажи, в какое направление хочешь: зам владельца, пиарщик, модератор, разработчик, гейм-мастер, регистратор или ивентолог. Если не определился — расскажу про каждое и помогу выбрать.',
+    chipsStaff: ['Хочу в модераторы', 'Хочу в гейм-мастера', 'Хочу в пиарщики', 'Хочу в разработчики', 'Хочу в ивентологи', 'Расскажи про направления', 'Сколько нужно активить?', 'Добавь в заявку'],
     'classes.templateLink': 'Шаблон своего класса',
     'classes.playerBlog': 'Все классы игроков в блоге',
     'player.empty': 'Пока нет — список пополняется.',
     'classes.basicAttack': 'Базовая атака',
     'classes.abilities': 'Способности',
-    'app.title': 'ИИ-анкетолог',
-    'app.hint': 'Опиши персонажа свободно. Скажи «добавь в анкету», чтобы сохранить детали. После проверки анкетолог выдаст ссылку на чат.',
+    'app.title': 'ИИ-регистратор',
+    'app.hint': 'Опиши персонажа свободно. Скажи «добавь в анкету», чтобы сохранить детали. Когда анкета готова — скажи «проверь», и я передам её владельцу.',
     'guide.title': 'Проводник',
     'guide.hint': 'Чат-справочник: вопросы о правилах, лоре, расах, классах и вступлении. Без ролевой игры.',
     'chat.send': 'Отправить',
@@ -61,7 +67,7 @@ const I18N = {
     'chat.placeholderGuide': 'Задай вопрос о чате…',
     'chat.placeholderStaff': 'Куда хочешь вступить?',
     'chat.thinking': 'Проводник думает…',
-    'chat.thinkingApp': 'Анкетолог думает…',
+    'chat.thinkingApp': 'Регистратор думает…',
     'chat.notConfigured': '⚠️ Не удалось загрузить ИИ-движок. Обновите страницу — чаты работают без ключа.',
     'chat.error': 'Не удалось получить ответ от ИИ.',
     'chat.copy': 'Копировать',
@@ -77,14 +83,20 @@ const I18N = {
     'chat.endTitle': 'Завершить диалог',
     'chat.endCommand': 'конец',
     guideWelcome: 'Привет, путник. Я Проводник Deeprealm. Спрошу тебя о правилах, лоре, расах, классах — или подскажу, как вступить в чат.',
-    appWelcome: 'Привет. Я Анкетолог Deeprealm. Расскажи о своём персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь — придумаю расу или класс за тебя: просто скажи «придумай мне расу сам». Когда захочешь добавить что-то в анкету — напиши «добавь в анкету». Когда закончим — я проверю всё и дам ссылку на чат.',
+    appWelcome: 'Привет. Я Регистратор Deeprealm. Расскажи о своём персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь — придумаю расу или класс за тебя: просто скажи «придумай мне расу сам». Если сомневаешься — спрашивай, я подскажу, что ослабить или добавить. Когда захочешь сохранить детали — напиши «добавь в анкету». Когда анкета будет готова — скажи «проверь», и я передам её владельцу.',
     chipsGuide: ['Как вступить в чат?', 'Какие есть расы?', 'Какие есть классы?', 'Расскажи про Воина', 'Что такое пасс уровней?', 'Кто в администрации?', 'Что такое Подземелье?', 'Правила про метагейм?'],
-    chipsApp: ['Хочу создать персонажа', 'Хочу создать свою расу', 'Хочу создать свой класс', 'Придумай мне расу сам', 'Придумай мне класс сам', 'Хочу предложить сюжет', 'Добавь в анкету', 'Покажи анкету', 'Проверь мою заявку']
+    chipsApp: ['Хочу создать персонажа', 'Хочу создать свою расу', 'Хочу создать свой класс', 'Придумай мне расу сам', 'Придумай мне класс сам', 'Хочу предложить сюжет', 'Добавь в анкету', 'Покажи анкету', 'Что добавить?', 'Может, ослабить?']
   },
   en: {
     brand: 'Deeprealm',
     tagline: 'Dark fantasy RP · a world after the Single Kingdom',
-    tabs: { home: 'Home', lore: 'Lore', rules: 'Rules', races: 'Races', classes: 'Classes', levelpass: 'Level pass', admin: 'Administration', application: 'Interviewer', guide: 'Guide' },
+    'nick.title': 'What is your Telegram handle?',
+    'nick.hint': 'Enter your Telegram handle — it is how the owner will write to you once your sheet is read.',
+    'nick.warn': 'If you enter someone else\'s handle, the owner cannot write to you first — you will have to contact them yourself.',
+    'nick.save': 'Continue',
+    'nick.change': 'Change handle',
+    'nick.error': 'Enter a Telegram handle: letters, digits and "_", at least 5 characters. For example, @username.',
+    tabs: { home: 'Home', lore: 'Lore', rules: 'Rules', races: 'Races', classes: 'Classes', levelpass: 'Level pass', admin: 'Administration', application: 'Registrar', guide: 'Guide' },
     'home.title': 'Welcome to Deeprealm',
     'home.lead': 'A world that survived the death of the Savior, the fall of the Single Kingdom and the Rumble. Players create characters, races and classes while the GM leads them through shadow and light.',
     'home.create': 'Create a character',
@@ -125,17 +137,17 @@ const I18N = {
     'admin.questions': 'What they ask',
     'admin.pace': 'Typical activity',
     'admin.faq': 'Questions candidates ask',
-    'staff.title': 'Staff application interviewer',
+    'staff.title': 'Registrar for candidates',
     'staff.hint': 'Want to join the team? Say which branch and answer the questions. The owner reviews your application.',
-    staffWelcome: 'Hi. I am the Deeprealm staff application interviewer. Tell me which branch you want: deputy owner, PR, moderator, developer, game master, application reviewer or event manager. If you are unsure I will walk you through each and help you choose.',
-    chipsStaff: ['I want to be a moderator', 'I want to be a game master', 'I want to do PR', 'Tell me about the branches', 'How much activity is expected?', 'Add to the application', 'Review my application'],
+    staffWelcome: 'Hi. I am the Deeprealm Registrar for team candidates. Tell me which branch you want: deputy owner, PR, moderator, developer, game master, registrar or event manager. If you are unsure I will walk you through each and help you choose.',
+    chipsStaff: ['I want to be a moderator', 'I want to be a game master', 'I want to do PR', 'I want to be a developer', 'I want to run events', 'Tell me about the branches', 'How much activity is expected?', 'Add to the application'],
     'classes.templateLink': 'Custom class template',
     'classes.playerBlog': 'All player classes in the blog',
     'player.empty': 'None yet — the list grows over time.',
     'classes.basicAttack': 'Basic attack',
     'classes.abilities': 'Abilities',
-    'app.title': 'AI Interviewer',
-    'app.hint': 'Describe your character freely. Say "add to the application" to save details. After review the interviewer grants the chat link.',
+    'app.title': 'AI Registrar',
+    'app.hint': 'Describe your character freely. Say "add to the application" to save details. When the sheet is ready — say "check" and I will pass it to the owner.',
     'guide.title': 'Guide',
     'guide.hint': 'A reference chat: questions about the rules, lore, races, classes and joining. No roleplay.',
     'chat.send': 'Send',
@@ -143,7 +155,7 @@ const I18N = {
     'chat.placeholderGuide': 'Ask something about the chat…',
     'chat.placeholderStaff': 'Which branch do you want?',
     'chat.thinking': 'The Guide is thinking…',
-    'chat.thinkingApp': 'The Interviewer is thinking…',
+    'chat.thinkingApp': 'The Registrar is thinking…',
     'chat.notConfigured': '⚠️ The AI engine could not be loaded. Reload the page — the chats need no key.',
     'chat.error': 'Could not get a reply from the AI.',
     'chat.copy': 'Copy',
@@ -159,14 +171,18 @@ const I18N = {
     'chat.endTitle': 'Finish the conversation',
     'chat.endCommand': 'finish',
     guideWelcome: 'Greetings, traveler. I am the Deeprealm Guide. Ask me about the rules, lore, races or classes — or how to join the chat.',
-    appWelcome: 'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, personality, strengths and weaknesses. I can also make a race or a class for you — just say "make a race for me". Say "add to the application" to save details. When we are done I will review everything and grant the chat link.',
+    appWelcome: 'Hi. I am the Deeprealm Registrar. Tell me about your character: name, race, class, personality, strengths and weaknesses. I can also make a race or a class for you — just say "make a race for me". If you are unsure, ask me and I will suggest what to weaken or add. Say "add to the application" to save details. When the sheet is ready — say "check" and I will pass it to the owner.',
     chipsGuide: ['How do I join?', 'What races are there?', 'What classes are there?', 'Tell me about the Warrior', 'What is the level pass?', 'Who is in the administration?', 'What is the Dungeon?', 'Rules on metagaming?'],
-    chipsApp: ['I want to create a character', 'I want to create a race', 'I want to create a class', 'Make a race for me', 'Make a class for me', 'I want to propose a plot', 'Add to the application', 'Show the application', 'Review my application']
+    chipsApp: ['I want to create a character', 'I want to create a race', 'I want to create a class', 'Make a race for me', 'Make a class for me', 'I want to propose a plot', 'Add to the application', 'Show the application', 'What should I add?', 'Maybe weaken it?']
   }
 };
 
 const state = {
   lang: localStorage.getItem('dr_lang') || 'ru',
+  // The Telegram handle the player entered once, remembered so the gate is shown a
+  // single time. It travels with every notification, so the owner always knows who
+  // an application came from.
+  nick: '',
   knowledge: null,
   // Player-made races and classes read from the blog: full texts for the Races
   // and Classes pages, and the same records handed to the built-in AI.
@@ -252,6 +268,28 @@ function syncPlayerArticles() {
 
 const CHAT_TYPES = ['guide', 'interview', 'staff'];
 const STORE_KEY = 'dr_chats_v1';
+// The Telegram handle is stored separately from the chats, so it survives a chat
+// reset and is asked exactly once.
+const NICK_KEY = 'dr_nick';
+
+// A Telegram handle: 5–32 characters of letters, digits and underscore. The input
+// is normalised to a single @handle so the same player is recognised whether they
+// type "@name", "name" or "t.me/name".
+function normalizeNick(value) {
+  const raw = String(value || '').trim().replace(/^https?:\/\/(t\.me|telegram\.me)\//i, '');
+  const match = raw.match(/@?([A-Za-z0-9_]{5,32})/);
+  return match ? `@${match[1]}` : '';
+}
+
+function loadNick() {
+  try { state.nick = normalizeNick(localStorage.getItem(NICK_KEY) || ''); } catch { state.nick = ''; }
+}
+
+function saveNick(value) {
+  state.nick = normalizeNick(value);
+  try { localStorage.setItem(NICK_KEY, state.nick); } catch { /* storage blocked */ }
+  el('nickChange').hidden = !state.nick;
+}
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function newConvo() { return { id: uid(), messages: [], application: {} }; }
@@ -313,6 +351,12 @@ async function boot() {
   state.playerRaces = (state.knowledge.races && state.knowledge.races.playerRaces) || [];
   state.playerClasses = (state.knowledge.classes && state.knowledge.classes.playerClasses) || [];
   el('langSelect').value = state.lang;
+  // The handle is read before the first paint and, when it is missing, the gate is
+  // shown at once — before anything else runs, so the site behind it is never usable
+  // without it.
+  loadNick();
+  wireNickGate();
+  if (!state.nick) openNickGate();
   renderStatic();
   renderKnowledge();
   buildTabs();
@@ -328,6 +372,62 @@ async function boot() {
   openFromHash();
 }
 
+// ---------- the Telegram-handle gate ----------
+
+// The gate is deliberately unskippable: there is no close button, no backdrop
+// click, no Escape handler and no way to scroll or click the page behind it. The
+// only way past it is a valid handle. It is shown once, on the first visit, and a
+// "сменить юз" button lets the player correct it later.
+function openNickGate() {
+  const gate = el('nickGate');
+  if (!gate) return;
+  gate.hidden = false;
+  document.body.classList.add('nick-locked');
+  const input = el('nickInput');
+  if (input) { input.value = state.nick || ''; setTimeout(() => input.focus(), 0); }
+}
+
+function closeNickGate() {
+  const gate = el('nickGate');
+  if (gate) gate.hidden = true;
+  document.body.classList.remove('nick-locked');
+}
+
+function submitNick() {
+  const input = el('nickInput');
+  const error = el('nickError');
+  const value = normalizeNick(input ? input.value : '');
+  if (!value) {
+    if (error) { error.textContent = t('nick.error'); error.hidden = false; }
+    if (input) input.focus();
+    return false;
+  }
+  if (error) error.hidden = true;
+  saveNick(value);
+  closeNickGate();
+  return true;
+}
+
+function wireNickGate() {
+  const input = el('nickInput');
+  const save = el('nickSave');
+  const change = el('nickChange');
+  if (save) save.addEventListener('click', submitNick);
+  if (input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submitNick(); }
+    });
+  }
+  // A later correction: reopen the same window. The player may have mistyped.
+  if (change) change.addEventListener('click', openNickGate);
+  // The gate cannot be dismissed from the keyboard, so Escape is swallowed rather
+  // than left to close it.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !el('nickGate').hidden) e.preventDefault();
+  });
+  if (el('nickChange')) el('nickChange').hidden = !state.nick;
+}
+
 // The owner asked to hear about arrivals. On our server the ping goes through
 // /api/visit; on static hosting there is no server, so the bundled notifier sends
 // it to Telegram itself. It is deliberately fire-and-forget: a notification is
@@ -337,7 +437,9 @@ function reportVisit() {
     page: (location.hash || '#home').replace('#', ''),
     from: document.referrer || '',
     device: navigator.userAgent.slice(0, 120),
-    session: sessionKey()
+    session: sessionKey(),
+    // The owner asked to see who arrived, so the handle travels with the visit too.
+    nick: state.nick || ''
   };
   // Static hosting answers /api with the site's own 404 page, which is a response,
   // not a rejection. Only a 2xx counts as "our server took it"; anything else
@@ -589,8 +691,8 @@ function renderKnowledge() {
   const k = state.knowledge;
   // Home
   const steps = state.lang === 'ru'
-    ? ['Придумайте персонажа и, при желании, свою расу и класс.', 'Пройдите диалог с ИИ-анкетологом и проверку.', 'Получите одобрение и ссылку на чат Telegram.']
-    : ['Design your character and, optionally, your own race and class.', 'Go through the AI interviewer dialogue and review.', 'Get approval and the Telegram chat link.'];
+    ? ['Придумайте персонажа и, при желании, свою расу и класс.', 'Пройдите диалог с ИИ-регистратором.', 'Когда анкета готова — скажите «проверь», и её передадут владельцу.']
+    : ['Design your character and, optionally, your own race and class.', 'Go through the AI registrar dialogue.', 'When the sheet is ready — say "check" and it is passed to the owner.'];
   el('entrySteps').innerHTML = steps.map((s) => `<li>${esc(s)}</li>`).join('');
   el('homeGrid').innerHTML = [
     [t('races.title'), state.lang === 'ru' ? `${k.races.list.length} + свои` : `${k.races.list.length} + custom`, 'races'],
@@ -692,8 +794,8 @@ function renderStoryTemplate() {
   if (!text) { box.innerHTML = ''; return; }
   const title = state.lang === 'ru' ? 'Шаблон заявки на сюжет для ГМ' : 'GM plot submission template';
   const hint = state.lang === 'ru'
-    ? 'Хочешь предложить сюжет? Разверни шаблон или просто напиши «Хочу предложить сюжет» — анкетолог поможет оформить.'
-    : 'Want to propose a plot? Expand the template, or just say "I want to propose a plot" and the interviewer will help.';
+    ? 'Хочешь предложить сюжет? Разверни шаблон или просто напиши «Хочу предложить сюжет» — регистратор поможет оформить.'
+    : 'Want to propose a plot? Expand the template, or just say "I want to propose a plot" and the registrar will help.';
   box.innerHTML = `
     <details class="rule-section">
       <summary>${esc(title)}</summary>
@@ -1085,7 +1187,7 @@ async function sendInterview(text) {
   const pending = pushMsg('interviewLog', 'system', t('chat.thinkingApp'));
   let live = null;
   try {
-    const data = await askChat('interview', { messages: convo.messages, lang: state.lang, application: convo.application, onLive: (p) => { live = p; } });
+    const data = await askChat('interview', { messages: convo.messages, lang: state.lang, application: convo.application, nick: state.nick, onLive: (p) => { live = p; } });
     pending.remove();
     if (data.unconfigured) {
       pushMsg('interviewLog', 'system', t('chat.notConfigured'));
@@ -1126,7 +1228,7 @@ async function sendStaff(text) {
   const pending = pushMsg('staffLog', 'system', t('chat.thinkingApp'));
   let live = null;
   try {
-    const data = await askChat('staff', { messages: convo.messages, lang: state.lang, application: convo.application, onLive: (p) => { live = p; } });
+    const data = await askChat('staff', { messages: convo.messages, lang: state.lang, application: convo.application, nick: state.nick, onLive: (p) => { live = p; } });
     pending.remove();
     if (data.unconfigured) {
       pushMsg('staffLog', 'system', t('chat.notConfigured'));

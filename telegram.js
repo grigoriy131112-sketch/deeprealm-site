@@ -150,6 +150,7 @@ export function createNotifier(options = {}) {
       }
       const lines = [
         '🚪 Новый заход на сайт Deeprealm',
+        info.nick ? `Игрок: ${info.nick}` : '',
         info.page ? `Страница: ${info.page}` : '',
         info.from ? `Пришёл откуда: ${info.from}` : '',
         info.device ? `Устройство: ${info.device}` : '',
@@ -161,6 +162,7 @@ export function createNotifier(options = {}) {
       const kind = { character: 'персонажа', race: 'расы', class: 'класса', story: 'сюжета' }[info.kind] || 'анкета';
       const head = `📋 Новая анкета ${kind} — Deeprealm`;
       const meta = [
+        info.nick ? `Игрок: ${info.nick}` : '',
         info.title ? `Название: ${info.title}` : '',
         info.contact ? `Контакт: ${info.contact}` : '',
         info.branch ? `Направление: ${info.branch}` : '',
@@ -175,6 +177,7 @@ export function createNotifier(options = {}) {
         : String(info.text || '').trim();
       return send([
         '🧑‍💼 Собеседование в администрацию — Deeprealm',
+        info.nick ? `Игрок: ${info.nick}` : '',
         info.role ? `Направление: ${info.role}` : '',
         info.contact ? `Контакт: ${info.contact}` : '',
         info.verdict ? `Итог: ${info.verdict}` : '',

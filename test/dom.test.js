@@ -559,3 +559,51 @@ test('an approved sheet is relayed as a sheet with its full text', async () => {
   assert.match(sheets[0].text, /Название класса:/, 'the full sheet text travels, not just the heading');
 });
 
+
+// --- the Telegram-handle gate -----------------------------------------------
+// The owner has to know who an application came from, so a first-time visitor
+// cannot use the site until a valid handle is entered. The gate is deliberately
+// unskippable: no close button, no backdrop click, no Escape.
+
+const nickGate = (win) => win.document.getElementById('nickGate');
+
+test('the handle gate opens on a first visit and closes only on a valid handle', async () => {
+  const win = await boot({});
+  assert.equal(nickGate(win).hidden, false, 'the gate is shown when no handle is stored');
+  assert.ok(win.document.body.classList.contains('nick-locked'), 'the page behind is locked');
+
+  // An empty or too-short handle is refused, and the gate stays up.
+  win.document.getElementById('nickInput').value = 'ab';
+  win.document.getElementById('nickSave').click();
+  assert.equal(nickGate(win).hidden, false, 'a bad handle does not open the site');
+  assert.equal(win.document.getElementById('nickError').hidden, false, 'the reason is shown');
+
+  // Escape must not dismiss it either.
+  win.document.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', cancelable: true, bubbles: true }));
+  assert.equal(nickGate(win).hidden, false, 'Escape cannot skip the gate');
+
+  // A valid handle is accepted, normalised and remembered.
+  win.document.getElementById('nickInput').value = 'telegram_man';
+  win.document.getElementById('nickSave').click();
+  assert.equal(nickGate(win).hidden, true, 'a valid handle opens the site');
+  assert.equal(win.document.body.classList.contains('nick-locked'), false, 'the scroll lock is lifted');
+  assert.equal(win.localStorage.getItem('dr_nick'), '@telegram_man', 'the handle is stored normalised');
+});
+
+test('a stored handle skips the gate on the next visit', async () => {
+  const win = await boot({ dr_nick: '@already_here' });
+  assert.equal(nickGate(win).hidden, true, 'the gate is not shown again');
+});
+
+test('the stored handle travels with a sheet sent to the owner', async () => {
+  const { state, opts, calls } = relayBoot({ dr_nick: '@candidate_one' });
+  const win = await boot(state, opts);
+  await say(win, 'interview', 'придумай мне класс сам');
+  await say(win, 'interview', 'проверь');
+  await sleep(120);
+
+  const sheets = calls.filter((c) => c.type === 'sheet');
+  assert.equal(sheets.length, 1, 'the owner gets the sheet');
+  assert.equal(sheets[0].nick, '@candidate_one', 'the owner sees who it came from');
+});
+

@@ -28,6 +28,7 @@
           <span data-i18n="tagline">Тёмное фэнтези-РП · мир после Единого Королевства</span>
         </div>
         <div class="lang">
+          <button class="btn nick-change" id="nickChange" type="button" data-i18n="nick.change" hidden>Сменить юз</button>
           <select id="langSelect" aria-label="Language">
             <option value="ru">RU</option>
             <option value="en">EN</option>
@@ -96,7 +97,7 @@
       <h2 data-i18n="admin.title">Администрация</h2>
       <p class="hint" data-i18n="admin.hint">Команда проекта, направления и как попасть в неё.</p>
       <div id="adminContent"></div>
-      <h3 data-i18n="staff.title">Анкетолог по кандидатам</h3>
+      <h3 data-i18n="staff.title">Регистратор по кандидатам</h3>
       <p class="hint" data-i18n="staff.hint">Хочешь в команду? Расскажи, куда хочешь, и ответь на вопросы. Заявку посмотрит владелец.</p>
       <div class="card chat">
         <div class="chat-toolbar" id="staffToolbar"></div>
@@ -109,10 +110,10 @@
       <div class="chips" id="staffChips"></div>
     </section>
 
-    <!-- APPLICATION (interviewer) -->
+    <!-- APPLICATION (registrar) -->
     <section class="page" data-page="application">
-      <h2 data-i18n="app.title">ИИ-анкетолог</h2>
-      <p class="hint" data-i18n="app.hint">Опиши персонажа свободно. Скажи «добавь в анкету», чтобы сохранить детали. После проверки анкетолог выдаст ссылку на чат.</p>
+      <h2 data-i18n="app.title">ИИ-регистратор</h2>
+      <p class="hint" data-i18n="app.hint">Опиши персонажа свободно. Скажи «добавь в анкету», чтобы сохранить детали. Когда анкета готова — скажи «проверь», и я передам её владельцу.</p>
       <div id="storyTemplateBox"></div>
       <div class="card chat">
         <div class="chat-toolbar" id="interviewToolbar"></div>
@@ -147,6 +148,22 @@
       <p>Deeprealm · <a id="chatLinkFooter" target="_blank" rel="noopener">Telegram</a></p>
     </div>
   </footer>
+
+  <!-- The nick gate. It is the first thing a visitor sees and it cannot be skipped:
+       the owner has to know who an application came from, and a player who types a
+       wrong handle can never be written back to. The overlay is shown before the
+       site is usable and only closes once a valid Telegram handle is entered. -->
+  <div class="nick-gate" id="nickGate" hidden>
+    <div class="nick-card" role="dialog" aria-modal="true" aria-labelledby="nickTitle">
+      <div class="nick-sigil">✦</div>
+      <h2 id="nickTitle" data-i18n="nick.title">Как тебя зовут в Telegram?</h2>
+      <p class="hint" data-i18n="nick.hint">Укажи свой ник в Telegram — по нему владелец напишет тебе, когда прочитает анкету.</p>
+      <input id="nickInput" type="text" autocomplete="off" spellcheck="false" placeholder="@username" maxlength="33" />
+      <p class="nick-error" id="nickError" hidden></p>
+      <p class="nick-warn" data-i18n="nick.warn">Если указать чужой ник, владелец не сможет написать вам первым — связаться с ним придётся самостоятельно.</p>
+      <button class="btn primary" id="nickSave" type="button" data-i18n="nick.save">Продолжить</button>
+    </div>
+  </div>
 
   <script src="scene.js"></script>
   <script src="chat-browser.js"></script>

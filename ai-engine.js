@@ -323,11 +323,147 @@ function isHelpAsk(text) {
 function interviewerReaction(text, lang) {
   const s = String(text || '').trim();
   if (!s) return '';
+  if (isAdviceAsk(s)) return pick(lang, 'Хорошая мысль, давай разберём.', 'Good thought, let us look at it.');
   if (/\?\s*$/.test(s)) return pick(lang, 'Хороший вопрос.', 'Good question.');
   if (/не\s+знаю|не\s+уверен|затрудня|не\s+понимаю/i.test(s)) return pick(lang, 'Ничего, помогу разобраться.', 'No worries, I will help you figure it out.');
   if (s.length < 12) return pick(lang, 'Коротко и ясно.', 'Short and clear.');
   if (s.length >= 40) return pick(lang, 'Отлично, вот это уже деталь.', 'Nice, that is a real detail.');
   return pick(lang, 'Записал.', 'Noted.');
+}
+
+// ------------------------------------------------------------- advice (советы)
+
+// Players ask the interviewer for advice all the time: "может, ослабить его
+// способности?", "может, добавить что-нибудь?", "а это не имба?", "что улучшить?".
+// There are far too many phrasings to enumerate, so this recognises the *shape* of
+// an advice question — a nudge, an evaluation, or an open ask — and answers from the
+// balance rules below. Anything that slips through still lands in the interviewer's
+// free-form reply, which keeps the conversation useful.
+export function isAdviceAsk(text) {
+  const s = String(text || '').trim().toLowerCase();
+  if (!s) return false;
+  return /может[,\s]|может\s+быть|стоит\s+ли|не\s+стоит|следует\s+ли|не\s+лучше\s+ли|лучше\s+ли|а\s+если|что\s+если|стоило\s+бы|надо\s+ли|нужно\s+ли|можно\s+ли|правильно\s+ли|нормально\s+ли|не\s+имба|имба\s+ли|слишком\s+(сильн|слаб|мощн|жирн|слабо)|чересчур|перебор|дисбаланс|сбалансиров|баланс|усил|ослабл|ослабь|ослабить|усиль|усилить|пониз|повыс|улучш|добав(ить|ь)|докин|убрать|убер|убрал|замен(ить|и)|поменять|исправить|поправить|дополнить|дополни|придумать\s+что|предложи|посоветуй|совет|подскажи|что\s+не\s+так|что\s+тут\s+не\s+так|в\s+чём\s+проблем|как\s+(сделать|улучшить|исправить|дополнить|усилить|ослабить)|помоги\s+с|оцени|проверь\s+баланс|норм\?|ок\?|или\s+нет/i.test(s);
+}
+
+// Whether the message is asking about the sheet rather than answering the current
+// field question. A plain "может, добавить что-нибудь?" during a race walk is about
+// the race, so the advice answers it and the walk continues.
+function adviceKind(text, app, history) {
+  const s = String(text || '').toLowerCase();
+  if (/сюжет|гм|квест|истори|приключен/i.test(s)) return 'story';
+  if (kindFromSheetText(s)) return kindFromSheetText(s);
+  return interviewKind(app, history);
+}
+
+// The balance rules the advice leans on, read from the knowledge base so a change
+// there is reflected here with no code edit.
+function balanceRules(kind) {
+  const k = getKnowledge() || {};
+  if (kind === 'race') {
+    return [
+      ...(k.races?.race_template_rules || []),
+      'минимум две серьёзные уязвимости;',
+      'максимум две школы магии;',
+      'никакого бессмертия и неуязвимости.'
+    ];
+  }
+  if (kind === 'class') {
+    return [
+      ...(k.classes?.class_balance_rules || []),
+      'у каждой способности перезарядка в ходах;',
+      'у ресурса — истощение;',
+      'минимум одно ограничение и одна слабость.'
+    ];
+  }
+  return [
+    'сильные стороны должны уравновешиваться слабостями;',
+    'у персонажа есть характер, мотивация и хотя бы одна уязвимость;',
+    'никакой неуязвимости и «бога из машины».'
+  ];
+}
+
+// A concrete, per-topic answer. The topic is matched loosely so the same advice
+// serves "ослабить", "слишком сильно", "имба", "убрать способность" and so on.
+function adviceTopic(text, kind) {
+  const s = String(text || '').toLowerCase();
+  if (/добав|докин|дополн|придумать\s+что|чего\s+не\s+хватает|не\s+хватает|что\s+ещё/i.test(s)) return 'add';
+  if (/убрать|убер|лишн|замен|поменять|переработ|переделать/i.test(s)) return 'remove';
+  if (/усил|повыс|слишком\s+слаб|мощн(ее|ее)|слаб(ый|о)|слабо|поднять/i.test(s)) return 'strengthen';
+  if (/ослаб|пониз|слишком\s+сильн|имба|перебор|дисбаланс|жирн|читер|неуязв|бессмерт/i.test(s)) return 'weaken';
+  if (/нормально|ок|окей|правильно|хорошо\s+ли|норм|сойдёт|сойдет/i.test(s)) return 'evaluate';
+  if (/что\s+не\s+так|в\s+чём\s+проблем|ошибк|проблем|замечан|замечани/i.test(s)) return 'problems';
+  if (/что\s+улучшить|улучш|доделать|доработ|как\s+лучше|идеи|посовет|совет|предложи|подскажи/i.test(s)) return 'improve';
+  return 'general';
+}
+
+// The advice body. Each topic says what to change and why, so the player can act on
+// it, and the balance rules are quoted back so the reasoning is the site's own.
+export function adviceAnswer(text, app, history, lang = 'ru') {
+  const kind = adviceKind(text, app, history);
+  const topic = adviceTopic(text, kind);
+  const rules = balanceRules(kind);
+  const what = kind === 'race' ? 'расы' : kind === 'class' ? 'класса' : kind === 'story' ? 'сюжета' : 'персонажа';
+  const head = pick(lang, `Разберём по балансу ${what}.`, `Let us look at the ${what} balance.`);
+
+  const bodies = {
+    weaken: [
+      pick(lang, 'Да, ослабить стоит — если сила не уравновешена слабостью, это уже имба. Что убрать или урезать:', 'Yes, it is worth weakening — if a strength is not balanced by a weakness, it is already overpowered. What to cut:'),
+      pick(lang, '— снизь урон или длительность: например, «12 урона и −3 к точности на 2 хода» вместо большего;', '— lower the damage or duration: e.g. "12 damage and −3 accuracy for 2 turns" instead of more;'),
+      pick(lang, '— добавь перезарядку в ходах у сильной способности;', '— add a cooldown in turns to the strong ability;'),
+      pick(lang, '— добавь вторую уязвимость, которая бьёт по сильной стороне (сухость, страх, хрупкость).', '— add a second weakness that bites the strong side (drought, fear, fragility).')
+    ],
+    strengthen: [
+      pick(lang, 'Если наоборот слабовато — усилить можно, но так, чтобы осталось честно:', 'If it is too weak instead — you can strengthen it, but keep it fair:'),
+      pick(lang, '— подними одно число (урон, длительность, запас ресурса), а не всё сразу;', '— raise one number (damage, duration, resource pool), not everything at once;'),
+      pick(lang, '— дай способности вторую грань: не только урон, но и полезный эффект;', '— give the ability a second edge: not only damage but a useful effect;'),
+      pick(lang, '— взамен добавь условие или слабость, чтобы не вышло имбы.', '— add a condition or weakness in exchange, so it does not become overpowered.')
+    ],
+    add: [
+      pick(lang, 'Да, добавить есть что. Смотри, чего обычно не хватает:', 'Yes, there is room to add. What is usually missing:'),
+      pick(lang, '— ещё одна слабость (среда, страх, цена силы) — это первое, что просят добавить;', '— one more weakness (environment, fear, a price for the power) — the first thing to add;'),
+      pick(lang, '— общественное устройство и отношения с другими расами, если это раса;', '— a society and relations with other races, if this is a race;'),
+      pick(lang, '— для класса: перезарядки в ходах, истощение ресурса и одна специализация.', '— for a class: cooldowns in turns, resource exhaustion and one specialization.')
+    ],
+    remove: [
+      pick(lang, 'Убрать или заменить можно — если что-то дублируется или ломает баланс:', 'You can remove or replace it — if something duplicates or breaks balance:'),
+      pick(lang, '— убери повтор: две способности с одним эффектом — это одна способность;', '— cut the duplicate: two abilities with the same effect are one ability;'),
+      pick(lang, '— замени «бесплатную» силу на силу с ценой или перезарядкой;', '— replace a "free" power with one that has a cost or a cooldown;'),
+      pick(lang, '— вместо запрета добавь ограничение: «не работает под водой» лучше, чем «нельзя».', '— instead of a ban, add a limit: "does not work underwater" beats "never allowed".')
+    ],
+    improve: [
+      pick(lang, 'Что улучшить — по порядку:', 'What to improve, in order:'),
+      pick(lang, '— сначала закрой уязвимости: без них заявку вернут;', '— close the weaknesses first: without them the sheet comes back;'),
+      pick(lang, '— потом уточни числа (урон, ХП, перезарядка, ресурс);', '— then pin the numbers (damage, HP, cooldown, resource);'),
+      pick(lang, '— и допиши, как это играется в сцене, а не только в цифрах.', '— and describe how it plays in a scene, not just in numbers.')
+    ],
+    evaluate: [
+      pick(lang, 'Оцениваю честно, по правилам:', 'Honest verdict, by the rules:'),
+      pick(lang, '— если у сильной способности есть слабость и перезарядка, всё в порядке;', '— if the strong ability has a weakness and a cooldown, it is fine;'),
+      pick(lang, '— если сильных сторон больше, чем ограничений, — это имба, урежем;', '— if strengths outweigh limits, it is overpowered and we will trim it;'),
+      pick(lang, '— если сомневаешься, добавь ещё одну слабость: лишняя слабость не мешает игре.', '— if unsure, add one more weakness: an extra weakness never hurts play.')
+    ],
+    problems: [
+      pick(lang, 'Что не так и на что смотрят в первую очередь:', 'What is wrong and what gets checked first:'),
+      pick(lang, '— нет уязвимостей или они несерьёзные;', '— no weaknesses, or they are not serious;'),
+      pick(lang, '— способность без перезарядки;', '— an ability with no cooldown;'),
+      pick(lang, '— бессмертие, неуязвимость или владение всеми школами магии.', '— immortality, invulnerability, or mastery of every school of magic.')
+    ],
+    general: [
+      pick(lang, 'Отвечу по существу — опирайся на эти правила:', 'Straight answer — lean on these rules:'),
+      pick(lang, '— у каждой силы должна быть цена или слабость;', '— every strength needs a cost or a weakness;'),
+      pick(lang, '— числа важнее слов: урон, ХП, перезарядка, ресурс;', '— numbers matter more than words: damage, HP, cooldown, resource;'),
+      pick(lang, '— не бойся слабостей: они делают персонажа живым.', '— do not fear weaknesses: they make the character alive.')
+    ]
+  };
+
+  return [head, ...(bodies[topic] || bodies.general), pick(lang, 'Правила, на которые я смотрю:', 'The rules I am looking at:'), ...rules.map((r) => `— ${r}`)].join('\n');
+}
+
+// Whether the message reads like the player asking for advice rather than answering
+// the current field. A question mark alone is not enough ("как зовут твоего героя?"
+// is not advice), so the advice shape is required.
+export function looksLikeAdvice(text) {
+  return isAdviceAsk(text);
 }
 
 // The two ways to get a race or a class, said plainly. This is what the player is
@@ -588,6 +724,22 @@ function interviewMinFields(kind) {
   return KIND_MIN_FIELDS[kind] || INTERVIEW_MIN_FIELDS;
 }
 
+// Whether the sheet is complete enough to be handed to the owner. Exported so the
+// caller can decide to send without re-deriving the rule, and so the decision does
+// not depend on the model's wording: the site no longer judges the sheet, it only
+// checks that there is something to send.
+export function interviewReady(application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  const kind = interviewKind(app, history);
+  return countFilledFields(app, history) >= interviewMinFields(kind);
+}
+
+// The player asked for the sheet to be taken in. Exported so the sender can tell an
+// explicit check from a stray "проверь" that is part of a longer sentence.
+export function isCheckCommand(text) {
+  return isCheckCmd(text);
+}
+
 function countFilledFields(app, history) {
   const names = interviewFields(app, history);
   const drafted = Object.keys(app || {}).filter((k) => !k.startsWith('_') && !k.startsWith('note_'));
@@ -670,30 +822,42 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   }
   if (isShowCmd(text)) return renderApplication(app, lang);
   if (isCheckCmd(text)) {
-    // A filled-in sheet is recognised from the draft and from the dialogue, so a
-    // player who never used "add to the application" can still be checked. A race
-    // and a class must carry their abilities and weaknesses, which is what the
-    // balance rules are about, so they need more covered fields than a character.
+    // The site does not judge the sheet any more: it accepts it and hands it to the
+    // owner, who decides. So a check either reports that the sheet is not ready, or
+    // accepts it. The fixed "передана владельцу" closing line is added by the caller.
     const kind = interviewKind(app, history);
     const filled = countFilledFields(app, history);
     if (filled < interviewMinFields(kind)) {
       return [
-        pick(lang, 'Анкета ещё не заполнена: мне нужно больше деталей, иначе проверять нечего.', 'The application is not filled in yet: I need more detail before checking.'),
+        pick(lang, 'Анкета ещё не заполнена: мне нужно больше деталей, иначе отправлять нечего.', 'The application is not filled in yet: I need more detail before sending it.'),
         nextFieldPrompt(app, lang, history)
       ].join('\n');
     }
-    const approved = pick(lang, 'Проверил: выглядит сбалансированно, серьёзных нарушений не вижу. ОДОБРЕНО ✅', 'I checked it: it looks balanced, I see no serious issues. APPROVED ✅');
-    return approved;
+    return pick(lang, 'Принял заявку — передаю её владельцу.', 'Accepted — passing it to the owner.');
   }
   // The player asks the Interviewer to author the sheet itself ("создай сам",
   // "придумай за меня"). It builds a complete race or class from the balance rules
-  // and hands back the draft, so the very next "проверь" approves and forwards it.
+  // and hands back the draft, so the very next "проверь" accepts and forwards it.
   const made = generatedSheet(history, app, lang);
   if (made) return renderGenerated(made, lang);
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
-  // A question about how this works is explained instead of opening the walk, so
-  // "а как мне создать расу?" gets the two options and then the first question.
+  // "Как мне создать расу?" is a how-to, not advice about a sheet: the two options
+  // are explained, then the walk continues. Checked before the advice block so the
+  // word "подскажи" in a how-to question cannot turn it into balance advice.
+  const createHelp = /как\s+(мне\s+)?(создать|сделать|придумать|заполнить|начать|играть|быть)|с\s+чего\s+начать|what\s+(do|should)\s+i|how\s+(do|can)\s+i/i.test(text);
+  if (createHelp) {
+    const kind = wantsRace ? 'race' : wantsClass ? 'class' : interviewKind(app, history);
+    return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
+  }
+  // The player is thinking out loud about the sheet ("может, ослабить его
+  // способности?", "может, добавить что-нибудь?"). There are too many phrasings to
+  // list, so the shape of the question is recognised and answered from the balance
+  // rules, and then the walk continues from where it was. A plain creation request
+  // ("может, сделать расу?") is handled above, so it is not swallowed here.
+  if (isAdviceAsk(text)) {
+    return [adviceAnswer(text, app, history, lang), nextFieldPrompt(app, lang, history)].join('\n');
+  }
   if (isHelpAsk(text)) {
     const kind = wantsRace ? 'race' : wantsClass ? 'class' : interviewKind(app, history);
     return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
@@ -718,8 +882,8 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   }
   if (isGreeting(text) || !text.trim()) {
     return pick(lang,
-      'Привет. Я Анкетолог Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
-      'Hi. I am the Deeprealm Interviewer. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
+      'Привет. Я Регистратор Deeprealm. Расскажи о персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь создать расу, класс или предложить сюжет для ГМ — просто скажи. Скажи «добавь в анкету», чтобы сохранить детали.',
+      'Hi. I am the Deeprealm Registrar. Tell me about your character: name, race, class, character, strengths and weaknesses. To make a race, a class or to propose a plot for the game master, just say so. Say "add to the application" to save details.');
   }
   // Otherwise react to what was just said, then ask for the next thing. The
   // reaction is what makes the walk feel like a conversation instead of a form.

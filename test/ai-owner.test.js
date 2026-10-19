@@ -230,12 +230,12 @@ test('the guide answers at once and hands the live rewrite to the caller', async
 
 test('owner-delivery text tells the truth when sending fails', () => {
   const ok = sentToOwnerText('interview', 'ru', { delivered: true });
-  assert.match(ok, /Анкета отправлена владельцу/);
+  assert.match(ok, /передан[а]? владельцу/);
   const failed = sentToOwnerText('interview', 'ru', { delivered: false });
   assert.match(failed, /не удалось/);
   assert.match(failed, /@Omega_Gribcha/, 'the owner contact is repeated so a sheet is not lost');
   const staffOk = sentToOwnerText('staff', 'ru', { delivered: true });
-  assert.match(staffOk, /Все ответы отправлены владельцу/);
+  assert.match(staffOk, /Все ответы переданы владельцу/);
 });
 
 test('applicationTitle prefers a real name over the kind label', () => {
@@ -269,7 +269,7 @@ test('an approved interview forwards the sheet to the owner through the notifier
   assert.equal(out.delivered, true);
   assert.equal(sent.length, 1, 'the owner gets exactly one message');
   assert.match(sent[0].text, /Лира/);
-  assert.match(out.reply, /Анкета отправлена владельцу/);
+  assert.match(out.reply, /передан[а]? владельцу/);
   setNotifier(null);
 });
 
@@ -288,10 +288,10 @@ test('a notification that never settles cannot freeze the approval', async () =>
   // failed, instead of the chat staying on "the Interviewer is thinking" forever.
   setNotifier(() => new Promise(() => {}));
   const out = await answerInterview({ messages: APPROVED_DIALOGUE, lang: 'ru', notifyTimeoutMs: 50 });
-  assert.equal(out.finale, true, 'the approval still reaches the player');
+  assert.equal(out.finale, true, 'the intake still reaches the player');
   assert.equal(out.delivered, false);
-  assert.match(out.reply, /ОДОБРЕНО/);
-  assert.match(out.reply, /не удалось/);
+  assert.match(out.reply, /Отправить владельцу автоматически не удалось/);
+  assert.match(out.reply, /Анкета уже у владельца/);
   setNotifier(null);
 });
 
@@ -309,7 +309,7 @@ test('a finished staff interview sends all the answers to the owner', async () =
   assert.equal(out.done, true);
   assert.equal(sent.length, 1, 'one message carries the whole interview');
   assert.equal(sent[0].answers.length, asked.length, 'every asked question is paired');
-  assert.match(out.reply, /Все ответы отправлены владельцу/);
+  assert.match(out.reply, /Все ответы переданы владельцу/);
   setNotifier(null);
 });
 
@@ -369,7 +369,7 @@ test('an approved plot goes to the owner and is not published by the site', asyn
   assert.equal(sent.length, 1, 'the owner gets the plot');
   assert.equal(sent[0].kind, 'story');
   assert.equal(sent[0].title, 'Банк призраков', 'the plot title reaches the owner');
-  assert.match(out.reply, /Сюжет отправлен владельцу/);
+  assert.match(out.reply, /Сюжет передан владельцу/);
   // The site no longer publishes a race, a class or a plot itself: the owner
   // posts them in the blog, and the pages read the blog.
   assert.equal(out.published, undefined, 'nothing is published by the site');
@@ -409,12 +409,12 @@ test('a race interview continues on its own checklist and approves a full sheet'
     'Где живут': 'подземелья', 'Способности': 'шаг сквозь тень', 'Уязвимости': 'свет и соль'
   };
   const approved = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: full });
-  assert.match(approved, /ОДОБРЕНО/, 'a filled race sheet is approved');
+  assert.match(approved, /передаю её владельцу/, 'a filled race sheet is accepted and handed off');
 });
 
 test('a thin race sheet is not approved and is not filed as a character', async () => {
   const thin = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: { _kind: 'race', 'Название': 'Тени' } });
-  assert.doesNotMatch(thin, /ОДОБРЕНО/, 'one field is not enough for a race');
+  assert.doesNotMatch(thin, /передан[а]? владельцу/, 'one field is not enough for a race');
   assert.match(thin, /не заполнена/);
 
   const sent = [];
@@ -477,7 +477,7 @@ test('a self-made race is stored, approved and sent to the owner', async () => {
   // The very next "проверь" approves the generated sheet without more questions.
   messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
   const second = await answerInterview({ messages, lang: 'ru', application: first.application });
-  assert.match(second.reply, /ОДОБРЕНО/, 'the generated race passes the check');
+  assert.match(second.reply, /передан[а]? владельцу/, 'the generated race is accepted and handed off');
   assert.equal(sent.length, 1, 'the generated race is sent to the owner');
   assert.equal(sent[0].kind, 'race');
   assert.equal(sent[0].title, first.application['Название'], 'the owner gets the generated name');
@@ -494,7 +494,7 @@ test('a self-made class is stored, approved and sent to the owner', async () => 
 
   messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
   const second = await answerInterview({ messages, lang: 'ru', application: first.application });
-  assert.match(second.reply, /ОДОБРЕНО/, 'the generated class passes the check');
+  assert.match(second.reply, /передан[а]? владельцу/, 'the generated class is accepted and handed off');
   assert.equal(sent.length, 1, 'the generated class is sent to the owner');
   assert.equal(sent[0].kind, 'class');
   setNotifier(null);
@@ -516,7 +516,7 @@ test('a class built for an existing race names that race and its milestones', as
 
   messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
   const second = await answerInterview({ messages, lang: 'ru', application: first.application });
-  assert.match(second.reply, /ОДОБРЕНО/, 'the race-based class passes the check');
+  assert.match(second.reply, /передан[а]? владельцу/, 'the race-based class is accepted and handed off');
   assert.equal(sent.length, 1);
   assert.equal(sent[0].kind, 'class');
   setNotifier(null);
@@ -527,12 +527,12 @@ test('a ready sheet pasted by the player is checked as its own kind', async () =
   setNotifier(async (info) => { sent.push(info); return { ok: true }; });
   const race = 'Название: Пепельники\nСамоназвание: Тлеющие\nГде живут: выжженные пустоши\nЧем занимаются: собирают пепел\nБоевые навыки: швыряют обломки\nСпособности: Жар ядра\nУязвимости: вода и холод\nМагия: Огонь и Руны';
   const out = await answerInterview({ messages: [{ role: 'user', content: race }, { role: 'user', content: 'проверь' }], lang: 'ru' });
-  assert.match(out.reply, /ОДОБРЕНО/, 'a pasted race sheet is approved');
+  assert.match(out.reply, /передан[а]? владельцу/, 'a pasted race sheet is accepted and handed off');
   assert.equal(sent[0].kind, 'race', 'the owner gets it as a race, not a character');
 
   const cls = 'Название класса: Гробовый певец\nРоль: призыватель\nРесурс: Кости\nБазовая атака: 3 кости\nУльтимейт: Зов гробницы\nИстощение ресурса: кости = 0';
   const out2 = await answerInterview({ messages: [{ role: 'user', content: cls }, { role: 'user', content: 'проверь' }], lang: 'ru' });
-  assert.match(out2.reply, /ОДОБРЕНО/, 'a pasted class sheet is approved');
+  assert.match(out2.reply, /передан[а]? владельцу/, 'a pasted class sheet is accepted and handed off');
   assert.equal(sent[1].kind, 'class', 'the owner gets it as a class');
   setNotifier(null);
 });

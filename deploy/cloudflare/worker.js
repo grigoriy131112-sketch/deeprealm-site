@@ -93,6 +93,7 @@ function visitText(info) {
   const now = Date.now();
   return [
     '🚪 Новый заход на сайт Deeprealm',
+    info.nick ? `Игрок: ${info.nick}` : '',
     info.page ? `Страница: ${info.page}` : '',
     info.from ? `Пришёл откуда: ${info.from}` : '',
     info.device ? `Устройство: ${info.device}` : '',
@@ -103,6 +104,7 @@ function visitText(info) {
 function sheetText(info) {
   const kind = { character: 'персонажа', race: 'расы', class: 'класса', story: 'сюжета' }[info.kind] || 'анкета';
   const meta = [
+    info.nick ? `Игрок: ${info.nick}` : '',
     info.title ? `Название: ${info.title}` : '',
     info.contact ? `Контакт: ${info.contact}` : '',
     info.branch ? `Направление: ${info.branch}` : '',
@@ -119,6 +121,7 @@ function staffText(info) {
     : String(info.text || '').trim();
   return [
     '🧑‍💼 Собеседование в администрацию — Deeprealm',
+    info.nick ? `Игрок: ${info.nick}` : '',
     info.role ? `Направление: ${info.role}` : '',
     info.contact ? `Контакт: ${info.contact}` : '',
     info.verdict ? `Итог: ${info.verdict}` : '',

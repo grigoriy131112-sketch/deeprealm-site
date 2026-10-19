@@ -210,8 +210,8 @@ app.get('/api/status', (req, res) => {
 // page reports one and the notifier throttles it per browser session. It always
 // answers 200: a notification is never worth an error on the visitor's screen.
 app.post('/api/visit', (req, res) => {
-  const { page, from, device, session } = req.body || {};
-  notifier.visit({ page, from, device, session }).catch(() => {});
+  const { page, from, device, session, nick } = req.body || {};
+  notifier.visit({ page, from, device, session, nick }).catch(() => {});
   res.json({ ok: true, telegram: notifier.enabled });
 });
 
@@ -296,10 +296,10 @@ app.post('/api/guide', async (req, res) => {
 });
 
 app.post('/api/interview', async (req, res) => {
-  const { messages = [], lang = 'ru', application = {} } = req.body || {};
+  const { messages = [], lang = 'ru', application = {}, nick = '' } = req.body || {};
   try {
     res.json(await answerInterview({
-      messages, lang, application,
+      messages, lang, application, nick,
       notify: (info) => notifier.sheet(info)
     }));
   } catch (err) {
@@ -308,9 +308,9 @@ app.post('/api/interview', async (req, res) => {
 });
 
 app.post('/api/staff', async (req, res) => {
-  const { messages = [], lang = 'ru', application = {} } = req.body || {};
+  const { messages = [], lang = 'ru', application = {}, nick = '' } = req.body || {};
   try {
-    res.json(await answerStaff({ messages, lang, application, notify: (info) => notifier.staff(info) }));
+    res.json(await answerStaff({ messages, lang, application, nick, notify: (info) => notifier.staff(info) }));
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
