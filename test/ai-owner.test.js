@@ -12,7 +12,7 @@ import {
   STAFF_MAX_QUESTIONS, setSheetDetector
 } from '../chat-core.js';
 import { setNotifier, answerInterview, answerStaff, setLiveCaller, answerGuide } from '../chat-answers.js';
-import { localInterview, parseFieldEdit } from '../ai-engine.js';
+import { localInterview, parseFieldEdit, finishSheet } from '../ai-engine.js';
 import { detectSheetKind } from '../publish.js';
 
 // These tests run against the real knowledge base, so the reply texts and the
@@ -585,6 +585,42 @@ test('the interviewer offers to finish the sheet itself partway through', () => 
   // And the offer leads straight to a generated sheet.
   history.push({ role: 'assistant', content: reply }, { role: 'user', content: 'придумай мне рассу сам' });
   assert.match(localInterview({ messages: history, lang: 'ru', application: app }), /Готово/);
+});
+
+test('"finish it for me" mid-walk generates the rest and keeps the player\'s answers', async () => {
+  // The owner's exact complaint: after "Хорошо... Можешь сам всё дальше придумать?"
+  // the bot answered "Хороший вопрос" and offered the same handover back. It must
+  // author the sheet and keep the name the player already chose.
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const app = { _kind: 'race', 'Название': 'лёд', 'Самоназвание': 'Сухие', 'Внешность': 'сухая кожа' };
+  const messages = [{ role: 'user', content: 'Хорошо... Можешь сам всё дальше придумать?' }];
+  const first = await answerInterview({ messages, lang: 'ru', application: app });
+  assert.match(first.reply, /Готово/, 'the rest is authored');
+  assert.doesNotMatch(first.reply, /Хороший вопрос/, 'not the generic non-answer');
+  assert.equal(first.application['Название'], 'лёд', 'the player\'s own name is kept');
+  assert.equal(first.application['Внешность'], 'сухая кожа', 'the player\'s own look is kept');
+  assert.ok(first.application['Уязвимости'], 'the balance rules supply the missing fields');
+
+  messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
+  const second = await answerInterview({ messages, lang: 'ru', application: first.application });
+  assert.match(second.reply, /передан[а]? владельцу/, 'the finished sheet is handed off');
+  assert.equal(sent[0].title, 'лёд', 'the owner gets the name the player chose');
+  setNotifier(null);
+});
+
+test('a finish request is only read as one when it really asks for the rest', () => {
+  const race = { _kind: 'race', 'Название': 'Тени' };
+  const at = (text) => finishSheet([{ role: 'user', content: text }], race, 'ru');
+  for (const ask of ['Можешь сам всё дальше придумать?', 'придумай остальное сам', 'доделай за меня', 'можешь придумать всё сам']) {
+    assert.ok(at(ask), `"${ask}" hands the rest over`);
+  }
+  // An ordinary answer that merely contains "сами" is not a handover.
+  for (const ask of ['Они сами по себе живут в горах', 'мы сами решим свою судьбу', 'хочу расу']) {
+    assert.equal(at(ask), null, `"${ask}" is not a handover`);
+  }
+  // Outside a race/class walk nothing is generated, even with the same words.
+  assert.equal(finishSheet([{ role: 'user', content: 'Можешь сам всё дальше придумать?' }], { _kind: 'character' }, 'ru'), null);
 });
 
 test('a rename request changes the sheet instead of being ignored', async () => {

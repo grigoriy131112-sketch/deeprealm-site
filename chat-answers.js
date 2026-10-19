@@ -6,7 +6,7 @@ import {
   sentToOwnerText, applicationTitle, staffAnswerPairs, detectSheet,
   staffTurn, matchActivityFaq, GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM
 } from './chat-core.js';
-import { localGuide, localInterview, localStaff, interviewKind, generatedSheet, interviewReady, isCheckCommand, parseFieldEdit } from './ai-engine.js';
+import { localGuide, localInterview, localStaff, interviewKind, generatedSheet, finishSheet, interviewReady, isCheckCommand, parseFieldEdit } from './ai-engine.js';
 import { keepsEssentials } from './ai-maker.js';
 
 let modelCaller = null;
@@ -171,7 +171,7 @@ export async function answerInterview({ messages = [], lang = 'ru', application 
   // the draft and the very next "проверь" can accept and forward it. Without this
   // the generated sheet would be shown but never stored, and the check would find
   // an empty draft.
-  const made = generatedSheet(history, appState, lang);
+  const made = generatedSheet(history, appState, lang) || finishSheet(history, appState, lang);
   // A revision of the sheet ("давай поменяем название на «лёд»") is stored in the
   // draft, so the change the player asked for survives into the hand-off. It is
   // applied before the nextApp is built, and the reply is the engine's own wording.

@@ -299,6 +299,15 @@ permission is missing. Probe that way before starting any long operation.
   `answerInterview` stores the value in the draft, so the next "проверь" hands off
   the renamed sheet. The preposition must sit right after the field name, so an
   ordinary answer that merely mentions a place is not mistaken for a revision.
+- "Finish the rest for me" mid-walk is honoured (added 2026-10-19). "Хорошо...
+  Можешь сам всё дальше придумать?" used to fail the noun gate in `generatedSheet`
+  (it names no race), so the interviewer answered "Хороший вопрос" and offered the
+  very same handover back. `finishSheet` recognises the handover inside a race/class
+  walk (`FINISH_REQUEST`: "сам всё/остальное/дальше" + a make verb, "за/для меня"),
+  generates the sheet, and keeps the fields the player already filled — the name
+  they chose and the abilities they wrote survive, the balance rules supply the
+  rest. `answerInterview` folds it in beside `generatedSheet`. The verb list is
+  explicit so an ordinary answer with "сами" ("они сами по себе") is not a handover.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

@@ -579,7 +579,9 @@ export function seedFrom(history) {
 // review it. The sheet is complete by construction, so the check can pass at once.
 export function renderGenerated(draft, lang) {
   const byIdea = draft.kind === 'race' && draft.concept;
-  const head = draft.kind === 'race'
+  const head = draft.finished
+    ? genPick(lang, 'Готово. Дописал всё, что оставалось, — твои ответы сохранил:', 'Done. I filled in what was left — I kept your answers:')
+    : draft.kind === 'race'
     ? (byIdea
         ? genPick(lang, 'Готово. Собрал расу по твоей идее — с её природой, способностями и слабостями:', 'Done. I built the race from your idea — its nature, powers and weaknesses:')
         : genPick(lang, 'Готово. Придумал тебе расу целиком — по правилам баланса, со способностями и слабостями:', 'Done. I made you a whole race — balanced, with its own powers and weaknesses:'))

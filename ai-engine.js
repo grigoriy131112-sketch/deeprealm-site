@@ -309,6 +309,54 @@ function isSelfMade(text) {
   return /(?<![а-яё])сам(а|и|о|е|ому|ой|ого|им|их)?(?![а-яё])|за\s+меня|для\s+меня|мне\s+сам|придума(й|йте|ть)|(?<![а-яё])сделай|(?<![а-яё])создай|сгенерируй|на\s+свой\s+вкус|на\s+тво[её]\s+усмотрение|твой\s+вариант|yourself|for me|make it|create it/i.test(s);
 }
 
+// A clear "finish the rest for me" inside a walk, where the player names no race or
+// class: "Можешь сам всё дальше придумать?", "придумай остальное сам", "доделай за
+// меня". The noun gate used to drop these and the interviewer answered "Хороший
+// вопрос" and offered the very same handover back. The verb list is explicit so an
+// ordinary answer that happens to contain "сами" ("они сами по себе") is not read as
+// a request to author the sheet.
+const FINISH_REQUEST = new RegExp([
+  '(?<![а-яё])сам[аиое]?\\s+(?:всё|все|остальн[а-яё]*|дальше)',
+  '(?:придума|сдела|законч|додел|дорису|заполн)[а-яё]*\\s+(?:всё|все|остальн[а-яё]*|дальше)',
+  '(?:придума|сдела|законч|додел|дорису|заполн)[а-яё]*\\s+сам[аиое]?(?![а-яё])',
+  'за\\s+меня|для\\s+меня|на\\s+свой\\s+вкус|на\\s+тво[её]\\s+усмотрение|твой\\s+вариант'
+].join('|'), 'i');
+
+function escapeRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// The player hands the rest of the walk over ("Можешь сам всё дальше придумать?").
+// The draft already holds their answers, so the generated sheet fills only the
+// fields they left blank: the name they chose and the abilities they wrote are kept,
+// and the balance rules supply the rest. Returns null outside a race/class walk or
+// when the message is not a handover, so an ordinary answer is never turned into a
+// generated sheet.
+export function finishSheet(history, application = {}, lang = 'ru') {
+  const msgs = Array.isArray(history) ? history : [];
+  const app = application && typeof application === 'object' ? application : {};
+  const last = [...msgs].reverse().find((m) => m && m.role !== 'assistant');
+  const text = String(last?.content || '');
+  if (!FINISH_REQUEST.test(text)) return null;
+  if (/(?<![а-яё])я\s+сам/i.test(text)) return null;
+  const kind = interviewKind(app, msgs);
+  if (kind !== 'race' && kind !== 'class') return null;
+  const draft = kind === 'race'
+    ? generateRace(lang, seedFrom(msgs), raceConceptFrom(msgs))
+    : generateClass(lang, seedFrom(msgs));
+  const kept = {};
+  for (const field of INTERVIEW_FIELDS[kind] || []) {
+    const value = app[field];
+    if (typeof value === 'string' && value.trim()) kept[field] = value.trim();
+  }
+  let body = draft.text;
+  for (const [field, value] of Object.entries(kept)) {
+    const line = new RegExp(`^${escapeRe(field)}:\\s*.*$`, 'm');
+    if (line.test(body)) body = body.replace(line, `${field}: ${value}`);
+  }
+  return { ...draft, app: { ...draft.app, ...kept }, text: body, finished: true };
+}
+
 // A player who asks how any of this works should get an answer, not another field
 // question. Recognising the help request is what makes the chat feel like a
 // conversation: "а как создать расу?" is answered, then the walk continues.
@@ -933,6 +981,11 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   // and hands back the draft, so the very next "проверь" accepts and forwards it.
   const made = generatedSheet(history, app, lang);
   if (made) return renderGenerated(made, lang);
+  // The player hands the rest over mid-walk ("Можешь сам всё дальше придумать?").
+  // The generated sheet keeps the fields they already filled and only fills the
+  // blanks, instead of answering with a question and offering the same handover back.
+  const finished = finishSheet(history, app, lang);
+  if (finished) return renderGenerated(finished, lang);
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
   // "Как мне создать расу?" is a how-to, not advice about a sheet: the two options

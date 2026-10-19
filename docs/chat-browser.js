@@ -128,6 +128,7 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Регистратор чата D
 10. Если анкета расы или класса заполнена и нарушений баланса нет — подведи короткое резюме и заверши: сайт сам отправит её владельцу. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали. Никаких вопросов после готовой заявки.
 11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце собираешь заявку. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
 11д. ПРАВКИ АНКЕТЫ. Если игрок просит что-то поменять — «давай поменяем название на «Лёд»», «переименуй расу», «смени внешность», «поменяй уязвимости» — ты не отвечаешь «хороший вопрос» и не спрашиваешь дальше то же самое. Прими правку, коротко подтверди («Записал: Название → «Лёд»») и продолжай. Никогда не пропускай изменение, которое игрок прямо назвал.
+11е. «ПРИДУМАЙ ДАЛЬШЕ САМ». Если игрок посреди заполнения говорит «можешь сам всё дальше придумать?», «придумай остальное сам», «доделай за меня» — НЕ отвечай «хороший вопрос» и не предлагай то же самое ещё раз. Допиши оставшиеся пункты сам по правилам баланса, СОХРАНИВ то, что игрок уже написал (название, способности и т. д.), и выведи готовую анкету.
 11г. ИДЕЯ ИГРОКА ГЛАВНЕЕ ТВОЕЙ. Если игрок уже назвал задумку — «полулюди-полунежить», «ледяные, что живут в горах», «раса кузнецов-изгнанников» — ты ОБЯЗАН строить расу вокруг неё, а не начинать с чистого листа и не спрашивать заново то, что он уже сказал. Повтори идею его словами и задавай только те вопросы, которые её уточняют. Если он просит «сделай такую» — собери расу по его описанию сразу и выведи готовую анкету.
 11а. Если игрок просит придумать расу или класс ЗА НЕГО ("создай сам", "придумай за меня", "сделай сам") — не задавай вопросов и не отказывайся: придумай расу или класс целиком и сразу, по правилам баланса, со способностями и слабостями, и выведи готовую анкету. Встроенный движок уже умеет это и без тебя; если ты пишешь ответ сам, сделай то же самое.
 11б. ГОТОВЫЕ АНКЕТЫ. Игрок может прислать уже заполненную анкету расы или класса (например, вставил текст из блога) и попросить принять её. Не заставляй его заполнять заново: прими присланный текст как черновик и подведи короткое резюме. Если игрок просит создать класс по уже готовой расе — собери класс под названную расу, указав "Под расу: <название>" и строку совместимости с её природой.
@@ -1087,7 +1088,9 @@ function seedFrom(history) {
 // review it. The sheet is complete by construction, so the check can pass at once.
 function renderGenerated(draft, lang) {
   const byIdea = draft.kind === 'race' && draft.concept;
-  const head = draft.kind === 'race'
+  const head = draft.finished
+    ? genPick(lang, 'Готово. Дописал всё, что оставалось, — твои ответы сохранил:', 'Done. I filled in what was left — I kept your answers:')
+    : draft.kind === 'race'
     ? (byIdea
         ? genPick(lang, 'Готово. Собрал расу по твоей идее — с её природой, способностями и слабостями:', 'Done. I built the race from your idea — its nature, powers and weaknesses:')
         : genPick(lang, 'Готово. Придумал тебе расу целиком — по правилам баланса, со способностями и слабостями:', 'Done. I made you a whole race — balanced, with its own powers and weaknesses:'))
@@ -1408,6 +1411,54 @@ function isSelfMade(text) {
   const s = String(text || '');
   if (/(?<![а-яё])я\s+сам/i.test(s)) return false;
   return /(?<![а-яё])сам(а|и|о|е|ому|ой|ого|им|их)?(?![а-яё])|за\s+меня|для\s+меня|мне\s+сам|придума(й|йте|ть)|(?<![а-яё])сделай|(?<![а-яё])создай|сгенерируй|на\s+свой\s+вкус|на\s+тво[её]\s+усмотрение|твой\s+вариант|yourself|for me|make it|create it/i.test(s);
+}
+
+// A clear "finish the rest for me" inside a walk, where the player names no race or
+// class: "Можешь сам всё дальше придумать?", "придумай остальное сам", "доделай за
+// меня". The noun gate used to drop these and the interviewer answered "Хороший
+// вопрос" and offered the very same handover back. The verb list is explicit so an
+// ordinary answer that happens to contain "сами" ("они сами по себе") is not read as
+// a request to author the sheet.
+const FINISH_REQUEST = new RegExp([
+  '(?<![а-яё])сам[аиое]?\\s+(?:всё|все|остальн[а-яё]*|дальше)',
+  '(?:придума|сдела|законч|додел|дорису|заполн)[а-яё]*\\s+(?:всё|все|остальн[а-яё]*|дальше)',
+  '(?:придума|сдела|законч|додел|дорису|заполн)[а-яё]*\\s+сам[аиое]?(?![а-яё])',
+  'за\\s+меня|для\\s+меня|на\\s+свой\\s+вкус|на\\s+тво[её]\\s+усмотрение|твой\\s+вариант'
+].join('|'), 'i');
+
+function escapeRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// The player hands the rest of the walk over ("Можешь сам всё дальше придумать?").
+// The draft already holds their answers, so the generated sheet fills only the
+// fields they left blank: the name they chose and the abilities they wrote are kept,
+// and the balance rules supply the rest. Returns null outside a race/class walk or
+// when the message is not a handover, so an ordinary answer is never turned into a
+// generated sheet.
+function finishSheet(history, application = {}, lang = 'ru') {
+  const msgs = Array.isArray(history) ? history : [];
+  const app = application && typeof application === 'object' ? application : {};
+  const last = [...msgs].reverse().find((m) => m && m.role !== 'assistant');
+  const text = String(last?.content || '');
+  if (!FINISH_REQUEST.test(text)) return null;
+  if (/(?<![а-яё])я\s+сам/i.test(text)) return null;
+  const kind = interviewKind(app, msgs);
+  if (kind !== 'race' && kind !== 'class') return null;
+  const draft = kind === 'race'
+    ? generateRace(lang, seedFrom(msgs), raceConceptFrom(msgs))
+    : generateClass(lang, seedFrom(msgs));
+  const kept = {};
+  for (const field of INTERVIEW_FIELDS[kind] || []) {
+    const value = app[field];
+    if (typeof value === 'string' && value.trim()) kept[field] = value.trim();
+  }
+  let body = draft.text;
+  for (const [field, value] of Object.entries(kept)) {
+    const line = new RegExp(`^${escapeRe(field)}:\\s*.*$`, 'm');
+    if (line.test(body)) body = body.replace(line, `${field}: ${value}`);
+  }
+  return { ...draft, app: { ...draft.app, ...kept }, text: body, finished: true };
 }
 
 // A player who asks how any of this works should get an answer, not another field
@@ -2034,6 +2085,11 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
   // and hands back the draft, so the very next "проверь" accepts and forwards it.
   const made = generatedSheet(history, app, lang);
   if (made) return renderGenerated(made, lang);
+  // The player hands the rest over mid-walk ("Можешь сам всё дальше придумать?").
+  // The generated sheet keeps the fields they already filled and only fills the
+  // blanks, instead of answering with a question and offering the same handover back.
+  const finished = finishSheet(history, app, lang);
+  if (finished) return renderGenerated(finished, lang);
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
   // "Как мне создать расу?" is a how-to, not advice about a sheet: the two options
@@ -2802,7 +2858,7 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
   // the draft and the very next "проверь" can accept and forward it. Without this
   // the generated sheet would be shown but never stored, and the check would find
   // an empty draft.
-  const made = generatedSheet(history, appState, lang);
+  const made = generatedSheet(history, appState, lang) || finishSheet(history, appState, lang);
   // A revision of the sheet ("давай поменяем название на «лёд»") is stored in the
   // draft, so the change the player asked for survives into the hand-off. It is
   // applied before the nextApp is built, and the reply is the engine's own wording.
