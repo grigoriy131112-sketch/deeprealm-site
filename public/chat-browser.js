@@ -127,6 +127,7 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Регистратор чата D
 9. Ты не сохраняешь ничего в базах и не запускаешь игру. Твоё финальное действие — резюме заявки, которую сайт передаёт владельцу.
 10. Если анкета расы или класса заполнена и нарушений баланса нет — подведи короткое резюме и заверши: сайт сам отправит её владельцу. Не спрашивай "перенести в итоговый формат?" и не предлагай обсудить детали. Никаких вопросов после готовой заявки.
 11. СОЗДАНИЕ РАСЫ И КЛАССА — это твоя работа, а не повод отправить игрока заполнять шаблон самому. Если игрок говорит, что хочет создать расу или класс, ты ведёшь его по пунктам анкеты (по одному вопросу за раз), собираешь ответы и в конце собираешь заявку. НЕ отвечай фразой "опишите расу по пунктам" и не отправляй к шаблону вместо диалога.
+11г. ИДЕЯ ИГРОКА ГЛАВНЕЕ ТВОЕЙ. Если игрок уже назвал задумку — «полулюди-полунежить», «ледяные, что живут в горах», «раса кузнецов-изгнанников» — ты ОБЯЗАН строить расу вокруг неё, а не начинать с чистого листа и не спрашивать заново то, что он уже сказал. Повтори идею его словами и задавай только те вопросы, которые её уточняют. Если он просит «сделай такую» — собери расу по его описанию сразу и выведи готовую анкету.
 11а. Если игрок просит придумать расу или класс ЗА НЕГО ("создай сам", "придумай за меня", "сделай сам") — не задавай вопросов и не отказывайся: придумай расу или класс целиком и сразу, по правилам баланса, со способностями и слабостями, и выведи готовую анкету. Встроенный движок уже умеет это и без тебя; если ты пишешь ответ сам, сделай то же самое.
 11б. ГОТОВЫЕ АНКЕТЫ. Игрок может прислать уже заполненную анкету расы или класса (например, вставил текст из блога) и попросить принять её. Не заставляй его заполнять заново: прими присланный текст как черновик и подведи короткое резюме. Если игрок просит создать класс по уже готовой расе — собери класс под названную расу, указав "Под расу: <название>" и строку совместимости с её природой.
 11в. СПЕЦИАЛИЗАЦИИ И ВЕХИ. У класса 15 начальных уровней, затем на 16 уровне игрок выбирает одну из трёх специализаций. Вехи — 20, 30, 40 и 50. Между вехами промежуточные уровни (16–19, 21–29, 31–39, 41–49), и на каждом — ровно одна способность специализации. Если игрок заполняет класс, спроси про три специализации и напомни про способности на промежуточных уровнях.
@@ -638,14 +639,69 @@ const RACE_THEMES = [
   }
 ];
 
+// Which race theme fits what the player actually asked for. The player often opens
+// with a concept of their own ("полулюди, полунежить", "ледяные, живут в горах"),
+// and building a random theme would ignore it. Each theme is scored by the idea's
+// words; a tie or a blank idea falls back to the seed, so the same request stays
+// stable and a request with no recognizable words still gets a race.
+const RACE_THEME_HINTS = [
+  [/(пепел|огн|жар|уголь|обсидиан|дым|тле|костр|кузн|лав)/i, 0],
+  [/(лёд|лед|мороз|снег|стуж|зим|холод|иней|мёрзл|мерзл)/i, 1],
+  [/(кост|скелет|мёртв|мертв|гроб|склеп|могил|нежить|могиль|катакомб|погреб|шов)/i, 2],
+  [/(солён|солен|соль|мор|океан|вод|прилив|болот|утопл|гавань|глубин|перепонк)/i, 3],
+  [/(камен|скал|глубин|пещер|подзем|руд|базальт|шахт|гранит)/i, 4],
+  [/(гроз|молн|неб|ветр|бур|гром|разряд|грозов|электр)/i, 5]
+];
+
+function themeIndexForConcept(concept, seed) {
+  const text = String(concept || '');
+  let best = -1;
+  let bestScore = 0;
+  RACE_THEME_HINTS.forEach(([re, idx]) => {
+    const hits = (text.match(new RegExp(re.source, 'gi')) || []).length;
+    if (hits > bestScore) { bestScore = hits; best = idx; }
+  });
+  return bestScore > 0 ? best : seed % RACE_THEMES.length;
+}
+
+// A race request that also carries the race's nature ("полу люди, полу нежить",
+// "ледяные, что живут в горах"). The Interviewer builds the race from these words
+// instead of ignoring the player's idea and asking for a name. A bare "хочу расу"
+// has no nature word, so it still opens the walk. Shared with the engine, which
+// needs it to tell a concept request from a plain one.
+const RACE_NATURE = /(?<![а-яё])(полу|половин|гибрид|нежить|нежит|мертв|мёртв|вампир|призрак|скелет|зомби|костян|ледян|огненн|каменн|болотн|морск|водян|грозов|пепельн|тёмн|темн|светл|кров|тень|тенев|звер|птиц|дракон|демон|ангел|эльф|орк|гном|дворф|человек|люд|рыб|насеком|растен|гриб|кристалл|механ|облачн|снежн|песчан|пустынн|лесн|горн|подземн|глубинн|солён|солен|солян|морозн|инеист|пепел|угольн|глинян|бронзов|железн|стальн)/i;
+
+// The theme's own name when the player's idea names the race's nature, so a
+// "полунежить" concept comes back as the skeletal race rather than a random one.
+// The player's own words are kept in a separate line instead of overwriting the
+// template, which keeps the sheet's field order intact. Only the sentence that
+// carries the idea is kept, so the pleasantries around it do not ride along.
+function conceptName(concept) {
+  const text = String(concept || '').trim();
+  if (!text) return '';
+  const sentences = text.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
+  const carries = sentences.filter((s) => RACE_NATURE.test(s));
+  const source = (carries.length ? carries : sentences).slice(-1)[0] || '';
+  const clean = source
+    .replace(/^(что\s*бы\s+это\s+были|чтобы\s+это\s+были|это\s+будут|это\s+были|пусть\s+(это\s+)?будут|были|будут|это\s+будет|это|хочу|хотел[аи]?|давай|можешь|сможешь|нужна|надо|сдела[йть]|созда[йть]|придума[йть])\s+/gi, '')
+    .replace(/\s+(расу|раса|рассу|класс|клас)$/i, '')
+    .replace(/[?!.]+$/g, '')
+    .trim();
+  if (!clean) return '';
+  return clean.length > 90 ? `${clean.slice(0, 89).trimEnd()}…` : clean;
+}
+
 // The sheet the owner receives, in the order of the race template, so it can be
 // pasted into the blog as-is. The weaknesses come from the theme itself, which is
-// what makes every generated race pass the "minimum two weaknesses" rule.
-function raceDraft(lang, seed) {
-  const t = RACE_THEMES[seed % RACE_THEMES.length];
+// what makes every generated race pass the "minimum two weaknesses" rule. When the
+// player brought a concept, the theme is chosen to match it and the idea is quoted
+// in the sheet, so the race answers what was asked for instead of a random theme.
+function raceDraft(lang, seed, concept = '') {
+  const t = RACE_THEMES[themeIndexForConcept(concept, seed)];
   const name = t.names[(seed >>> 5) % t.names.length];
   const self = t.selves[(seed >>> 9) % t.selves.length];
   const [magic, noMagic] = t.magic;
+  const idea = conceptName(concept);
   const lines = [
     `Название: ${name}`,
     `Самоназвание: ${self}`,
@@ -660,26 +716,24 @@ function raceDraft(lang, seed) {
     `Магия: владеют — ${magic}; не владеют — ${noMagic}`,
     `Отношения с другими расами: ${t.relations}`
   ];
-  return {
-    kind: 'race',
-    name,
-    app: {
-      _kind: 'race',
-      'Название': name,
-      'Самоназвание': self,
-      'Внешность': t.look,
-      'Где живут': t.habitat,
-      'Чем занимаются': t.activity,
-      'Боевые навыки': t.combat,
-      'Способности': t.powers.map(([n, e]) => `${n} — ${e}`).join('; '),
-      'Уязвимости': t.weak.join('; '),
-      'Чего боятся': t.fear,
-      'Общественное устройство': t.society,
-      'Магия': `владеют — ${magic}; не владеют — ${noMagic}`,
-      'Отношения с другими расами': t.relations
-    },
-    text: lines.join('\n')
+  if (idea) lines.splice(1, 0, `Идея игрока: ${idea}`);
+  const app = {
+    _kind: 'race',
+    'Название': name,
+    'Самоназвание': self,
+    'Внешность': t.look,
+    'Где живут': t.habitat,
+    'Чем занимаются': t.activity,
+    'Боевые навыки': t.combat,
+    'Способности': t.powers.map(([n, e]) => `${n} — ${e}`).join('; '),
+    'Уязвимости': t.weak.join('; '),
+    'Чего боятся': t.fear,
+    'Общественное устройство': t.society,
+    'Магия': `владеют — ${magic}; не владеют — ${noMagic}`,
+    'Отношения с другими расами': t.relations
   };
+  if (idea) app['Идея игрока'] = idea;
+  return { kind: 'race', name, app, text: lines.join('\n'), concept: idea };
 }
 
 // --- classes ---------------------------------------------------------------
@@ -995,7 +1049,7 @@ function classDraft(lang, seed) {
   };
 }
 
-function generateRace(lang, seed) { return raceDraft(lang, seed); }
+function generateRace(lang, seed, concept = '') { return raceDraft(lang, seed, concept); }
 function generateClass(lang, seed) { return classDraft(lang, seed); }
 
 // A class built for an existing, ready race. The player hands over a race they
@@ -1031,8 +1085,11 @@ function seedFrom(history) {
 // The reply the player sees: a short lead-in, the whole sheet, and the offer to
 // review it. The sheet is complete by construction, so the check can pass at once.
 function renderGenerated(draft, lang) {
+  const byIdea = draft.kind === 'race' && draft.concept;
   const head = draft.kind === 'race'
-    ? genPick(lang, 'Готово. Придумал тебе расу целиком — по правилам баланса, со способностями и слабостями:', 'Done. I made you a whole race — balanced, with its own powers and weaknesses:')
+    ? (byIdea
+        ? genPick(lang, 'Готово. Собрал расу по твоей идее — с её природой, способностями и слабостями:', 'Done. I built the race from your idea — its nature, powers and weaknesses:')
+        : genPick(lang, 'Готово. Придумал тебе расу целиком — по правилам баланса, со способностями и слабостями:', 'Done. I made you a whole race — balanced, with its own powers and weaknesses:'))
     : genPick(lang, 'Готово. Придумал тебе класс целиком — по правилам баланса, с перезарядкой в ходах:', 'Done. I made you a whole class — balanced, with cooldowns in turns:');
   const tail = genPick(lang,
     'Скажи «проверь» — проверю и отправлю владельцу. Или скажи, что поменять: имя, способности, слабости.',
@@ -1808,7 +1865,12 @@ function generatedSheet(history, application = {}, lang = 'ru') {
   const text = String(last?.content || '');
   const hasClassWord = new RegExp(CLASS_WORD, 'i').test(text);
   const forRace = hasClassWord && isClassForRace(text);
-  if (!isSelfMade(text) && !forRace) return null;
+  // The player often opens with a concept of their own ("полулюди, полунежить")
+  // instead of "сделай за меня". Reading the nature words out of that message and
+  // building the race from them is what stops the Interviewer from ignoring the
+  // player's idea and asking for a name instead.
+  const concept = raceConceptFrom(msgs);
+  if (!isSelfMade(text) && !forRace && !(RACE_INTENT.test(text) && RACE_NATURE.test(text))) return null;
   const seed = seedFrom(msgs);
   // A class for an already-made race: the player names the race, so the class is
   // tied to it instead of being a free-floating kit. Checked first because such a
@@ -1817,7 +1879,22 @@ function generatedSheet(history, application = {}, lang = 'ru') {
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
   if (!wantsRace && !wantsClass) return null;
-  return wantsRace && !wantsClass ? generateRace(lang, seed) : generateClass(lang, seed);
+  return wantsRace && !wantsClass ? generateRace(lang, seed, concept) : generateClass(lang, seed);
+}
+
+// The player's own idea for a race, pulled from the dialogue. The opening request
+// names the nature ("полу люди, полу нежить", "ледяные, что живут в горах"), so it
+// is preferred; a bare "хочу расу" carries no nature and returns nothing, which
+// keeps the plain request opening the walk instead of inventing a race for it.
+function raceConceptFrom(history) {
+  const msgs = (Array.isArray(history) ? history : []).filter((m) => m && m.role !== 'assistant');
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const text = String(msgs[i].content || '').trim();
+    if (!text) continue;
+    if (isCheckCmd(text) || isShowCmd(text) || isAddCmd(text) || isEndCommand(text)) continue;
+    if (RACE_INTENT.test(text) && RACE_NATURE.test(text)) return text;
+  }
+  return '';
 }
 
 // "Класс под готовую расу X", "сделай класс для расы X", "класс по расе X". A class
@@ -1906,11 +1983,17 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
     return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
   }
   if (wantsRace) {
+    // The player may open with a concept of their own ("полу люди, полу нежить").
+    // When the message carries the race's nature, the race is built from it right
+    // away instead of being met with a form that ignores the idea.
+    const concept = raceConceptFrom(history);
+    if (concept) return renderGenerated(generateRace(lang, seedFrom(history), concept), lang);
     const rules = (getKnowledge().races?.race_template_rules || []).map((r) => `— ${r}`).join('\n');
     return [
       pick(lang, 'Давай сделаем расу. Правила:', 'Let us make a race. Rules:'),
       rules,
       pick(lang, 'Отвечай по пунктам, и я соберу анкету расы. Когда закончим — скажи «проверь».', 'Answer point by point and I will build the race sheet. When we are done — say "check".'),
+      pick(lang, 'Или опиши идею одной фразой — и я соберу расу сам.', 'Or describe the idea in one line and I will build the race myself.'),
       nextFieldPrompt({ ...app, _kind: 'race' }, lang, history)
     ].join('\n');
   }

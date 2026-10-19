@@ -280,6 +280,16 @@ permission is missing. Probe that way before starting any long operation.
 - "Я сам создам расу" (the player writes it) must keep opening the walk, so
   `isSelfMade` excludes a leading "я сам". A request must name a race or a class;
   a bare "сделай" mid-walk stays on the checklist.
+- The player's own idea wins over a random theme (added 2026-10-19). When the
+  opening request carries the race's nature ("полу люди, полу нежить", "ледяные,
+  что живут в горах"), `generatedSheet` builds the race from it at once instead
+  of answering with a form that ignores the idea — the bug the owner reported as
+  "он не слушает игрока". `raceConceptFrom` pulls the idea out of the dialogue,
+  `RACE_NATURE` (shared from `ai-gen.js`) tells a concept request from a bare
+  "хочу расу", `themeIndexForConcept` picks the theme whose words the idea
+  matches, and the idea is quoted as an `Идея игрока` line in the sheet and the
+  draft. A bare "хочу расу" has no nature word, so it still opens the walk, now
+  with an added "опиши идею одной фразой" hint.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

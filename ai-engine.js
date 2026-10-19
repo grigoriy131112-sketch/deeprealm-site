@@ -9,8 +9,8 @@
 //
 // The file is bundled into the browser too, so static hosting gets the same AI.
 
-import { getKnowledge, staffTurn, matchActivityFaq, finaleText } from './chat-core.js';
-import { generateRace, generateClass, generateClassForRace, seedFrom, renderGenerated } from './ai-gen.js';
+import { getKnowledge, staffTurn, matchActivityFaq, finaleText, isEndCommand } from './chat-core.js';
+import { generateRace, generateClass, generateClassForRace, seedFrom, renderGenerated, conceptName, RACE_NATURE } from './ai-gen.js';
 
 let engArticles = [];
 export function setEngineArticles(list) {
@@ -765,7 +765,12 @@ export function generatedSheet(history, application = {}, lang = 'ru') {
   const text = String(last?.content || '');
   const hasClassWord = new RegExp(CLASS_WORD, 'i').test(text);
   const forRace = hasClassWord && isClassForRace(text);
-  if (!isSelfMade(text) && !forRace) return null;
+  // The player often opens with a concept of their own ("полулюди, полунежить")
+  // instead of "сделай за меня". Reading the nature words out of that message and
+  // building the race from them is what stops the Interviewer from ignoring the
+  // player's idea and asking for a name instead.
+  const concept = raceConceptFrom(msgs);
+  if (!isSelfMade(text) && !forRace && !(RACE_INTENT.test(text) && RACE_NATURE.test(text))) return null;
   const seed = seedFrom(msgs);
   // A class for an already-made race: the player names the race, so the class is
   // tied to it instead of being a free-floating kit. Checked first because such a
@@ -774,7 +779,22 @@ export function generatedSheet(history, application = {}, lang = 'ru') {
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
   if (!wantsRace && !wantsClass) return null;
-  return wantsRace && !wantsClass ? generateRace(lang, seed) : generateClass(lang, seed);
+  return wantsRace && !wantsClass ? generateRace(lang, seed, concept) : generateClass(lang, seed);
+}
+
+// The player's own idea for a race, pulled from the dialogue. The opening request
+// names the nature ("полу люди, полу нежить", "ледяные, что живут в горах"), so it
+// is preferred; a bare "хочу расу" carries no nature and returns nothing, which
+// keeps the plain request opening the walk instead of inventing a race for it.
+function raceConceptFrom(history) {
+  const msgs = (Array.isArray(history) ? history : []).filter((m) => m && m.role !== 'assistant');
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const text = String(msgs[i].content || '').trim();
+    if (!text) continue;
+    if (isCheckCmd(text) || isShowCmd(text) || isAddCmd(text) || isEndCommand(text)) continue;
+    if (RACE_INTENT.test(text) && RACE_NATURE.test(text)) return text;
+  }
+  return '';
 }
 
 // "Класс под готовую расу X", "сделай класс для расы X", "класс по расе X". A class
@@ -863,11 +883,17 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
     return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
   }
   if (wantsRace) {
+    // The player may open with a concept of their own ("полу люди, полу нежить").
+    // When the message carries the race's nature, the race is built from it right
+    // away instead of being met with a form that ignores the idea.
+    const concept = raceConceptFrom(history);
+    if (concept) return renderGenerated(generateRace(lang, seedFrom(history), concept), lang);
     const rules = (getKnowledge().races?.race_template_rules || []).map((r) => `— ${r}`).join('\n');
     return [
       pick(lang, 'Давай сделаем расу. Правила:', 'Let us make a race. Rules:'),
       rules,
       pick(lang, 'Отвечай по пунктам, и я соберу анкету расы. Когда закончим — скажи «проверь».', 'Answer point by point and I will build the race sheet. When we are done — say "check".'),
+      pick(lang, 'Или опиши идею одной фразой — и я соберу расу сам.', 'Or describe the idea in one line and I will build the race myself.'),
       nextFieldPrompt({ ...app, _kind: 'race' }, lang, history)
     ].join('\n');
   }

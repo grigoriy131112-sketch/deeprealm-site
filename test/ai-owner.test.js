@@ -587,6 +587,46 @@ test('the interviewer offers to finish the sheet itself partway through', () => 
   assert.match(localInterview({ messages: history, lang: 'ru', application: app }), /Готово/);
 });
 
+test('a race idea the player brings is built around that idea, not ignored', () => {
+  // The owner's exact complaint: a player opens with "полу люди, полу нежить" and
+  // the Interviewer answered with a form that ignored the idea. It must build the
+  // race from the idea and quote it back.
+  const ask = 'Хорошо. У меня есть идея для рассы. Хочу что бы это были полу люди, полу нежить. Сможешь сделать рассу такую?';
+  const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+  assert.match(reply, /Готово/, 'the race is built from the idea, not met with a form');
+  assert.doesNotMatch(reply, /Расскажи про «Название»/, 'the player is not asked for a name they did not offer');
+  assert.match(reply, /Идея игрока: .*нежить/, 'the player\'s own idea is kept in the sheet');
+  assert.match(reply, /Уязвимости: .+;/, 'the race still has its two weaknesses');
+  // The undead idea picks the skeletal theme, not a random one.
+  assert.match(reply, /Название: (Костяные|Гробовники)/, 'the theme matches the idea');
+});
+
+test('an idea with no nature words still opens the walk', () => {
+  for (const ask of ['Хочу создать расу', 'Можно свою расу?']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+    assert.match(reply, /анкету расы/, `"${ask}" opens the race walk`);
+    assert.doesNotMatch(reply, /Готово/, `"${ask}" does not invent a race`);
+  }
+});
+
+test('a race built from the player\'s idea is stored and handed off on "проверь"', async () => {
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const messages = [{ role: 'user', content: 'Хочу расу полулюди-полунежить, живут в склепах' }];
+  const first = await answerInterview({ messages, lang: 'ru' });
+  assert.match(first.reply, /Готово/, 'the idea is built into a race');
+  assert.equal(first.application._kind, 'race');
+  assert.ok(first.application['Идея игрока'], 'the player\'s idea is stored in the draft');
+  assert.ok(first.application['Уязвимости'], 'the weaknesses are stored too');
+
+  messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
+  const second = await answerInterview({ messages, lang: 'ru', application: first.application });
+  assert.match(second.reply, /передан[а]? владельцу/, 'the idea-based race is accepted and handed off');
+  assert.equal(sent.length, 1, 'it is sent to the owner');
+  assert.equal(sent[0].kind, 'race');
+  setNotifier(null);
+});
+
 test('a generated race respects the balance rules it is built from', () => {
   for (const seedText of ['расу сам', 'другую расу придумай', 'создай расу сама', 'make a race for me']) {
     const reply = localInterview({ messages: [{ role: 'user', content: seedText }], lang: 'ru', application: {} });
