@@ -380,11 +380,16 @@ function ruleRequirement(text, lang) {
       'Понял: на каждом уровне — не меньше двух способностей. Так и в правилах класса, и я собираю анкету по этому требованию.',
       'Got it: at least two abilities on every level. That is the class rule too, and I build the sheet to match.');
   }
-  if (/перезарядк|кулдаун|откат/i.test(s)
-    && /(больш|коротк|меньш|длинн|умен|снизь|понизь|покороче|быстр|поменьше|небол)/i.test(s)) {
+  if (/пере[а-я]{0,2}рядк|кулдаун|откат/i.test(s)
+    && /(больш|коротк|меньш|длинн|умен|снизь|понизь|покороче|быстр|поменьше|небол|максимум|\b2\b|\b3\b)/i.test(s)) {
+    if (/не\s+везде|не\s+на\s+кажд|не\s+у\s+всех|не\s+все\s+способ|без\s+перезарядк/i.test(s)) {
+      return pick(lang,
+        'Понял: перезарядка не на каждой способности. На уровнях 1–15 — максимум 2–3 хода, у части способностей перезарядки нет вовсе, а у специализаций (16+) может быть больше.',
+        'Got it: not every ability has a cooldown. Levels 1–15 cap at 2–3 turns, some abilities have none, and specializations (16+) may run longer.');
+    }
     return pick(lang,
-      'Понял: перезарядки должны быть короткими. Держу их небольшими — 1–4 хода у обычных способностей и до 5 у специализаций.',
-      'Got it: cooldowns must stay short. I keep them small — 1–4 turns for base abilities and up to 5 for specializations.');
+      'Понял: перезарядки короткие. На уровнях 1–15 — максимум 2–3 хода, у специализаций может быть больше.',
+      'Got it: cooldowns stay short. Levels 1–15 cap at 2–3 turns, specializations may run longer.');
   }
   return '';
 }
@@ -1022,6 +1027,11 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
     const kind = wantsRace ? 'race' : wantsClass ? 'class' : interviewKind(app, history);
     return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
   }
+  // A stated requirement the sheet must meet ("до 15 уровня — максимум 2–3 хода",
+  // "перезарядка должна быть не везде") is acknowledged here, before the generic
+  // advice dump, so it cannot be swallowed by a "может быть" inside the same message.
+  const rule = ruleRequirement(text, lang);
+  if (rule) return [rule, nextFieldPrompt(app, lang, history)].join('\n');
   // The player is thinking out loud about the sheet ("может, ослабить его
   // способности?", "может, добавить что-нибудь?"). There are too many phrasings to
   // list, so the shape of the question is recognised and answered from the balance

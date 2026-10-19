@@ -320,6 +320,15 @@ permission is missing. Probe that way before starting any long operation.
   cooldown already short is kept as is. A stated requirement ("до 15 уровня …",
   "перезарядки не должны быть большими") is acknowledged by `ruleRequirement` instead
   of being brushed off with "Отлично, вот это уже деталь".
+- Base cooldowns are capped at 2–3 turns and are not on every ability (added
+  2026-10-19). The owner: "на уровнях до 15 должно быть максимум 2-3 хода
+  перезарядка. На других уже может быть больше. И перезарядка должна быть не везде".
+  `ABILITY_CD_CAP` is 3 for base abilities (specializations keep `SPEC_CD_CAP` 5), and
+  the role utility on each level carries no cooldown at all, so only the signature
+  ability and the ultimates have one. `ruleRequirement` also has a branch for the
+  "не везде" wording, and it now runs in `localInterview` before `isAdviceAsk`, because
+  the owner's sentence contains "может быть" and used to be swallowed by the generic
+  advice dump. The cooldown matcher tolerates the "перезорядку" typo.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

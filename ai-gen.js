@@ -407,10 +407,11 @@ const CLASS_THEMES = [
 ];
 
 // Cooldowns stay short on purpose: the owner asked for them not to be so long that
-// a class is awkward to play, so a base ability is capped at 4 turns and a
-// specialization ability at 5. A stored cooldown that is already short is kept as
-// is; only the long ones are pulled down.
-const ABILITY_CD_CAP = 4;
+// a class is awkward to play. Base abilities are capped at 3 turns ("до 15 уровня —
+// максимум 2–3 хода"), specializations may run a little longer (up to 5), and not
+// every ability has a cooldown at all — the role utilities are free to use. A stored
+// cooldown that is already short is kept as is; only the long ones are pulled down.
+const ABILITY_CD_CAP = 3;
 const SPEC_CD_CAP = 5;
 
 function turnsWord(n) {
@@ -453,11 +454,11 @@ function heavyAbility(t, index) {
 // The second ability on every level 1–15, so no level offers fewer than the two the
 // balance rules ask for ("2–3 способности на каждый уровень"). It is a role-flavoured
 // utility: a guard's shield, a blade's gap-closer, a summoner's servant, a caster's
-// burst, a controller's hex.
+// burst, a controller's hex. Not every ability carries a cooldown — the utility is
+// free to use ("перезарядка должна быть не везде").
 function utilityAbility(t, level) {
   const step = level - 1;
   const cost = `${Math.min(50, 6 + Math.round(step * 1.2))} ${t.resource.toLowerCase()}`;
-  const cd = cdText(Math.min(ABILITY_CD_CAP, 1 + Math.round(step / 5)));
   const variants = {
     guard: [
       `+${3 + Math.round(step / 3)} к защите себе на 2 хода`,
@@ -488,16 +489,18 @@ function utilityAbility(t, level) {
   const nouns = { guard: 'Стойка', blade: 'Выпад', control: 'Оковы', summon: 'Приказ', caster: 'Печать' };
   const role = themeRole(t);
   const effect = variants[role][(level - 1) % variants[role].length];
-  return [`${nouns[role]} ${level}`, cd, cost, effect];
+  return [`${nouns[role]} ${level}`, cost, effect];
 }
 
 function abilityLine(level, name, cd, cost, effect) {
-  return `Ур. ${level}: ${name} — ${effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`;
+  const tail = cd ? ` Перезарядка: ${cd}.` : '';
+  return `Ур. ${level}: ${name} — ${effect}. Стоимость: ${cost}.${tail}`;
 }
 
-// Two abilities on every level 1–15: the theme's signature power, then a role
-// utility. The list is written as "Ур. N: Название — эффект. Стоимость: X.
-// Перезарядка: Y.", one ability per line.
+// Two abilities on every level 1–15: the theme's signature power (which carries a
+// cooldown) and a role utility (which does not). The list is written as
+// "Ур. N: Название — эффект. Стоимость: X. Перезарядка: Y.", one ability per line,
+// with the cooldown left off where the ability has none.
 function classAbilityLines(t) {
   const out = [];
   for (let level = 1; level <= 15; level++) {
@@ -507,7 +510,7 @@ function classAbilityLines(t) {
       : heavyAbility(t, i - t.abilities.length);
     out.push(abilityLine(level, primary[0], shortCd(primary[1]), primary[2], primary[3]));
     const util = utilityAbility(t, level);
-    out.push(abilityLine(level, util[0], util[1], util[2], util[3]));
+    out.push(abilityLine(level, util[0], null, util[1], util[2]));
   }
   return out;
 }

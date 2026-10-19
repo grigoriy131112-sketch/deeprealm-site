@@ -130,7 +130,7 @@ const INTERVIEWER_SYSTEM = (lang) => `Ты — Регистратор чата D
 11д. ПРАВКИ АНКЕТЫ. Если игрок просит что-то поменять — «давай поменяем название на «Лёд»», «переименуй расу», «смени внешность», «поменяй уязвимости» — ты не отвечаешь «хороший вопрос» и не спрашиваешь дальше то же самое. Прими правку, коротко подтверди («Записал: Название → «Лёд»») и продолжай. Никогда не пропускай изменение, которое игрок прямо назвал.
 11е. «ПРИДУМАЙ ДАЛЬШЕ САМ». Если игрок посреди заполнения говорит «можешь сам всё дальше придумать?», «придумай остальное сам», «доделай за меня» — НЕ отвечай «хороший вопрос» и не предлагай то же самое ещё раз. Допиши оставшиеся пункты сам по правилам баланса, СОХРАНИВ то, что игрок уже написал (название, способности и т. д.), и выведи готовую анкету.
 11ж. ТРЕБОВАНИЯ ИГРОКА. Если игрок называет условие анкеты — «до 15 уровня должно быть не меньше 2 способностей», «перезарядки не должны быть большими», «минимум три специализации» — прими это как правило, подтверди коротко («Понял: …») и собери анкету по нему. Не отвечай «отлично, деталь» и не переспрашивай то же поле.
-11з. ПЕРЕЗАРЯДКИ КОРОТКИЕ. Не ставь большие перезарядки: у обычных способностей 1–4 хода, у способностей специализаций до 5 ходов. Ультимейты — «1 раз за сессию». Игроку должно быть не сложно играть.
+11з. ПЕРЕЗАРЯДКИ КОРОТКИЕ И НЕ ВЕЗДЕ. На уровнях 1–15 перезарядка — максимум 2–3 хода; у специализаций (16+) может быть больше. Перезарядка НЕ у каждой способности: у части обычных способностей её нет вовсе. Ультимейты — «1 раз за сессию». Игроку должно быть не сложно играть.
 11г. ИДЕЯ ИГРОКА ГЛАВНЕЕ ТВОЕЙ. Если игрок уже назвал задумку — «полулюди-полунежить», «ледяные, что живут в горах», «раса кузнецов-изгнанников» — ты ОБЯЗАН строить расу вокруг неё, а не начинать с чистого листа и не спрашивать заново то, что он уже сказал. Повтори идею его словами и задавай только те вопросы, которые её уточняют. Если он просит «сделай такую» — собери расу по его описанию сразу и выведи готовую анкету.
 11а. Если игрок просит придумать расу или класс ЗА НЕГО ("создай сам", "придумай за меня", "сделай сам") — не задавай вопросов и не отказывайся: придумай расу или класс целиком и сразу, по правилам баланса, со способностями и слабостями, и выведи готовую анкету. Встроенный движок уже умеет это и без тебя; если ты пишешь ответ сам, сделай то же самое.
 11б. ГОТОВЫЕ АНКЕТЫ. Игрок может прислать уже заполненную анкету расы или класса (например, вставил текст из блога) и попросить принять её. Не заставляй его заполнять заново: прими присланный текст как черновик и подведи короткое резюме. Если игрок просит создать класс по уже готовой расе — собери класс под названную расу, указав "Под расу: <название>" и строку совместимости с её природой.
@@ -918,10 +918,11 @@ const CLASS_THEMES = [
 ];
 
 // Cooldowns stay short on purpose: the owner asked for them not to be so long that
-// a class is awkward to play, so a base ability is capped at 4 turns and a
-// specialization ability at 5. A stored cooldown that is already short is kept as
-// is; only the long ones are pulled down.
-const ABILITY_CD_CAP = 4;
+// a class is awkward to play. Base abilities are capped at 3 turns ("до 15 уровня —
+// максимум 2–3 хода"), specializations may run a little longer (up to 5), and not
+// every ability has a cooldown at all — the role utilities are free to use. A stored
+// cooldown that is already short is kept as is; only the long ones are pulled down.
+const ABILITY_CD_CAP = 3;
 const SPEC_CD_CAP = 5;
 
 function turnsWord(n) {
@@ -964,11 +965,11 @@ function heavyAbility(t, index) {
 // The second ability on every level 1–15, so no level offers fewer than the two the
 // balance rules ask for ("2–3 способности на каждый уровень"). It is a role-flavoured
 // utility: a guard's shield, a blade's gap-closer, a summoner's servant, a caster's
-// burst, a controller's hex.
+// burst, a controller's hex. Not every ability carries a cooldown — the utility is
+// free to use ("перезарядка должна быть не везде").
 function utilityAbility(t, level) {
   const step = level - 1;
   const cost = `${Math.min(50, 6 + Math.round(step * 1.2))} ${t.resource.toLowerCase()}`;
-  const cd = cdText(Math.min(ABILITY_CD_CAP, 1 + Math.round(step / 5)));
   const variants = {
     guard: [
       `+${3 + Math.round(step / 3)} к защите себе на 2 хода`,
@@ -999,16 +1000,18 @@ function utilityAbility(t, level) {
   const nouns = { guard: 'Стойка', blade: 'Выпад', control: 'Оковы', summon: 'Приказ', caster: 'Печать' };
   const role = themeRole(t);
   const effect = variants[role][(level - 1) % variants[role].length];
-  return [`${nouns[role]} ${level}`, cd, cost, effect];
+  return [`${nouns[role]} ${level}`, cost, effect];
 }
 
 function abilityLine(level, name, cd, cost, effect) {
-  return `Ур. ${level}: ${name} — ${effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`;
+  const tail = cd ? ` Перезарядка: ${cd}.` : '';
+  return `Ур. ${level}: ${name} — ${effect}. Стоимость: ${cost}.${tail}`;
 }
 
-// Two abilities on every level 1–15: the theme's signature power, then a role
-// utility. The list is written as "Ур. N: Название — эффект. Стоимость: X.
-// Перезарядка: Y.", one ability per line.
+// Two abilities on every level 1–15: the theme's signature power (which carries a
+// cooldown) and a role utility (which does not). The list is written as
+// "Ур. N: Название — эффект. Стоимость: X. Перезарядка: Y.", one ability per line,
+// with the cooldown left off where the ability has none.
 function classAbilityLines(t) {
   const out = [];
   for (let level = 1; level <= 15; level++) {
@@ -1018,7 +1021,7 @@ function classAbilityLines(t) {
       : heavyAbility(t, i - t.abilities.length);
     out.push(abilityLine(level, primary[0], shortCd(primary[1]), primary[2], primary[3]));
     const util = utilityAbility(t, level);
-    out.push(abilityLine(level, util[0], util[1], util[2], util[3]));
+    out.push(abilityLine(level, util[0], null, util[1], util[2]));
   }
   return out;
 }
@@ -1581,11 +1584,16 @@ function ruleRequirement(text, lang) {
       'Понял: на каждом уровне — не меньше двух способностей. Так и в правилах класса, и я собираю анкету по этому требованию.',
       'Got it: at least two abilities on every level. That is the class rule too, and I build the sheet to match.');
   }
-  if (/перезарядк|кулдаун|откат/i.test(s)
-    && /(больш|коротк|меньш|длинн|умен|снизь|понизь|покороче|быстр|поменьше|небол)/i.test(s)) {
+  if (/пере[а-я]{0,2}рядк|кулдаун|откат/i.test(s)
+    && /(больш|коротк|меньш|длинн|умен|снизь|понизь|покороче|быстр|поменьше|небол|максимум|\b2\b|\b3\b)/i.test(s)) {
+    if (/не\s+везде|не\s+на\s+кажд|не\s+у\s+всех|не\s+все\s+способ|без\s+перезарядк/i.test(s)) {
+      return pick(lang,
+        'Понял: перезарядка не на каждой способности. На уровнях 1–15 — максимум 2–3 хода, у части способностей перезарядки нет вовсе, а у специализаций (16+) может быть больше.',
+        'Got it: not every ability has a cooldown. Levels 1–15 cap at 2–3 turns, some abilities have none, and specializations (16+) may run longer.');
+    }
     return pick(lang,
-      'Понял: перезарядки должны быть короткими. Держу их небольшими — 1–4 хода у обычных способностей и до 5 у специализаций.',
-      'Got it: cooldowns must stay short. I keep them small — 1–4 turns for base abilities and up to 5 for specializations.');
+      'Понял: перезарядки короткие. На уровнях 1–15 — максимум 2–3 хода, у специализаций может быть больше.',
+      'Got it: cooldowns stay short. Levels 1–15 cap at 2–3 turns, specializations may run longer.');
   }
   return '';
 }
@@ -2223,6 +2231,11 @@ function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
     const kind = wantsRace ? 'race' : wantsClass ? 'class' : interviewKind(app, history);
     return [howToMake(lang), nextFieldPrompt({ ...app, _kind: kind }, lang, history)].join('\n');
   }
+  // A stated requirement the sheet must meet ("до 15 уровня — максимум 2–3 хода",
+  // "перезарядка должна быть не везде") is acknowledged here, before the generic
+  // advice dump, so it cannot be swallowed by a "может быть" inside the same message.
+  const rule = ruleRequirement(text, lang);
+  if (rule) return [rule, nextFieldPrompt(app, lang, history)].join('\n');
   // The player is thinking out loud about the sheet ("может, ослабить его
   // способности?", "может, добавить что-нибудь?"). There are too many phrasings to
   // list, so the shape of the question is recognised and answered from the balance

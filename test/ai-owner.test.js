@@ -446,17 +446,18 @@ test('the interviewer authors a race itself when asked to', () => {
   }
 });
 
-test('the interviewer authors a class itself with a cooldown on every ability', () => {
+test('the interviewer authors a class itself, with cooldowns where they belong', () => {
   const reply = localInterview({ messages: [{ role: 'user', content: 'создай мне класс сам' }], lang: 'ru', application: {} });
   assert.match(reply, /Готово/, 'the class is built on request');
   assert.match(reply, /Название класса:/, 'the class is named');
   assert.match(reply, /Перезарядка:/, 'cooldowns are given in turns');
   assert.match(reply, /Истощение ресурса:/, 'the resource exhaustion rule is stated');
   assert.doesNotMatch(reply, /Расскажи про «/, 'the player is not sent back to the checklist');
-  // Every ability and both ultimates carry a cooldown, which is the rule the owner asked for.
+  // Both ultimates carry a cooldown, but not every base ability does: the owner asked
+  // for "перезарядка должна быть не везде".
   const cooldowns = (reply.match(/Перезарядка:/g) || []).length;
   const abilities = (reply.match(/Ур\. \d+:/g) || []).length;
-  assert.equal(cooldowns, abilities + 2, 'each base ability and both ultimates has a cooldown');
+  assert.ok(cooldowns > 0 && cooldowns < abilities, `some but not all abilities have a cooldown (${cooldowns}/${abilities})`);
 });
 
 test('every level 1-15 offers at least two abilities', () => {
@@ -475,14 +476,18 @@ test('every level 1-15 offers at least two abilities', () => {
   }
 });
 
-test('cooldowns stay short so the class is not hard to play', () => {
-  // The owner: "надо чтобы анкетолог не делал такие большие перезарядки".
+test('base cooldowns stay at 2-3 turns and are not on every ability', () => {
+  // The owner: "на уровнях до 15 должно быть максимум 2-3 хода перезарядка.
+  // На других уже может быть больше. И перезарядка должна быть не везде".
   for (const seed of [0, 1, 2, 3, 4, 5]) {
     const draft = generateClass('ru', seed);
     const base = draft.app['Способности'];
+    const baseLines = base.split('\n').filter((l) => /Ур\. \d+:/.test(l));
     const baseCds = [...base.matchAll(/Перезарядка: (\d+) ход/g)].map((m) => Number(m[1]));
     assert.ok(baseCds.length, `${draft.name}: base abilities carry cooldowns`);
-    assert.ok(Math.max(...baseCds) <= 4, `${draft.name}: base cooldown max is ${Math.max(...baseCds)}, want <= 4`);
+    assert.ok(Math.max(...baseCds) <= 3, `${draft.name}: base cooldown max is ${Math.max(...baseCds)}, want <= 3`);
+    const withCd = baseLines.filter((l) => /Перезарядка:/.test(l)).length;
+    assert.ok(withCd < baseLines.length, `${draft.name}: not every base ability has a cooldown (${withCd}/${baseLines.length})`);
     const specCds = [...draft.text.matchAll(/Ур\. (?:1[6-9]|[2-4]\d):[^\n]*Перезарядка: (\d+) ход/g)].map((m) => Number(m[1]));
     if (specCds.length) assert.ok(Math.max(...specCds) <= 5, `${draft.name}: spec cooldown max is ${Math.max(...specCds)}, want <= 5`);
   }
@@ -494,7 +499,20 @@ test('a stated requirement is acknowledged instead of brushed off', () => {
   assert.match(reply, /Понял: на каждом уровне — не меньше двух способностей/, 'the ability rule is confirmed');
   assert.doesNotMatch(reply, /Отлично, вот это уже деталь/, 'not brushed off as small talk');
   const cd = localInterview({ messages: [{ role: 'user', content: 'перезарядки не должны быть большими' }], lang: 'ru', application: app });
-  assert.match(cd, /Понял: перезарядки должны быть короткими/, 'the cooldown wish is confirmed');
+  assert.match(cd, /Понял: перезарядки короткие/, 'the cooldown wish is confirmed');
+});
+
+test('the exact cooldown request is acknowledged, not dumped as generic advice', () => {
+  // The owner's message: "Уменьши перезорядку, на уровнях до 15 должно быть максимум
+  // 2-3 хода перезарядка. На других уже может быть больше. И перезарядка должна быть
+  // не везде". The "может быть" inside it used to route the whole message to the
+  // generic advice dump.
+  const app = { _kind: 'class', 'Название класса': 'Громовой заклинатель' };
+  const text = 'Уменьши перезорядку, на уровнях до 15 должно быть максимум 2-3 хода перезарядка. На других уже может быть больше. И перезарядка должна быть не везде';
+  const reply = localInterview({ messages: [{ role: 'user', content: text }], lang: 'ru', application: app });
+  assert.match(reply, /Понял: перезарядка не на каждой способности/, 'the three cooldown rules are confirmed');
+  assert.doesNotMatch(reply, /Разберём баланс класса/, 'not the generic advice dump');
+  assert.doesNotMatch(reply, /Отлично, вот это уже деталь/, 'not brushed off');
 });
 
 test('"я сам" still opens the walk: the player writes it, not the interviewer', () => {
