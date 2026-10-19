@@ -365,12 +365,38 @@ function isHelpAsk(text) {
   return /как\s+(мне\s+)?(создать|сделать|придумать|заполнить|начать|играть|быть)|что\s+(мне\s+)?(писать|нужно|делать|дальше|заполнять)|помоги|подскажи|объясни|не\s+знаю|не\s+понимаю|запутался|с\s+чего\s+начать|how\s+(do|can)\s+i|what\s+(do|should)\s+i|help me/i.test(s);
 }
 
+// A player who states a requirement the sheet must meet ("До 15 уровня должно быть
+// не меньше 2 способностей", "перезарядки не должны быть большими") used to get
+// "Отлично, вот это уже деталь" and the same field question back, which reads as
+// "he did not listen". The requirement is acknowledged and the rule it names is
+// quoted, so the player can see it holds. Only these two rule shapes are recognised,
+// so an ordinary answer that happens to contain "не меньше" is left alone.
+function ruleRequirement(text, lang) {
+  const s = String(text || '').trim();
+  if (!s) return '';
+  if (/уровн/i.test(s) && /способност|умени|навык/i.test(s)
+    && /(не\s+меньше|не\s+больше|минимум|максимум|как\s+минимум|должн|нужно|надо|\b2\b|\b3\b|две|два|пару)/i.test(s)) {
+    return pick(lang,
+      'Понял: на каждом уровне — не меньше двух способностей. Так и в правилах класса, и я собираю анкету по этому требованию.',
+      'Got it: at least two abilities on every level. That is the class rule too, and I build the sheet to match.');
+  }
+  if (/перезарядк|кулдаун|откат/i.test(s)
+    && /(больш|коротк|меньш|длинн|умен|снизь|понизь|покороче|быстр|поменьше|небол)/i.test(s)) {
+    return pick(lang,
+      'Понял: перезарядки должны быть короткими. Держу их небольшими — 1–4 хода у обычных способностей и до 5 у специализаций.',
+      'Got it: cooldowns must stay short. I keep them small — 1–4 turns for base abilities and up to 5 for specializations.');
+  }
+  return '';
+}
+
 // A short, human reaction to the last message, so a turn reads as a reply rather
 // than a form field. It carries no «...» of its own, so the field question after it
 // stays the only question in the reply.
 function interviewerReaction(text, lang) {
   const s = String(text || '').trim();
   if (!s) return '';
+  const rule = ruleRequirement(s, lang);
+  if (rule) return rule;
   if (isAdviceAsk(s)) return pick(lang, 'Хорошая мысль, давай разберём.', 'Good thought, let us look at it.');
   if (/\?\s*$/.test(s)) return pick(lang, 'Хороший вопрос.', 'Good question.');
   if (/не\s+знаю|не\s+уверен|затрудня|не\s+понимаю/i.test(s)) return pick(lang, 'Ничего, помогу разобраться.', 'No worries, I will help you figure it out.');

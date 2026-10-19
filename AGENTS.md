@@ -308,6 +308,18 @@ permission is missing. Probe that way before starting any long operation.
   they chose and the abilities they wrote survive, the balance rules supply the
   rest. `answerInterview` folds it in beside `generatedSheet`. The verb list is
   explicit so an ordinary answer with "сами" ("они сами по себе") is not a handover.
+- Generated classes carry two abilities on every level 1–15 and short cooldowns
+  (added 2026-10-19). The owner: "До 15 уровня должно быть не меньше 2 способностей"
+  and "надо чтобы анкетолог не делал такие большие перезарядки". The sheet used to
+  list one ability per level for the first twelve levels, then jump to the ultimate,
+  so levels 13–15 had none, and cooldowns ran up to 8 turns. `classAbilityLines` now
+  emits the theme's signature ability plus a role utility on every level
+  (`utilityAbility`, role read from the theme wording by `themeRole`; the three levels
+  past the theme's twelve use `heavyAbility`), and cooldowns are capped at 4 turns for
+  base abilities and 5 for specializations (`ABILITY_CD_CAP` / `SPEC_CD_CAP`). A stored
+  cooldown already short is kept as is. A stated requirement ("до 15 уровня …",
+  "перезарядки не должны быть большими") is acknowledged by `ruleRequirement` instead
+  of being brushed off with "Отлично, вот это уже деталь".
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

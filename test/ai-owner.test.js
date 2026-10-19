@@ -13,6 +13,7 @@ import {
 } from '../chat-core.js';
 import { setNotifier, answerInterview, answerStaff, setLiveCaller, answerGuide } from '../chat-answers.js';
 import { localInterview, parseFieldEdit, finishSheet } from '../ai-engine.js';
+import { generateClass } from '../ai-gen.js';
 import { detectSheetKind } from '../publish.js';
 
 // These tests run against the real knowledge base, so the reply texts and the
@@ -455,7 +456,45 @@ test('the interviewer authors a class itself with a cooldown on every ability', 
   // Every ability and both ultimates carry a cooldown, which is the rule the owner asked for.
   const cooldowns = (reply.match(/Перезарядка:/g) || []).length;
   const abilities = (reply.match(/Ур\. \d+:/g) || []).length;
-  assert.equal(cooldowns, abilities + 2, 'each of the 12 abilities and both ultimates has a cooldown');
+  assert.equal(cooldowns, abilities + 2, 'each base ability and both ultimates has a cooldown');
+});
+
+test('every level 1-15 offers at least two abilities', () => {
+  // The owner's requirement: "До 15 уровня должно быть не меньше 2 способностей".
+  // The generated class used to carry only twelve abilities for fifteen levels.
+  for (const seed of [0, 1, 2, 3, 4, 5]) {
+    const draft = generateClass('ru', seed);
+    const perLevel = {};
+    for (const line of draft.text.split('\n')) {
+      const m = line.match(/Ур\. (\d+):/);
+      if (m) perLevel[m[1]] = (perLevel[m[1]] || 0) + 1;
+    }
+    for (let level = 1; level <= 15; level++) {
+      assert.ok((perLevel[level] || 0) >= 2, `${draft.name}: level ${level} offers ${perLevel[level] || 0} abilities, need 2`);
+    }
+  }
+});
+
+test('cooldowns stay short so the class is not hard to play', () => {
+  // The owner: "надо чтобы анкетолог не делал такие большие перезарядки".
+  for (const seed of [0, 1, 2, 3, 4, 5]) {
+    const draft = generateClass('ru', seed);
+    const base = draft.app['Способности'];
+    const baseCds = [...base.matchAll(/Перезарядка: (\d+) ход/g)].map((m) => Number(m[1]));
+    assert.ok(baseCds.length, `${draft.name}: base abilities carry cooldowns`);
+    assert.ok(Math.max(...baseCds) <= 4, `${draft.name}: base cooldown max is ${Math.max(...baseCds)}, want <= 4`);
+    const specCds = [...draft.text.matchAll(/Ур\. (?:1[6-9]|[2-4]\d):[^\n]*Перезарядка: (\d+) ход/g)].map((m) => Number(m[1]));
+    if (specCds.length) assert.ok(Math.max(...specCds) <= 5, `${draft.name}: spec cooldown max is ${Math.max(...specCds)}, want <= 5`);
+  }
+});
+
+test('a stated requirement is acknowledged instead of brushed off', () => {
+  const app = { _kind: 'class', 'Название класса': 'Громовой заклинатель' };
+  const reply = localInterview({ messages: [{ role: 'user', content: 'До 15 уровня должно быть не меньше 2 способностей' }], lang: 'ru', application: app });
+  assert.match(reply, /Понял: на каждом уровне — не меньше двух способностей/, 'the ability rule is confirmed');
+  assert.doesNotMatch(reply, /Отлично, вот это уже деталь/, 'not brushed off as small talk');
+  const cd = localInterview({ messages: [{ role: 'user', content: 'перезарядки не должны быть большими' }], lang: 'ru', application: app });
+  assert.match(cd, /Понял: перезарядки должны быть короткими/, 'the cooldown wish is confirmed');
 });
 
 test('"я сам" still opens the walk: the player writes it, not the interviewer', () => {

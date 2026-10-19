@@ -406,15 +406,110 @@ const CLASS_THEMES = [
   }
 ];
 
-// Ability cost rises with level the way the base classes do (5–15 resource for a
-// low ability, up to ~50 for the last), and every ability carries its cooldown in
-// turns. The list is written as "Ур. N: Название — эффект; стоимость; перезарядка".
+// Cooldowns stay short on purpose: the owner asked for them not to be so long that
+// a class is awkward to play, so a base ability is capped at 4 turns and a
+// specialization ability at 5. A stored cooldown that is already short is kept as
+// is; only the long ones are pulled down.
+const ABILITY_CD_CAP = 4;
+const SPEC_CD_CAP = 5;
+
+function turnsWord(n) {
+  const m = n % 100;
+  if (m >= 11 && m <= 14) return 'ходов';
+  const d = n % 10;
+  if (d === 1) return 'ход';
+  if (d >= 2 && d <= 4) return 'хода';
+  return 'ходов';
+}
+
+const cdText = (n) => `${n} ${turnsWord(n)}`;
+
+function shortCd(cd, cap = ABILITY_CD_CAP) {
+  const m = String(cd).match(/(\d+)/);
+  if (!m) return cd;
+  return cdText(Math.min(cap, Number(m[1])));
+}
+
+// Which base role a theme leans to, read from its own wording so the second ability
+// on each level matches the class instead of an index.
+function themeRole(t) {
+  const s = `${t.role} ${t.resource}`.toLowerCase();
+  if (/призыва|поднима|слуг|кост|мёртв|мертв/.test(s)) return 'summon';
+  if (/контрол|замедля|запира/.test(s)) return 'control';
+  if (/дальн|маг|молни|заклина/.test(s)) return 'caster';
+  if (/танк|выжиг|стойк|держит|проход|мастер/.test(s)) return 'guard';
+  return 'blade';
+}
+
+// The three levels past the theme's twelve signature abilities. They carry the class
+// to level 15 with a heavy hit near the 50-damage ceiling.
+function heavyAbility(t, index) {
+  const dmg = 42 + index * 3;
+  const names = ['Погибель', 'Расплата', 'Последний удар'];
+  return [names[index % names.length], '4 хода', `${45 + index * 3} ${t.resource.toLowerCase()}`,
+    `${dmg} урона по площади и −3 к защите врагов на 2 хода`];
+}
+
+// The second ability on every level 1–15, so no level offers fewer than the two the
+// balance rules ask for ("2–3 способности на каждый уровень"). It is a role-flavoured
+// utility: a guard's shield, a blade's gap-closer, a summoner's servant, a caster's
+// burst, a controller's hex.
+function utilityAbility(t, level) {
+  const step = level - 1;
+  const cost = `${Math.min(50, 6 + Math.round(step * 1.2))} ${t.resource.toLowerCase()}`;
+  const cd = cdText(Math.min(ABILITY_CD_CAP, 1 + Math.round(step / 5)));
+  const variants = {
+    guard: [
+      `+${3 + Math.round(step / 3)} к защите себе на 2 хода`,
+      `щит на ${15 + step * 2} урона союзнику`,
+      'снимает оглушение и страх с союзника рядом'
+    ],
+    blade: [
+      `+${3 + Math.round(step / 4)} к скорости себе на 2 хода`,
+      `рывок к цели и ${12 + step} урона`,
+      `${12 + step} урона и −2 к защите цели на 2 хода`
+    ],
+    control: [
+      `−${2 + Math.round(step / 6)} к точности врагов рядом на 2 хода`,
+      `замедляет цель на ${1 + Math.round(step / 8)} ход`,
+      'сковывает цель: она не может двигаться 1 ход'
+    ],
+    summon: [
+      `поднимает слугу: ${15 + step} ХП, ${6 + Math.round(step / 2)} урона`,
+      `лечит слугу на ${10 + step} ХП`,
+      'приказывает слугам бить вне очереди 1 ход'
+    ],
+    caster: [
+      `${12 + step} урона одной цели на дистанции`,
+      `${10 + step} урона по области`,
+      '−2 к точности врагов рядом на 2 хода'
+    ]
+  };
+  const nouns = { guard: 'Стойка', blade: 'Выпад', control: 'Оковы', summon: 'Приказ', caster: 'Печать' };
+  const role = themeRole(t);
+  const effect = variants[role][(level - 1) % variants[role].length];
+  return [`${nouns[role]} ${level}`, cd, cost, effect];
+}
+
+function abilityLine(level, name, cd, cost, effect) {
+  return `Ур. ${level}: ${name} — ${effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`;
+}
+
+// Two abilities on every level 1–15: the theme's signature power, then a role
+// utility. The list is written as "Ур. N: Название — эффект. Стоимость: X.
+// Перезарядка: Y.", one ability per line.
 function classAbilityLines(t) {
-  const costs = [8, 12, 15, 18, 22, 25, 28, 30, 35, 38, 45, 50];
-  return t.abilities.map(([name, cd, cost, effect], i) => {
-    const level = i + 1;
-    return `Ур. ${level}: ${name} — ${effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`;
-  });
+  const out = [];
+  for (let level = 1; level <= 15; level++) {
+    const i = level - 1;
+    const primary = level <= t.abilities.length
+      ? t.abilities[i]
+      : heavyAbility(t, i - t.abilities.length);
+    out.push(abilityLine(level, primary[0], shortCd(primary[1]), primary[2], primary[3]));
+    const util = utilityAbility(t, level);
+    out.push(abilityLine(level, util[0], util[1], util[2], util[3]));
+  }
+  return out;
 }
 
 // The levels between the milestones. At level 16 a class picks one of three
@@ -484,7 +579,7 @@ function specializationLines(t) {
     SPECIALIZATION_LEVELS.forEach((level, i) => {
       const a = specAbility(spec.name, role, level, i);
       const cost = Math.min(50, 15 + Math.round((level - 16) * 1.15));
-      const cd = Math.min(8, 3 + Math.round((level - 16) / 5));
+      const cd = Math.min(SPEC_CD_CAP, 2 + Math.round((level - 16) / 12));
       out.push(`  Ур. ${level}: ${a.name} — ${a.effect}. Стоимость: ${cost}. Перезарядка: ${cd}.`);
     });
   }
