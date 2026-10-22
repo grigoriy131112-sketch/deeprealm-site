@@ -206,7 +206,7 @@ export function buildDocs(k) {
     add(`admin:${r.key}`, pick('ru', `Направление: ${r.name}`, `Branch: ${r.name}`), [
       r.name, r.practice ? `Практикант: ${r.practice}` : '', r.main ? `Основная степень: ${r.main}` : '',
       r.chief ? `Главный: ${r.chief}` : '', r.pace ? `Активность: ${r.pace}` : ''
-    ].filter(Boolean).join('\n'), 'admin', ['администрация', r.name, r.key]);
+    ].filter(Boolean).join('\n'), 'admin', ['администрация', r.name, r.key], { role: r });
   }
 
   for (const a of engArticles) {
@@ -282,6 +282,37 @@ function renderDoc(doc, lang) {
   return doc.text;
 }
 
+// "А можно ты просто расскажешь в двух словах?" is a request for the gist, not for
+// the whole stored text again. Without this the Guide re-printed the full branch
+// description and read as if it had ignored the player.
+const BRIEF_RE = /(в|на)\s+двух\s+словах|вкратце|покороче|покоротче|сократи|сокращ[аеё]|сжато|тезисно|не\s+так\s+подробно|без\s+подробностей|по\s+сути|в\s+общем|кратко|коротко|in\s+short|briefly|tldr|tl;dr|short\s+version|summar/i;
+const wantsBrief = (text) => BRIEF_RE.test(String(text || ''));
+
+const lowerFirst = (s) => {
+  const t = String(s || '').trim();
+  return t ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+};
+
+// A two-sentence gist of an administration branch: what the main degree does, and
+// the expected pace. The branch's stored text stays the long answer.
+function briefRole(role, lang) {
+  const lead = String(role.main || role.practice || '').split(',')[0].trim().replace(/[.;:]+$/, '');
+  const head = lead ? `${role.name} — ${lowerFirst(lead)}.` : `${role.name}.`;
+  return [head, role.pace || ''].filter(Boolean).join(' ');
+}
+
+// The gist of any document: the first two sentences, which is what "в двух словах"
+// asks for. A branch is summarised from its own fields, a class from its rendered
+// lines, so the answer stays clean instead of repeating the title.
+function briefDoc(doc, lang) {
+  if (doc.role) return briefRole(doc.role, lang);
+  const text = renderDoc(doc, lang).replace(/\s+/g, ' ').trim();
+  if (!text) return doc.title;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  const gist = sentences.slice(0, 2).join(' ').trim();
+  return doc.kind === 'class' ? gist : `${doc.title}: ${gist}`;
+}
+
 const wantsLink = (text) => /ссылк|ссылоч|link|приглашен|invite|где\s+чат|куда\s+писать/i.test(String(text || ''));
 
 // The Guide answers from the corpus. A confident hit is answered with the stored
@@ -294,7 +325,17 @@ export function localGuide({ messages = [], lang = 'ru' } = {}) {
   // A request for the template gets the whole sheet, not the shortened entry from
   // the corpus: the owner asked for the full form, not an abridged one.
   if (wantsTemplate(q)) return fullCharacterTemplate(lang);
-  let hits = retrieve(q, docs(), 3);
+  const brief = wantsBrief(q);
+  // "В двух словах" names no topic of its own — it asks to shorten the previous
+  // answer. Folding the previous player turn into the query keeps retrieval on that
+  // topic instead of drifting to whichever document the phrase happens to match.
+  let query = q;
+  if (brief) {
+    const prior = [...history].reverse().filter((m) => m.role !== 'assistant' && String(m.content || '') !== q)
+      .map((m) => String(m.content || ''))[0] || '';
+    if (prior && tokens(prior).length) query = `${prior} ${q}`;
+  }
+  let hits = retrieve(query, docs(), 3);
   // "Какие есть классы?" scores on the shared word "класс", which every class
   // document contains. Prefer the overview in that case so the answer is the list.
   if (LIST_RE.test(q)) {
@@ -308,6 +349,7 @@ export function localGuide({ messages = [], lang = 'ru' } = {}) {
       pick(lang, `Спроси администрацию в чате: ${getKnowledge().chat?.telegram}.`, `Ask the administration in the chat: ${getKnowledge().chat?.telegram}.`)
     ].join('\n');
   }
+  if (brief) return briefDoc(best.doc, lang);
   const body = renderDoc(best.doc, lang);
   const tail = wantsLink(q) || best.doc.kind === 'chat' ? linkLine(lang) : '';
   return [`${best.doc.title}:`, body, tail].filter(Boolean).join('\n');

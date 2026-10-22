@@ -136,6 +136,32 @@ test('a class requested for an unnamed race asks which race, and a named one is 
   assert.match(named, /Пепельники/);
 });
 
+test('the guide honours a request to answer in a few words', () => {
+  // The owner: "А можно ты просто расскажешь в двух словах?" — and the Guide
+  // re-printed the whole branch description, which read as if it had not listened.
+  const history = [
+    { role: 'user', content: 'Расскажи про направление Регистратор' },
+    { role: 'assistant', content: 'Направление: Регистратор...' },
+    { role: 'user', content: 'А можно ты просто расскажешь в двух словах?' }
+  ];
+  const full = localGuide({ messages: [history[0]], lang: 'ru' });
+  const brief = localGuide({ messages: history, lang: 'ru' });
+  assert.match(brief, /Регистратор/);
+  assert.ok(brief.length < full.length, 'the brief is shorter than the full answer');
+  assert.doesNotMatch(brief, /Главный:/, 'the degrees are not listed again');
+  // The topic comes from the previous turn, so the gist is about the branch, not
+  // whichever document the phrase "в двух словах" happens to match.
+  const briefClass = localGuide({
+    messages: [
+      { role: 'user', content: 'Что за класс Маг?' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'А покороче можно?' }
+    ], lang: 'ru'
+  });
+  assert.match(briefClass, /Маг/);
+  assert.ok(briefClass.length < 400, 'a short gist, not the whole entry');
+});
+
 test('the built-in interviewer accepts a filled sheet for hand-off', () => {
   const draft = { Имя: 'Лира', Раса: 'Эльф', Класс: 'Маг' };
   const reply = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: draft });

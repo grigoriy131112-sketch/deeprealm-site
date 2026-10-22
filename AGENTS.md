@@ -347,6 +347,14 @@ permission is missing. Probe that way before starting any long operation.
   `isClassForRaceAsk` routes the unnamed case to a "назови расу" question. The stat
   list in `data/knowledge.json` was aligned with the owner's template ("Здоровье" in
   the physical block, "Хитрость" in the intellectual one).
+- A request to answer in a few words gives the gist (added 2026-10-19). The player
+  asked "А можно ты просто расскажешь в двух словах?" and the Guide re-printed the
+  whole branch description, which reads as "he did not listen". `localGuide` now
+  recognises the brevity ask (`в двух словах`, `вкратце`, `покороче`, `сократи`, …),
+  folds the previous player turn into the query so the topic does not drift, and
+  returns `briefDoc`: an admin branch is summarised from its own `main` + `pace`
+  fields, anything else from its first two sentences. The full answer is unchanged
+  when the ask is absent.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo
