@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlayerEntries } from '../blog-sync.js';
 import { buildKnowledgeContext, buildStaffContext, isLLMConfigured, app, staffTurn, stripMarkdown, matchActivityFaq, finaleText, isEndCommand, approvedWithSheet } from '../server.js';
-import { buildDocs, retrieve, localGuide, localInterview, localStaff } from '../ai-engine.js';
+import { buildDocs, retrieve, localGuide, localInterview, localStaff, setEngineArticles } from '../ai-engine.js';
 import { getKnowledge } from '../chat-core.js';
 
 // Real markup fragments copied from the Deeprealm blog index pages.
@@ -160,6 +160,74 @@ test('the guide honours a request to answer in a few words', () => {
   });
   assert.match(briefClass, /Маг/);
   assert.ok(briefClass.length < 400, 'a short gist, not the whole entry');
+});
+
+test('the guide gives the essence of each specialization in a few words', () => {
+  // The owner: "можно в двух словах рассказать что это за специализации?" — and the
+  // answer re-listed only the names, with a raw link. It must say what each does.
+  const reply = localGuide({
+    messages: [
+      { role: 'user', content: 'Расскажи про специализации Мага' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'Так а можно в двух словах рассказать что это за специализации?' }
+    ], lang: 'ru'
+  });
+  assert.match(reply, /Элементалист/);
+  assert.match(reply, /Арканный маг/);
+  assert.match(reply, /Хронист/);
+  // Each direction carries a one-line meaning, not just its name.
+  assert.match(reply, /повелитель стихий/i);
+  assert.match(reply, /контрол/i);
+  assert.match(reply, /ближнем бою/i);
+  assert.doesNotMatch(reply, /https?:\/\//, 'no raw links in the brief');
+});
+
+test('a few words about every class specialization works the same way', () => {
+  const expectations = {
+    Воин: /машина разрушения/i,
+    Лучник: /шквал стрел/i,
+    Некромант: /армией мёртвых/i,
+    Чернокнижник: /демонов-помощников/i
+  };
+  for (const [cls, re] of Object.entries(expectations)) {
+    const reply = localGuide({ messages: [{ role: 'user', content: `в двух словах про специализации ${cls}` }], lang: 'ru' });
+    assert.match(reply, re, `${cls} specializations carry their essence`);
+    assert.ok(reply.length < 500, `${cls} brief stays short`);
+  }
+});
+
+test('a few words works for base classes, base races and player entities', () => {
+  const klass = localGuide({ messages: [{ role: 'user', content: 'в двух словах про класс Маг' }], lang: 'ru' });
+  assert.match(klass, /Маг — /);
+  assert.ok(klass.length < 200, 'a base class gets one line');
+
+  const race = localGuide({ messages: [{ role: 'user', content: 'в двух словах про расу Эльф' }], lang: 'ru' });
+  assert.match(race, /Эльф/);
+  assert.match(race, /лес/i);
+  assert.ok(race.length < 300, 'a base race gets one line');
+
+  // The player lists are already compact, so the brief returns them as-is.
+  const players = localGuide({ messages: [{ role: 'user', content: 'в двух словах про классы игроков' }], lang: 'ru' });
+  assert.match(players, /Трикстер/);
+});
+
+test('breaks a player race or class blog post down to its own opening lines', () => {
+  setEngineArticles([
+    { slug: 'race-Разумные цветы', title: 'Разумные цветы', kind: 'race', text: 'Название народа: разумные цветы\nВнешность: выглядит как цветок с обширным корнем.\nБоевые особенности: покрывает тело шипами.' },
+    { slug: 'class-Трикстер', title: 'Трикстер', kind: 'class', text: 'Название класса: Трикстер\nКраткое описание: класс сильный в иллюзорной магии.\nКонцепция: контроль-поддержка' }
+  ]);
+  try {
+    const race = localGuide({ messages: [{ role: 'user', content: 'в двух словах про расу игроков Разумные цветы' }], lang: 'ru' });
+    assert.match(race, /Разумные цветы/);
+    assert.match(race, /цветок/i);
+    assert.doesNotMatch(race, /Название народа/, 'the name line is not repeated');
+
+    const klass = localGuide({ messages: [{ role: 'user', content: 'в двух словах про класс игроков Трикстер' }], lang: 'ru' });
+    assert.match(klass, /Трикстер/);
+    assert.match(klass, /иллюзорной магии/i);
+  } finally {
+    setEngineArticles([]);
+  }
 });
 
 test('the built-in interviewer accepts a filled sheet for hand-off', () => {

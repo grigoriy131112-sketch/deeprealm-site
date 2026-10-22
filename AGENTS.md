@@ -355,6 +355,18 @@ permission is missing. Probe that way before starting any long operation.
   returns `briefDoc`: an admin branch is summarised from its own `main` + `pace`
   fields, anything else from its first two sentences. The full answer is unchanged
   when the ask is absent.
+- "В двух словах про специализации" gives each direction's essence (added 2026-10-19).
+  The owner asked "можно в двух словах рассказать что это за специализации?" and got
+  only the three names plus a raw link. `data/knowledge.json` now carries a one-line
+  `classes.specialization_briefs` per direction (from the blog's own "Описание:"),
+  `base_classes[name].brief` and `races.briefs`. `briefDoc` renders per entity: a
+  specialization class lists all three with their essence, a base class/race prints
+  its one-line brief, the race and class overviews return the compact list, and a
+  player race/class read from the blog falls back to its own opening lines (the
+  "Название народа/класса" line is dropped). The same briefs are in the model context
+  (`КРАТКО О КЛАССАХ`, `КРАТКО О РАСАХ`, `КРАТКО О СПЕЦИАЛИЗАЦИЯХ`) and the Guide
+  prompt (rule 3г), so the live model answers the same way. `knowledge-view.js` passes
+  `races.briefs` through for the static build.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

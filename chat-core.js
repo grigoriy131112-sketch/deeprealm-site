@@ -34,14 +34,17 @@ export function buildKnowledgeContext(lang) {
     'ЛОР:',
     ...Object.entries(knowledge.lore).map(([k, v]) => `— ${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`),
     'РАСЫ (базовые): ' + knowledge.races.list.join(', '),
+    'КРАТКО О РАСАХ: ' + Object.entries(knowledge.races.briefs || {}).map(([n, b]) => `${n} — ${b}`).join(' | '),
     'ССЫЛКИ НА РАСЫ: ' + Object.entries(knowledge.races.links || {}).map(([n, v]) => `${n}: ${v}`).join('; '),
     'ПРАВИЛА СОЗДАНИЯ РАС: ' + knowledge.races.race_template_rules.join(' '),
     knowledge.races.blog_link ? 'СТАТЬЯ ПРО РАСЫ: ' + knowledge.races.blog_link : '',
     knowledge.races.template_link ? 'ШАБЛОН СВОЕЙ РАСЫ: ' + knowledge.races.template_link : '',
     'КЛАССЫ (базовые): ' + Object.entries(knowledge.classes.base_classes).map(([n, d]) => `${n} — ресурс: ${d.resource}; старт: ${d.start}; базовая атака: ${d.basic_attack}; способности: ${d.abilities}; истощение: ${d.exhaustion}`).join(' | '),
+    'КРАТКО О КЛАССАХ: ' + Object.entries(knowledge.classes.base_classes).filter(([, d]) => d.brief).map(([n, d]) => `${n} — ${d.brief}`).join(' | '),
     'СИСТЕМА КЛАССОВ: ' + knowledge.classes.class_system,
     'ССЫЛКИ НА КЛАССЫ: ' + Object.entries(knowledge.classes.links || {}).filter(([, v]) => typeof v === 'string').map(([n, v]) => `${n}: ${v}`).join('; '),
     'ССЫЛКИ НА СПЕЦИАЛИЗАЦИИ: ' + Object.entries((knowledge.classes.links && knowledge.classes.links.specializations) || {}).map(([cls, specs]) => `${cls} — ${Object.entries(specs).map(([s, u]) => `${s}: ${u}`).join(', ')}`).join(' | '),
+    'КРАТКО О СПЕЦИАЛИЗАЦИЯХ: ' + Object.entries(knowledge.classes.specialization_briefs || {}).map(([cls, specs]) => `${cls} — ${Object.entries(specs).map(([s, b]) => `${s}: ${b}`).join('; ')}`).join(' | '),
     knowledge.classes.level_pass_link ? 'ПАСС УРОВНЕЙ (статья): ' + knowledge.classes.level_pass_link : '',
     'ПАСС УРОВНЕЙ: ' + [knowledge.classes.level_pass?.note, ...(knowledge.classes.level_pass?.tiers || []).map((t) => `${t.name} (${t.range}): ` + t.rewards.map((r) => `${r.level} ур. — ${r.reward}`).join('; '))].filter(Boolean).join(' | '),
     knowledge.classes.template_link ? 'ШАБЛОН СВОЕГО КЛАССА: ' + knowledge.classes.template_link : '',
@@ -94,7 +97,8 @@ export const GUIDE_SYSTEM = (lang) => `Ты — Проводник чата Deep
 3. Когда рассказываешь про класс, расу или специализацию — НЕ отправляй читать статью. Перескажи сам: ресурс, старт, базовая атака, способности, механика истощения, роль, специализации — всё, что есть в информации ниже. Ссылку на статью давай только если игрок прямо попросил ссылку.
 3а. Если игрок просит рассказать о специализациях класса — перечисли все три направления этого класса и коротко объясни каждое. Не подменяй ответ рассказом о самом классе.
 3б. Если игрок просит шаблон анкеты персонажа — выведи ПОЛНУЮ анкету целиком, со всеми полями и обоими блоками характеристик (физические и интеллектуальные). Не сокращай и не пересказывай.
-3в. Если игрок просит рассказать короче — «в двух словах», «вкратце», «покороче», «сократи», «по сути» — дай сжатую суть в 1–2 предложения. Не повторяй предыдущий длинный ответ целиком.
+3в. Если игрок просит рассказать короче — «в двух словах», «вкратце», «покороче», «сократи», «по сути», «суть» — дай сжатую суть в 1–2 предложения. Не повторяй предыдущий длинный ответ целиком.
+3г. КРАТКО О СПЕЦИАЛИЗАЦИЯХ. Если игрок просит «в двух словах» про специализации класса — перечисли все три направления и одной фразой объясни суть каждого (по «КРАТКО О СПЕЦИАЛИЗАЦИЯХ» ниже). Если «в двух словах» про конкретное направление — одна фраза про него. Так же кратко — про базовые классы и расы, классы игроков и расы игроков (одна суть на каждого).
 4. Ссылки давай только те, что есть в информации ниже. Никогда не придумывай ссылки, кнопки, файлы и адреса.
 
 ССЫЛКИ И КОНТАКТЫ:

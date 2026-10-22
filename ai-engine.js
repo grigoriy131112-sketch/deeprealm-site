@@ -111,15 +111,21 @@ export function buildDocs(k) {
   }
 
   const races = k.races || {};
-  if (races.list) add('races', pick('ru', 'Расы', 'Races'), pick('ru', `Базовые расы: ${races.list.join(', ')}.`, `Base races: ${races.list.join(', ')}.`), 'races', ['расы', 'список', 'races']);
+  // The relation keys are upper-case ("ЭЛЬФ") while the briefs are written in the
+  // blog's mixed case ("Эльф"), so the two are matched without regard to case.
+  const raceBriefFor = (name) => {
+    const key = Object.keys(races.briefs || {}).find((b) => b.toLowerCase() === String(name).toLowerCase());
+    return { raceBriefName: key || name, raceBrief: key ? races.briefs[key] : '' };
+  };
+  if (races.list) add('races', pick('ru', 'Расы', 'Races'), pick('ru', `Базовые расы: ${races.list.join(', ')}.`, `Base races: ${races.list.join(', ')}.`), 'races', ['расы', 'список', 'races'], { raceName: null, raceBriefs: races.briefs || {} });
   for (const [name, value] of Object.entries(races.relations || {})) {
     const text = typeof value === 'string' ? value : Object.entries(value || {}).map(([n, v]) => `${n}: ${v}`).join('\n');
-    add(`race-rel:${name}`, pick('ru', `Раса ${name}`, `Race ${name}`), text, 'race', ['раса', name]);
+    add(`race-rel:${name}`, pick('ru', `Раса ${name}`, `Race ${name}`), text, 'race', ['раса', name], { raceName: name, ...raceBriefFor(name) });
   }
   if (races.race_template_rules) add('race-rules', pick('ru', 'Правила создания расы', 'Race creation rules'), races.race_template_rules.map((r) => `— ${r}`).join('\n'), 'race', ['раса', 'правила', 'баланс']);
   if (races.race_template_fields) add('race-fields', pick('ru', 'Поля анкеты расы', 'Race sheet fields'), races.race_template_fields.map((f) => `— ${f}`).join('\n'), 'race', ['раса', 'шаблон', 'поля']);
   if ((races.player_races || []).length) {
-    add('race-players', pick('ru', 'Расы игроков', 'Player races'), races.player_races.map((r) => `${r.name} — ${r.author}${r.url ? ` (${r.url})` : ''}`).join('\n'), 'race', ['расы', 'игроки']);
+    add('race-players', pick('ru', 'Расы игроков', 'Player races'), races.player_races.map((r) => `${r.name} — ${r.author}${r.url ? ` (${r.url})` : ''}`).join('\n'), 'race', ['расы', 'игроки'], { playerList: true });
   }
 
   const classes = k.classes || {};
@@ -139,9 +145,10 @@ export function buildDocs(k) {
       `Базовая атака: ${d.basic_attack}`,
       `Способности: ${d.abilities}`,
       `Истощение: ${d.exhaustion}`
-    ].join('\n'), 'class', ['класс', name, 'class'], { data: d, name });
+    ].join('\n'), 'class', ['класс', name, 'class'], { data: d, name, classBrief: d.brief || '' });
   }
   const specLinks = (classes.links && classes.links.specializations) || {};
+  const specBriefs = classes.specialization_briefs || {};
   for (const [name, specs] of Object.entries(classes.specializations || {})) {
     const list = Array.isArray(specs) ? specs : Object.keys(specs || {});
     if (!list.length) continue;
@@ -154,12 +161,13 @@ export function buildDocs(k) {
       ...list.map((s) => (links[s] ? `${s}: ${links[s]}` : '')).filter(Boolean)
     ].join('\n');
     add(`spec:${name}`, pick('ru', `Специализации ${name}`, `${name} specializations`), body,
-      'class', ['специализация', 'специализации', 'специализациям', name, 'spec']);
+      'class', ['специализация', 'специализации', 'специализациям', name, 'spec'],
+      { specClass: name, specNames: list, specBriefs: specBriefs[name] || {}, specLinks: links });
   }
   if (Object.keys(classes.specializations || {}).length) {
     add('spec-all', pick('ru', 'Специализации классов', 'Class specializations'),
       Object.entries(classes.specializations).map(([n, s]) => `${n}: ${(Array.isArray(s) ? s : Object.keys(s || {})).join(', ')}.`).join('\n'),
-      'class', ['специализация', 'специализации', 'специализации классов', 'spec']);
+      'class', ['специализация', 'специализации', 'специализации классов', 'spec'], { specAll: true });
   }
   if (classes.class_system) add('class-system', pick('ru', 'Система классов', 'Class system'), classes.class_system, 'class', ['класс', 'система', 'уровни']);
   if (classes.milestones) {
@@ -174,7 +182,7 @@ export function buildDocs(k) {
   }
   if (classes.class_balance_rules) add('class-rules', pick('ru', 'Правила баланса классов', 'Class balance rules'), classes.class_balance_rules.map((r) => `— ${r}`).join('\n'), 'class', ['класс', 'баланс', 'правила']);
   if ((classes.player_classes || []).length) {
-    add('class-players', pick('ru', 'Классы игроков', 'Player classes'), classes.player_classes.map((c) => `${c.name} — ${c.author}${c.url ? ` (${c.url})` : ''}`).join('\n'), 'class', ['классы', 'игроки']);
+    add('class-players', pick('ru', 'Классы игроков', 'Player classes'), classes.player_classes.map((c) => `${c.name} — ${c.author}${c.url ? ` (${c.url})` : ''}`).join('\n'), 'class', ['классы', 'игроки'], { playerList: true });
   }
 
   const lp = classes.level_pass || {};
@@ -211,7 +219,10 @@ export function buildDocs(k) {
 
   for (const a of engArticles) {
     if (!a || !a.title) continue;
-    add(`article:${a.slug || a.title}`, a.title, a.text || a.title, a.kind || 'article', [a.kind || '', 'статья', a.title]);
+    // Player races and classes read from the blog are searched alongside the rest,
+    // so "в двух словах про расу игроков Разумные цветы" is answered from the post.
+    const kind = a.kind === 'race' || a.kind === 'class' ? a.kind : (a.kind || 'article');
+    add(`article:${a.slug || a.title}`, a.title, a.text || a.title, kind, [a.kind || '', 'статья', a.title, 'игрок']);
   }
 
   return docs;
@@ -285,7 +296,7 @@ function renderDoc(doc, lang) {
 // "А можно ты просто расскажешь в двух словах?" is a request for the gist, not for
 // the whole stored text again. Without this the Guide re-printed the full branch
 // description and read as if it had ignored the player.
-const BRIEF_RE = /(в|на)\s+двух\s+словах|вкратце|покороче|покоротче|сократи|сокращ[аеё]|сжато|тезисно|не\s+так\s+подробно|без\s+подробностей|по\s+сути|в\s+общем|кратко|коротко|in\s+short|briefly|tldr|tl;dr|short\s+version|summar/i;
+const BRIEF_RE = /(в|на)\s+двух\s+словах|вкратце|покороче|покоротче|сократи|сокращ[аеё]|сжато|тезисно|не\s+так\s+подробно|без\s+подробностей|по\s+сути|в\s+общих\s+чертах|в\s+общем|кратко|коротко|\bсуть\b|in\s+short|briefly|tldr|tl;dr|short\s+version|summar/i;
 const wantsBrief = (text) => BRIEF_RE.test(String(text || ''));
 
 const lowerFirst = (s) => {
@@ -293,24 +304,73 @@ const lowerFirst = (s) => {
   return t ? t.charAt(0).toLowerCase() + t.slice(1) : t;
 };
 
+// The first couple of readable lines, used as the gist of a blog post when it has
+// no stored brief of its own. The name line is dropped (it only repeats the title),
+// and the class posts' own field labels are shortened.
+function leadingLines(text, n = 2) {
+  const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean)
+    .filter((l) => !/^Название\s+(народа|класса)\s*:/i.test(l));
+  return lines.slice(0, n).join(' ')
+    .replace(/^Краткое\s+описание[^:]*:\s*/i, '')
+    .replace(/^Концепция[^:]*:\s*/i, 'Стиль: ')
+    .replace(/\s+/g, ' ').trim();
+}
+
 // A two-sentence gist of an administration branch: what the main degree does, and
 // the expected pace. The branch's stored text stays the long answer.
-function briefRole(role, lang) {
+function briefRole(role) {
   const lead = String(role.main || role.practice || '').split(',')[0].trim().replace(/[.;:]+$/, '');
   const head = lead ? `${role.name} — ${lowerFirst(lead)}.` : `${role.name}.`;
   return [head, role.pace || ''].filter(Boolean).join(' ');
 }
 
-// The gist of any document: the first two sentences, which is what "в двух словах"
-// asks for. A branch is summarised from its own fields, a class from its rendered
-// lines, so the answer stays clean instead of repeating the title.
+// A one-line essence per base class, from the stored brief.
+function briefClass(doc) {
+  return doc.classBrief ? `${doc.name} — ${doc.classBrief}.` : doc.text;
+}
+
+// A one-line essence per base race, from the stored brief.
+function briefRace(doc) {
+  return doc.raceBrief ? `${doc.raceBriefName || doc.raceName} — ${doc.raceBrief}.` : doc.text;
+}
+
+// All base races, one line each: "расскажи в двух словах про расы".
+function briefRaceList(doc) {
+  return Object.entries(doc.raceBriefs || {}).map(([name, b]) => `${name} — ${b}.`).join('\n');
+}
+
+// "Что это за специализации?" is answered with the essence of each direction, so
+// the player learns what Элементалист / Арканный маг / Хронист actually do instead
+// of only seeing their names.
+function briefSpecs(doc) {
+  const briefs = doc.specBriefs || {};
+  const lines = (doc.specNames || []).map((s) => `${s} — ${briefs[s] || 'смотри статью'}.`);
+  return [`${doc.specClass} — специализации:`, ...lines].join('\n');
+}
+
+// A player race or class read from the blog has no stored brief, so its own opening
+// lines serve as the gist.
+function briefPlayer(doc) {
+  const lead = leadingLines(doc.text, 2);
+  return lead ? `${doc.title}: ${lead}` : doc.title;
+}
+
+// The gist of any document: a stored brief when there is one, otherwise the first
+// two sentences. This is what "в двух словах" asks for.
 function briefDoc(doc, lang) {
-  if (doc.role) return briefRole(doc.role, lang);
+  if (doc.specNames) return briefSpecs(doc);
+  // The class-specialization overview and the player lists are already compact: a
+  // list of names reads as a gist on its own.
+  if (doc.specAll || doc.playerList) return doc.text;
+  if (doc.role) return briefRole(doc.role);
+  if (doc.raceBriefs && !doc.raceName) return briefRaceList(doc);
+  if (doc.raceName) return briefRace(doc);
+  if (doc.classBrief) return briefClass(doc);
+  if (doc.kind === 'race' || doc.kind === 'class') return briefPlayer(doc);
   const text = renderDoc(doc, lang).replace(/\s+/g, ' ').trim();
   if (!text) return doc.title;
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  const gist = sentences.slice(0, 2).join(' ').trim();
-  return doc.kind === 'class' ? gist : `${doc.title}: ${gist}`;
+  return `${doc.title}: ${sentences.slice(0, 2).join(' ').trim()}`;
 }
 
 const wantsLink = (text) => /ссылк|ссылоч|link|приглашен|invite|где\s+чат|куда\s+писать/i.test(String(text || ''));

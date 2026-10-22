@@ -13,6 +13,7 @@ export function knowledgeView(knowledge) {
       list: races.list,
       links: races.links || {},
       relations: races.relations,
+      briefs: races.briefs || {},
       rules: races.race_template_rules,
       fields: races.race_template_fields,
       templateLink: races.template_link || '',
