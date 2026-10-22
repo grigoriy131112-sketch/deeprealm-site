@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlayerEntries } from '../blog-sync.js';
 import { buildKnowledgeContext, buildStaffContext, isLLMConfigured, app, staffTurn, stripMarkdown, matchActivityFaq, finaleText, isEndCommand, approvedWithSheet } from '../server.js';
-import { buildDocs, retrieve, localGuide, localInterview, localStaff, setEngineArticles } from '../ai-engine.js';
+import { buildDocs, retrieve, localGuide, guideReference, localInterview, localStaff, setEngineArticles } from '../ai-engine.js';
 import { getKnowledge } from '../chat-core.js';
 
 // Real markup fragments copied from the Deeprealm blog index pages.
@@ -228,6 +228,81 @@ test('breaks a player race or class blog post down to its own opening lines', ()
   } finally {
     setEngineArticles([]);
   }
+});
+
+test('the guide answers "как выглядит эльф" with the appearance, not the relations', () => {
+  // The owner: "я спрашиваю как выглядит эльф ... мне отвечает Раса ЭЛЬФ: К Людям:
+  // Снисходительность ..." — the relations document was winning on the race name.
+  const reply = localGuide({ messages: [{ role: 'user', content: 'как выглядит эльф' }], lang: 'ru' });
+  assert.match(reply, /Внешность:/);
+  assert.match(reply, /зеленоватым|серебристым|длинными конечностями/i);
+  assert.doesNotMatch(reply, /^Раса ЭЛЬФ:/m);
+  assert.doesNotMatch(reply, /К Людям/, 'the relations are not the answer');
+});
+
+test('"а как выглядит он?" borrows the race from the previous turn', () => {
+  const reply = localGuide({
+    messages: [
+      { role: 'user', content: 'как выглядит эльф' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'а как выглядит он?' }
+    ], lang: 'ru'
+  });
+  assert.match(reply, /Внешность:/);
+  assert.match(reply, /Эльф/i);
+  assert.doesNotMatch(reply, /К Людям/);
+});
+
+test('"способности первого уровня" returns the level abilities, not the level pass', () => {
+  // The owner: "я спрашиваю способности первого уровня — мне отвечает Пасс уровней".
+  const reply = localGuide({
+    messages: [
+      { role: 'user', content: 'класс воин' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'способности первого уровня' }
+    ], lang: 'ru'
+  });
+  assert.match(reply, /Удар оружием/);
+  assert.match(reply, /1 уровень/);
+  assert.doesNotMatch(reply, /Пасс уровней/);
+  assert.doesNotMatch(reply, /серебряных монет/);
+});
+
+test('a specialization answers on its own with its essence and abilities', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'расскажи про специализацию Элементалист' }], lang: 'ru' });
+  assert.match(reply, /повелитель стихий/i);
+  assert.match(reply, /16 уровень/);
+  assert.match(reply, /Буря стихий/);
+});
+
+test('a short field follow-up answers with that field only', () => {
+  const weaknesses = localGuide({
+    messages: [
+      { role: 'user', content: 'как выглядит эльф' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'а уязвимости?' }
+    ], lang: 'ru'
+  });
+  assert.match(weaknesses, /Уязвимости и слабые стороны/);
+  assert.doesNotMatch(weaknesses, /Внешность:/, 'only the asked field is shown');
+
+  const abilities = localGuide({
+    messages: [
+      { role: 'user', content: 'класс воин' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'а способности?' }
+    ], lang: 'ru'
+  });
+  assert.match(abilities, /1 уровень/);
+  assert.match(abilities, /Удар оружием/);
+  assert.doesNotMatch(abilities, /Ресурс: Выносливость/, 'not the class overview again');
+});
+
+test('the model reference carries the appearance text for a looks question', () => {
+  const reference = guideReference({ messages: [{ role: 'user', content: 'как выглядит эльф' }], lang: 'ru' });
+  assert.match(reference, /Внешность:/);
+  assert.match(reference, /Эльф/i);
+  assert.doesNotMatch(reference, /К Людям/);
 });
 
 test('the built-in interviewer accepts a filled sheet for hand-off', () => {

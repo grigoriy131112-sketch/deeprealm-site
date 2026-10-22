@@ -6,7 +6,7 @@ import {
   sentToOwnerText, applicationTitle, staffAnswerPairs, detectSheet,
   staffTurn, matchActivityFaq, GUIDE_SYSTEM, INTERVIEWER_SYSTEM, STAFF_SYSTEM
 } from './chat-core.js';
-import { localGuide, localInterview, localStaff, interviewKind, generatedSheet, finishSheet, interviewReady, isCheckCommand, parseFieldEdit } from './ai-engine.js';
+import { localGuide, localInterview, localStaff, interviewKind, generatedSheet, finishSheet, interviewReady, isCheckCommand, parseFieldEdit, guideReference } from './ai-engine.js';
 import { keepsEssentials } from './ai-maker.js';
 
 let modelCaller = null;
@@ -153,8 +153,13 @@ export async function answerGuide({ messages = [], lang = 'ru', onLive = null } 
   const history = toHistory(messages, 20);
   // Ending the dialogue needs no model, so it works with no key and no network.
   if (isEndCommand(lastUserText(history))) return { reply: withEnd(finaleText('guide', lang)), finale: true };
+  // The reference text gives the model the exact facts (appearance, a level's
+  // abilities, a race profile) so it does not fall back to the wrong document or
+  // invent an answer.
+  const reference = guideReference({ messages: history, lang });
   const { reply, by, livePending } = await askModelOrLocal([
     { role: 'system', content: GUIDE_SYSTEM(lang) },
+    ...(reference ? [{ role: 'system', content: `СПРАВКА (используй как источник фактов, перескажи своими словами):\n${reference}` }] : []),
     ...history.map(asRole)
   ], () => localGuide({ messages: history, lang }), { keyless: true, live: true, role: 'guide', onLive });
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };

@@ -367,6 +367,22 @@ permission is missing. Probe that way before starting any long operation.
   (`КРАТКО О КЛАССАХ`, `КРАТКО О РАСАХ`, `КРАТКО О СПЕЦИАЛИЗАЦИЯХ`) and the Guide
   prompt (rule 3г), so the live model answers the same way. `knowledge-view.js` passes
   `races.briefs` through for the static build.
+- Race profiles, class abilities and specialization abilities are real data pulled
+  from the blog (added 2026-10-20). The owner reported three wrong answers: "как
+  выглядит эльф" returned the race *relations* ("К Людям: Снисходительность…"),
+  "способности первого уровня" returned the *level pass* rewards, and a
+  specialization had no answer of its own. `data/knowledge.json` now carries
+  `races.details` (each base race's Внешность / Образ жизни / Боевые особенности /
+  Уязвимости / … fields), `classes.base_classes[name].levels` (the 1–15 ability list)
+  and `classes.specializations_detail[name].levels` (the 16–50 abilities). The Guide
+  routes a looks question to the profile (appearance first), a level question to that
+  level's abilities, and a named specialization to its essence + abilities. The race
+  profile document is added before the relations so a plain "расскажи про эльфа"
+  gets the profile; the relations keep their own document and answer "а отношения?".
+- The Guide resolves follow-ups. "А как выглядит он?" and "а уязвимости?" carry no
+  entity, so the previous player turn is folded into the query; a field-naming
+  follow-up shows only that field. `guideReference()` hands the live model the exact
+  same source text, so the model path cannot fall back to the wrong document.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

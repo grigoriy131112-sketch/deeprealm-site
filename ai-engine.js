@@ -118,9 +118,20 @@ export function buildDocs(k) {
     return { raceBriefName: key || name, raceBrief: key ? races.briefs[key] : '' };
   };
   if (races.list) add('races', pick('ru', 'Расы', 'Races'), pick('ru', `Базовые расы: ${races.list.join(', ')}.`, `Base races: ${races.list.join(', ')}.`), 'races', ['расы', 'список', 'races'], { raceName: null, raceBriefs: races.briefs || {} });
+  // The full profile of each base race: appearance, way of life, combat traits,
+  // weaknesses. This is what "как выглядит эльф" answers from — the relations
+  // document alone (who likes whom) was the wrong answer to a looks question. It is
+  // added before the relations so a plain "расскажи про эльфа" gets the profile.
+  for (const [name, fields] of Object.entries(races.details || {})) {
+    const body = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
+    add(`race-det:${name}`, pick('ru', `Раса ${name}`, `Race ${name}`), body, 'race',
+      ['раса', name, 'внешность', 'внешний вид', 'как выглядит', 'как выглядят', 'описание', 'appearance', 'look'],
+      { raceName: name, raceDetailsName: name, raceFields: fields, ...raceBriefFor(name) });
+  }
   for (const [name, value] of Object.entries(races.relations || {})) {
     const text = typeof value === 'string' ? value : Object.entries(value || {}).map(([n, v]) => `${n}: ${v}`).join('\n');
-    add(`race-rel:${name}`, pick('ru', `Раса ${name}`, `Race ${name}`), text, 'race', ['раса', name], { raceName: name, ...raceBriefFor(name) });
+    add(`race-rel:${name}`, pick('ru', `Раса ${raceBriefFor(name).raceBriefName}`, `Race ${raceBriefFor(name).raceBriefName}`), text, 'race',
+      ['раса', name, 'отношения', 'отношение', 'дружба', 'вражда'], { raceName: name, ...raceBriefFor(name) });
   }
   if (races.race_template_rules) add('race-rules', pick('ru', 'Правила создания расы', 'Race creation rules'), races.race_template_rules.map((r) => `— ${r}`).join('\n'), 'race', ['раса', 'правила', 'баланс']);
   if (races.race_template_fields) add('race-fields', pick('ru', 'Поля анкеты расы', 'Race sheet fields'), races.race_template_fields.map((f) => `— ${f}`).join('\n'), 'race', ['раса', 'шаблон', 'поля']);
@@ -146,9 +157,18 @@ export function buildDocs(k) {
       `Способности: ${d.abilities}`,
       `Истощение: ${d.exhaustion}`
     ].join('\n'), 'class', ['класс', name, 'class'], { data: d, name, classBrief: d.brief || '' });
+    // The per-level ability list, so "способности первого уровня" answers with the
+    // abilities themselves instead of falling through to the level pass rewards.
+    if (Array.isArray(d.levels) && d.levels.length) {
+      add(`class-lv:${name}`, pick('ru', `Способности ${name} по уровням`, `${name} abilities by level`),
+        d.levels.map((lv) => `${lv.level} уровень: ${lv.abilities.join('; ')}`).join('\n'),
+        'class', ['способности', 'умения', 'навыки', 'уровни', 'уровень', 'level', name],
+        { classLevels: d.levels, name });
+    }
   }
   const specLinks = (classes.links && classes.links.specializations) || {};
   const specBriefs = classes.specialization_briefs || {};
+  const specDetail = classes.specializations_detail || {};
   for (const [name, specs] of Object.entries(classes.specializations || {})) {
     const list = Array.isArray(specs) ? specs : Object.keys(specs || {});
     if (!list.length) continue;
@@ -163,6 +183,17 @@ export function buildDocs(k) {
     add(`spec:${name}`, pick('ru', `Специализации ${name}`, `${name} specializations`), body,
       'class', ['специализация', 'специализации', 'специализациям', name, 'spec'],
       { specClass: name, specNames: list, specBriefs: specBriefs[name] || {}, specLinks: links });
+    // Each direction also answers on its own: its essence and its 16–50 abilities.
+    for (const s of list) {
+      const levels = (specDetail[s] || {}).levels || [];
+      const parts = [
+        specBriefs[name] && specBriefs[name][s] ? `${s} — ${specBriefs[name][s]}.` : `${s}.`,
+        levels.length ? levels.map((lv) => `${lv.level} уровень: ${lv.abilities.join('; ')}`).join('\n') : ''
+      ].filter(Boolean);
+      add(`spec-det:${s}`, pick('ru', `Специализация ${s}`, `Specialization ${s}`), parts.join('\n'),
+        'class', ['специализация', 'способности', 'умения', name, s],
+        { specName: s, specOwner: name, specLevels: levels, specBrief: (specBriefs[name] || {})[s] || '' });
+    }
   }
   if (Object.keys(classes.specializations || {}).length) {
     add('spec-all', pick('ru', 'Специализации классов', 'Class specializations'),
@@ -278,7 +309,7 @@ const linkLine = (lang) => {
   return pick(lang, `Ссылка на чат: ${chat.telegram}.`, `Chat link: ${chat.telegram}.`);
 };
 
-function renderDoc(doc, lang) {
+function renderDoc(doc, lang, level) {
   if (doc.kind === 'class' && doc.data) {
     const d = doc.data;
     return [
@@ -289,6 +320,16 @@ function renderDoc(doc, lang) {
       `${pick(lang, 'Способности', 'Abilities')}: ${d.abilities}.`,
       `${pick(lang, 'Истощение', 'Exhaustion')}: ${d.exhaustion}.`
     ].join('\n');
+  }
+  // A class or specialization ability list can be narrowed to one level, so
+  // "способности первого уровня" returns the first-level abilities rather than all
+  // fifteen rows or, worse, the level-pass rewards.
+  if ((doc.classLevels || doc.specLevels) && level) {
+    const levels = doc.classLevels || doc.specLevels;
+    const row = levels.find((l) => l.level === level);
+    const title = doc.classLevels ? pick(lang, `Способности ${doc.name}`, `${doc.name} abilities`) : doc.specName;
+    if (!row) return `${title}: ${pick(lang, `на ${level} уровне способностей нет.`, `no abilities at level ${level}.`)}`;
+    return `${title} — ${level} ${pick(lang, 'уровень', 'level')}:\n${row.abilities.map((a) => `— ${a}`).join('\n')}`;
   }
   return doc.text;
 }
@@ -375,6 +416,169 @@ function briefDoc(doc, lang) {
 
 const wantsLink = (text) => /ссылк|ссылоч|link|приглашен|invite|где\s+чат|куда\s+писать/i.test(String(text || ''));
 
+// "Как выглядит эльф?" asks for the race's appearance, not for whom it likes. The
+// relations document was winning on the race name alone and answering the wrong
+// question, so a looks question is routed to the race profile and shown appearance
+// first.
+const LOOK_RE = /как\s+выгляд|выглядит|выглядят|внешн|внешний\s+вид|опиши|описание|похож|appearance|what\s+.*look|look\s+like/i;
+const wantsLook = (text) => LOOK_RE.test(String(text || ''));
+
+// A short follow-up about one field of the entity just discussed ("а уязвимости?",
+// "а способности?") names no entity either, so it borrows the previous turn too.
+const FOLLOW_FIELD_RE = /выгляд|внешн|уязвим|слабост|отношен|образ\s+жизни|устройств|продолжительност|способност|умени|навык|истощени/i;
+
+// When a follow-up names one field, only that field is shown, so "а уязвимости?"
+// answers with the weaknesses rather than the whole profile again.
+const FIELD_FOCUS = [
+  [/выгляд|внешн|appearance/i, ['Внешность']],
+  [/уязвим|слабост/i, ['Уязвимости и слабые стороны']],
+  [/образ\s+жизни|среда|быт/i, ['Образ жизни и среда обитания']],
+  [/боевые|физическ|в бою/i, ['Боевые и физические особенности']],
+  [/общественн|устройств|правит/i, ['Общественное устройство']],
+  [/продолжительност|живут|сколько\s+жив/i, ['Продолжительность жизни']],
+  [/маги/i, ['Отношение к магии']],
+  [/вер[аеу]|религи/i, ['Вера']],
+  [/отношен|дружб|враж|другие\s+расы/i, ['Отношения']]
+];
+function fieldFocus(text) {
+  const s = String(text || '');
+  const keys = [];
+  for (const [re, fields] of FIELD_FOCUS) if (re.test(s)) keys.push(...fields);
+  return keys;
+}
+
+const ORDINALS = {
+  '1': 1, 'перв': 1, '2': 2, 'втор': 2, '3': 3, 'трет': 3, '4': 4, 'четверт': 4, '5': 5, 'пят': 5,
+  '6': 6, 'шест': 6, '7': 7, 'седьм': 7, '8': 8, 'восьм': 8, '9': 9, 'девят': 9, '10': 10, 'десят': 10,
+  '11': 11, 'одиннадцат': 11, '12': 12, 'двенадцат': 12, '13': 13, 'тринадцат': 13, '14': 14, 'четырнадцат': 14,
+  '15': 15, 'пятнадцат': 15
+};
+
+// "способности первого уровня", "что на 5 уровне", "уровень 3". Returns the level
+// number or 0 when the question is not pinned to one.
+function levelFromQuery(text) {
+  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+  let m = s.match(/уровен[ья][\s-]*(\d{1,2})/);
+  if (m) return Number(m[1]);
+  m = s.match(/(\d{1,2})\s*(?:-?го\s*)?уровн/);
+  if (m) return Number(m[1]);
+  for (const [key, value] of Object.entries(ORDINALS)) {
+    if (new RegExp(`(?:^|[^а-яa-z])${key}[а-я]*\\s+уровн`).test(s)) return value;
+  }
+  return 0;
+}
+
+// The names the corpus can answer about, used to tell "он/она" (no topic) from a
+// real question that merely lacks a noun.
+function knownNames() {
+  const k = getKnowledge() || {};
+  const names = new Set();
+  for (const n of Object.keys(k.classes?.base_classes || {})) names.add(n.toLowerCase());
+  for (const n of k.races?.list || []) names.add(String(n).toLowerCase());
+  for (const n of Object.keys(k.races?.details || {})) names.add(String(n).toLowerCase());
+  for (const list of Object.values(k.classes?.specializations || {})) {
+    for (const s of (Array.isArray(list) ? list : Object.keys(list || {}))) names.add(String(s).toLowerCase());
+  }
+  for (const r of k.races?.player_races || []) names.add(String(r.name || '').toLowerCase());
+  for (const c of k.classes?.player_classes || []) names.add(String(c.name || '').toLowerCase());
+  return names;
+}
+
+function mentionsEntity(text) {
+  const s = String(text || '').toLowerCase();
+  for (const name of knownNames()) {
+    if (name && s.includes(name)) return true;
+  }
+  return false;
+}
+
+// The race profile, appearance first: that is the question a looks query asks. When
+// the follow-up names one field ("а уязвимости?"), only that field is shown.
+function renderRaceDetails(doc, lang, focus) {
+  const fields = doc.raceFields || {};
+  const order = ['Внешность', 'Образ жизни и среда обитания', 'Боевые и физические особенности', 'Уязвимости и слабые стороны', 'Общественное устройство', 'Продолжительность жизни', 'Отношение к магии', 'Вера'];
+  let keys = [...order.filter((k) => fields[k]), ...Object.keys(fields).filter((k) => !order.includes(k) && k !== 'Название народа')];
+  if (focus && focus.length) {
+    const wanted = focus.filter((k) => fields[k]);
+    if (wanted.length) keys = keys.filter((k) => wanted.includes(k));
+  }
+  return [`${pick(lang, 'Раса', 'Race')} ${doc.raceDetailsName || doc.raceName}:`, ...keys.map((k) => `${k}: ${fields[k]}`)].join('\n');
+}
+
+// The relations document for a race, used when a follow-up asks about them.
+function raceRelationsDoc(raceName) {
+  return docs().find((d) => d.id.startsWith('race-rel:') && String(d.raceName).toLowerCase() === String(raceName).toLowerCase());
+}
+
+// Chooses the document that answers the latest turn, applying the same routing the
+// local answer uses: brevity, appearance, list and level questions, and pronoun
+// resolution. Shared so the model prompt can be given the same source text.
+function pickAnswer(history) {
+  const last = [...history].reverse().find((m) => m.role !== 'assistant');
+  const q = String(last?.content || '');
+  const brief = wantsBrief(q);
+  const look = wantsLook(q);
+  const level = levelFromQuery(q);
+  const focus = fieldFocus(q);
+  const abilityFocus = /способност|умени|навык/i.test(q);
+  // "А уязвимости?", "а способности?" — a short follow-up about a field of the entity
+  // just discussed. It names no entity, so it borrows the previous turn too.
+  const followUp = FOLLOW_FIELD_RE.test(q) && tokens(q).length <= 2;
+  const priorTurns = [...history].reverse()
+    .filter((m) => m.role !== 'assistant' && String(m.content || '') !== q)
+    .map((m) => String(m.content || ''));
+  const prior = priorTurns[0] || '';
+  const priorEntity = priorTurns.find((c) => mentionsEntity(c)) || '';
+  let query = q;
+  if ((brief || look || followUp) && !mentionsEntity(q)) {
+    if (prior && tokens(prior).length) query = `${prior} ${q}`;
+  }
+  let hits = retrieve(query, docs(), 3);
+  // "Какие есть классы?" scores on the shared word "класс", which every class
+  // document contains. Prefer the overview in that case so the answer is the list.
+  if (LIST_RE.test(q)) {
+    const overview = hits.find((h) => isListDoc(h.doc));
+    if (overview) hits = [overview, ...hits.filter((h) => h !== overview)];
+  }
+  // A looks question belongs to the race profile, not to the relations document that
+  // happens to share the race name. The profile wins when it is among the hits.
+  if (look) {
+    const profile = hits.find((h) => h.doc.raceFields);
+    if (profile) hits = [profile, ...hits.filter((h) => h !== profile)];
+  }
+  // "А способности?" after a class means the class's per-level ability list, not the
+  // overview whose "Способности: 5–15 выносливости" is only the resource cost.
+  if (abilityFocus && !mentionsEntity(q) && priorEntity) {
+    const list = hits.find((h) => h.doc.classLevels && priorEntity.toLowerCase().includes(String(h.doc.name).toLowerCase()));
+    if (list) hits = [list, ...hits.filter((h) => h !== list)];
+  }
+  // "Способности первого уровня" carries no class name, so the previous turn supplies
+  // it. Among equally-scored ability lists, prefer the one for that class.
+  if (level && !mentionsEntity(q) && priorEntity) {
+    const named = hits.find((h) => h.doc.classLevels && priorEntity.toLowerCase().includes(String(h.doc.name).toLowerCase()));
+    if (named) hits = [named, ...hits.filter((h) => h !== named)];
+  }
+  const best = hits[0];
+  // "А отношения?" names the relations field, so the relations document answers even
+  // though the race profile also matches on the race name.
+  if (focus.includes('Отношения') && best && best.doc.raceName) {
+    const rel = raceRelationsDoc(best.doc.raceDetailsName || best.doc.raceName);
+    if (rel) return { q, brief, look, followUp, focus, level, best: rel };
+  }
+  return { q, brief, look, followUp, focus, level, best: best && best.score >= 2 ? best.doc : null };
+}
+
+// The source text for the model prompt: the same document the local answer would use,
+// rendered the same way. Without it the live model has no appearance or per-level
+// facts and guesses, which is how "как выглядит эльф" produced the relations text.
+export function guideReference({ messages = [], lang = 'ru' } = {}) {
+  const { brief, look, followUp, focus, level, best } = pickAnswer(Array.isArray(messages) ? messages : []);
+  if (!best) return '';
+  if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
+  if (brief) return briefDoc(best, lang);
+  return renderDoc(best, lang, level);
+}
+
 // The Guide answers from the corpus. A confident hit is answered with the stored
 // text; a weak one is admitted as unknown rather than guessed, which keeps the
 // chat honest.
@@ -385,34 +589,18 @@ export function localGuide({ messages = [], lang = 'ru' } = {}) {
   // A request for the template gets the whole sheet, not the shortened entry from
   // the corpus: the owner asked for the full form, not an abridged one.
   if (wantsTemplate(q)) return fullCharacterTemplate(lang);
-  const brief = wantsBrief(q);
-  // "В двух словах" names no topic of its own — it asks to shorten the previous
-  // answer. Folding the previous player turn into the query keeps retrieval on that
-  // topic instead of drifting to whichever document the phrase happens to match.
-  let query = q;
-  if (brief) {
-    const prior = [...history].reverse().filter((m) => m.role !== 'assistant' && String(m.content || '') !== q)
-      .map((m) => String(m.content || ''))[0] || '';
-    if (prior && tokens(prior).length) query = `${prior} ${q}`;
-  }
-  let hits = retrieve(query, docs(), 3);
-  // "Какие есть классы?" scores on the shared word "класс", which every class
-  // document contains. Prefer the overview in that case so the answer is the list.
-  if (LIST_RE.test(q)) {
-    const overview = hits.find((h) => isListDoc(h.doc));
-    if (overview) hits = [overview, ...hits.filter((h) => h !== overview)];
-  }
-  const best = hits[0];
-  if (!best || best.score < 2) {
+  const { brief, look, followUp, focus, level, best } = pickAnswer(history);
+  if (!best) {
     return [
       pick(lang, 'Честно: в моих материалах нет ответа на этот вопрос.', 'Honestly, my materials have no answer to that.'),
       pick(lang, `Спроси администрацию в чате: ${getKnowledge().chat?.telegram}.`, `Ask the administration in the chat: ${getKnowledge().chat?.telegram}.`)
     ].join('\n');
   }
-  if (brief) return briefDoc(best.doc, lang);
-  const body = renderDoc(best.doc, lang);
-  const tail = wantsLink(q) || best.doc.kind === 'chat' ? linkLine(lang) : '';
-  return [`${best.doc.title}:`, body, tail].filter(Boolean).join('\n');
+  if (brief) return briefDoc(best, lang);
+  if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
+  const body = renderDoc(best, lang, level);
+  const tail = wantsLink(q) || best.kind === 'chat' ? linkLine(lang) : '';
+  return [`${best.title}:`, body, tail].filter(Boolean).join('\n');
 }
 
 // The full character sheet template, in the player's own wording, so asking for the
