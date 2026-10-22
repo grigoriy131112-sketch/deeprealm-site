@@ -49,7 +49,7 @@ const STOP = new Set([
 export function stem(word) {
   const w = String(word || '').toLowerCase().replace(/ё/g, 'е');
   if (w.length <= 3) return w;
-  let s = w.replace(/(иями|ями|ами|ов|ев|ей|ой|ый|ий|ая|яя|ое|ее|ые|ие|ах|ях|ам|ям|ом|ем|ую|юю|ии|ия|ию|ью|ть|а|я|о|е|у|ю|ы|и|ь)$/, '');
+  let s = w.replace(/(иями|иях|иям|ями|ами|ов|ев|ей|ой|ый|ий|ая|яя|ое|ее|ые|ие|ах|ях|ам|ям|ом|ем|ую|юю|ии|ия|ию|ью|ть|а|я|о|е|у|ю|ы|и|ь)$/, '');
   // Verbs and verbal nouns split here: "создать" and "создания" must land on the
   // same stem, or a question about creating something misses the rules that
   // describe creating it.
@@ -141,9 +141,25 @@ export function buildDocs(k) {
       `Истощение: ${d.exhaustion}`
     ].join('\n'), 'class', ['класс', name, 'class'], { data: d, name });
   }
+  const specLinks = (classes.links && classes.links.specializations) || {};
   for (const [name, specs] of Object.entries(classes.specializations || {})) {
     const list = Array.isArray(specs) ? specs : Object.keys(specs || {});
-    if (list.length) add(`spec:${name}`, pick('ru', `Специализации ${name}`, `${name} specializations`), `${name}: ${list.join(', ')}.`, 'class', ['специализация', name]);
+    if (!list.length) continue;
+    const links = specLinks[name] || {};
+    // The names and, where they exist, the article links, so a question about a
+    // class's specializations answers with the three directions instead of falling
+    // back to the class overview (the owner's "проводник не выдаёт то, что прошу").
+    const body = [
+      `${name}: ${list.join(', ')}.`,
+      ...list.map((s) => (links[s] ? `${s}: ${links[s]}` : '')).filter(Boolean)
+    ].join('\n');
+    add(`spec:${name}`, pick('ru', `Специализации ${name}`, `${name} specializations`), body,
+      'class', ['специализация', 'специализации', 'специализациям', name, 'spec']);
+  }
+  if (Object.keys(classes.specializations || {}).length) {
+    add('spec-all', pick('ru', 'Специализации классов', 'Class specializations'),
+      Object.entries(classes.specializations).map(([n, s]) => `${n}: ${(Array.isArray(s) ? s : Object.keys(s || {})).join(', ')}.`).join('\n'),
+      'class', ['специализация', 'специализации', 'специализации классов', 'spec']);
   }
   if (classes.class_system) add('class-system', pick('ru', 'Система классов', 'Class system'), classes.class_system, 'class', ['класс', 'система', 'уровни']);
   if (classes.milestones) {
@@ -171,9 +187,10 @@ export function buildDocs(k) {
 
   const tpl = k.character_template || {};
   if (tpl.fields) {
+    // The full sheet, not the shortened form: the owner wants the whole template
+    // printed, and a player asking for it should see every field and stat block.
     add('template', pick('ru', 'Шаблон анкеты персонажа', 'Character sheet template'),
-      Object.entries(tpl.fields).map(([n, v]) => `${n}: ${typeof v === 'string' ? v : ''}`.trim()).join('\n'),
-      'template', ['шаблон', 'анкета', 'персонаж']);
+      fullCharacterTemplate('ru'), 'template', ['шаблон', 'анкета', 'персонаж', 'полная анкета']);
   }
 
   if (k.story_template) add('story', pick('ru', 'Шаблон заявки на сюжет для ГМ', 'Plot application template'), k.story_template, 'template', ['сюжет', 'гм', 'шаблон']);
@@ -274,6 +291,9 @@ export function localGuide({ messages = [], lang = 'ru' } = {}) {
   const history = Array.isArray(messages) ? messages : [];
   const last = [...history].reverse().find((m) => m.role !== 'assistant');
   const q = String(last?.content || '');
+  // A request for the template gets the whole sheet, not the shortened entry from
+  // the corpus: the owner asked for the full form, not an abridged one.
+  if (wantsTemplate(q)) return fullCharacterTemplate(lang);
   let hits = retrieve(q, docs(), 3);
   // "Какие есть классы?" scores on the shared word "класс", which every class
   // document contains. Prefer the overview in that case so the answer is the list.
@@ -292,6 +312,68 @@ export function localGuide({ messages = [], lang = 'ru' } = {}) {
   const tail = wantsLink(q) || best.doc.kind === 'chat' ? linkLine(lang) : '';
   return [`${best.doc.title}:`, body, tail].filter(Boolean).join('\n');
 }
+
+// The full character sheet template, in the player's own wording, so asking for the
+// template prints every field and stat block instead of the shortened form. The
+// owner asked for the complete sheet: "я буду тебя просить что бы ты засунул полную
+// анкету, а не сократил её". The stat names come from the knowledge base, so a change
+// there is reflected here with no code edit.
+function fullCharacterTemplate(lang) {
+  const fields = (getKnowledge().character_template || {}).fields || {};
+  const statBlock = (name, fallback) => {
+    const block = fields[name];
+    const stats = (block && block.stats) || fallback;
+    return [
+      `${name} (${(block && block.rule) || 'может быть только один показатель на 10, два на 8, один на 7'}):`,
+      '',
+      ...stats.map((s) => `${s}: 0–10`),
+      '',
+      '',
+      'Необязательно:',
+      `Сильные стороны: (${(block && block.strong_sides) || '2–3 пункта'})`,
+      `Слабые стороны: (${(block && block.weak_sides) || '2–3 пункта, обязательно!'})`,
+      `Особые умения: (${(block && block.special_moves) || 'если есть'})`
+    ].join('\n');
+  };
+  if (lang === 'en') {
+    return [
+      'Character sheet template', '', 'Name:', 'Nickname:', 'Height / weight:', 'Gender:',
+      'Orientation:', 'Character traits:', '1. Strengths:', '2. Weaknesses:', 'Race:', 'Class:',
+      'Age:', 'Hobbies:', 'Interesting facts: unusual events in the character\'s life',
+      'Origin: (at least 2-3 sentences of backstory)', 'Appearance:', 'Distinctive features:',
+      'Starting gear:', '', statBlock('Physical characteristics', ['Strength', 'Speed', 'Agility', 'Endurance', 'Health', 'Reaction']),
+      '', statBlock('Intellectual abilities', ['Cunning', 'Intellect', 'Resourcefulness', 'Guile', 'Aggression', 'Kindness', 'Charisma', 'Empathy'])
+    ].join('\n');
+  }
+  return [
+    'Шаблон анкеты', '',
+    'Имя:',
+    'Прозвище:',
+    'Рост / вес:',
+    'Пол:',
+    'Ориентация:',
+    'Черты характера:',
+    '1. Преимущества:',
+    '2. Недостатки:',
+    'Раса:',
+    'Класс:',
+    'Возраст:',
+    'Хобби:',
+    'Интересные факты: необычные события из жизни персонажа',
+    'Происхождение: (минимум 2-3 предложения предыстории)',
+    'Внешность:',
+    'Особенности внешности:',
+    'Стартовое снаряжение:',
+    '',
+    statBlock('Физические характеристики', ['Сила', 'Скорость', 'Ловкость', 'Выносливость', 'Здоровье', 'Реакция']),
+    '',
+    statBlock('Интеллектуальные способности', ['Хитрость', 'Интеллект', 'Сообразительность', 'Изворотливость', 'Агрессивность', 'Доброта', 'Харизма', 'Эмпатия'])
+  ].join('\n');
+}
+
+// Whether the question is asking for the template itself, so the full sheet is
+// printed rather than the short entry from the knowledge base.
+export const wantsTemplate = (text) => /шаблон|template|полн[а-яё]*\s+анкет|форму\s+анкет/i.test(String(text || ''));
 
 // -------------------------------------------------------------- interviewer
 
@@ -926,8 +1008,12 @@ export function generatedSheet(history, application = {}, lang = 'ru') {
   const seed = seedFrom(msgs);
   // A class for an already-made race: the player names the race, so the class is
   // tied to it instead of being a free-floating kit. Checked first because such a
-  // request names both a race and a class.
-  if (forRace) return generateClassForRace(lang, seed, raceNameFor(text, application, msgs));
+  // request names both a race and a class. When no race is named the request is left
+  // to `localInterview`, which asks for the name rather than inventing one.
+  if (forRace) {
+    const race = raceNameFor(text, application, msgs);
+    return /\S/.test(race) ? generateClassForRace(lang, seed, race) : null;
+  }
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
   if (!wantsRace && !wantsClass) return null;
@@ -953,30 +1039,57 @@ function raceConceptFrom(history) {
 // requested together with a race is a different request from a free-standing class.
 export function isClassForRace(text) {
   const s = String(text || '');
-  return /класс[а-яё]{0,3}\s*(?:под|для|по)\s*(?:(?:готов[а-яё]*|мою|свою|эту|ту)\s+)?рас|рас[а-яё]{0,3}\s*(?:под|для)\s*класс|class\s+(?:for|to)\s+(?:the\s+|my\s+)?race/i.test(s);
+  return /класс[а-яё]{0,3}\s*(?:,?\s*(?:котор[а-яё]+|что)\s*)?(?:подход[а-яё]*|подходящ[а-яё]*|под\b|для\b|по\b|под\s+готов)/i.test(s) && /рас[а-яё]{0,3}/i.test(s)
+    || /класс[а-яё]{0,3}\s*(?:под|для|по)\s*(?:(?:готов[а-яё]*|мою|свою|эту|ту|моей|своей)\s+)?рас/i.test(s)
+    || /рас[а-яё]{0,3}\s*(?:под|для)\s*класс/i.test(s)
+    || /класс[а-яё]{0,3}[\s\S]{0,40}рас[а-яё]{0,3}/i.test(s) && /подход|подходящ|совместим|соответств/i.test(s)
+    || /class\s+(?:for|to|that\s+fits?|matching)\s+(?:the\s+|my\s+|a\s+)?race/i.test(s);
+}
+
+// A class-for-race request that names no race ("сделай класс под мою расу",
+// "может ли ии сделать класс для расы игрока"). The engine cannot invent the race,
+// so it asks for the name instead of building a free-floating class that ignores it.
+export function isClassForRaceAsk(text) {
+  const s = String(text || '');
+  if (!isClassForRace(s)) return false;
+  return !/\S/.test(raceNameFor(s, {}, []) || '');
 }
 
 // The race the class is built for. The newest message wins, then a ready race the
 // player pasted in (the "Название" line of a race sheet), then the draft the race
 // interview left behind, then any race named in the dialogue.
+// Words that follow "расы/раса" in ordinary speech but are not a race name
+// ("класс для расы игрока", "под мою расу"). Without this the history fallback read
+// "игрока" as the race name, so "сделай класс для расы игрока" was taken as a
+// named race and the interviewer invented a class instead of asking which race.
+const NOT_A_RACE_NAME = /^(игрок|игрока|игроку|игроком|персонаж|персонажа|герой|героя|свою|мою|нашу|эту|ту|готовую|новую|любую|расу|расы|раса|расе|класс|класса|классу)$/i;
+
+function cleanRaceName(value) {
+  const name = String(value || '').trim().split(/[.\n]/)[0].slice(0, 60).trim();
+  return NOT_A_RACE_NAME.test(name) ? '' : name;
+}
+
 export function raceNameFor(text, application = {}, history = []) {
   const app = application && typeof application === 'object' ? application : {};
   const quoted = String(text || '').match(/[«"']([^»"']{2,60})[»"']/);
-  if (quoted) return quoted[1].trim();
+  if (quoted) return cleanRaceName(quoted[1]);
   // A pasted race sheet carries its own "Название: X" line. The lookbehind keeps
   // "Самоназвание: X" from being read as the race name.
   const labelled = String(text || '').match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)/i);
-  if (labelled) return labelled[1].trim().split(/[.\n]/)[0].slice(0, 60);
+  if (labelled) return cleanRaceName(labelled[1]);
   const named = String(text || '').match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
-  if (named) return named[1].trim();
+  if (named) return cleanRaceName(named[1]);
   for (const key of ['Название', 'Название расы']) {
-    if (typeof app[key] === 'string' && app[key].trim()) return app[key].trim();
+    if (typeof app[key] === 'string' && app[key].trim()) return cleanRaceName(app[key]);
   }
   const msgs = Array.isArray(history) ? history : [];
-  const mentioned = msgs.filter((m) => m && m.role !== 'assistant')
-    .map((m) => String(m.content || '')).join('\n')
-    .match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)|(?<![а-яё])(?:расу|расы|раса|расе)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/i);
-  return mentioned ? String(mentioned[1] || mentioned[2] || '').trim().split(/[.\n]/)[0].slice(0, 60) : '';
+  const joined = msgs.filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || '')).join('\n');
+  const labelledHist = joined.match(/(?<![а-яё])[Нн]азвание(?:\s+расы)?\s*[:\-—]\s*(.+)/);
+  if (labelledHist) return cleanRaceName(labelledHist[1]);
+  // No `/i` here: an upper-case first letter is what tells a name from "расы игрока".
+  const namedHist = joined.match(/(?<![а-яё])(?:расу|расы|раса|расе)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+  return namedHist ? cleanRaceName(namedHist[1]) : '';
 }
 
 export function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
@@ -1019,6 +1132,15 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   if (finished) return renderGenerated(finished, lang);
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
+  // A class requested for a race that has not been named yet ("может ли ии сделать
+  // класс для расы игрока?", "сделай класс под мою расу"). The engine cannot invent
+  // the race, so it asks which one instead of building a class that ignores it.
+  if (isClassForRaceAsk(text)) {
+    return [
+      pick(lang, 'Конечно, могу — но сначала назови расу, под которую нужен класс: под её природу, способности и слабости я соберу подходящий класс.', 'Of course I can — but first name the race the class is for: I will build it around that race\'s nature, abilities and weaknesses.'),
+      nextFieldPrompt({ ...app, _kind: 'class' }, lang, history)
+    ].join('\n');
+  }
   // "Как мне создать расу?" is a how-to, not advice about a sheet: the two options
   // are explained, then the walk continues. Checked before the advice block so the
   // word "подскажи" in a how-to question cannot turn it into balance advice.

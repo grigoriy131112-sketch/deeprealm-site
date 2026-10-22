@@ -329,6 +329,24 @@ permission is missing. Probe that way before starting any long operation.
   "не везде" wording, and it now runs in `localInterview` before `isAdviceAsk`, because
   the owner's sentence contains "может быть" and used to be swallowed by the generic
   advice dump. The cooldown matcher tolerates the "перезорядку" typo.
+- The Guide answers about specializations and prints the full template (added
+  2026-10-19). Two reports: "просил рассказать о специализациях мага — выдавал только
+  краткое описание самого мага", and "засунь полную анкету, а не сократи её". The
+  plural "специализациях" stemmed differently from the stored "специализации", so the
+  question fell back to the class overview; `stem` now folds `иях/иям` like `иями`, the
+  spec document lists the three directions plus their article links, and a `spec-all`
+  document answers the class-agnostic question. `fullCharacterTemplate` renders the
+  whole sheet (both stat blocks, from the knowledge base), used both by the Guide when
+  `wantsTemplate` matches and by the stored template document, so the shortened form is
+  never printed.
+- A class requested for a race with no name asks which race (added 2026-10-19). The
+  owner's question: "сможет ли ии сделать класс для расы игрока". `raceNameFor`'s
+  history fallback had `/i` on a pattern whose first group is `[A-ZА-ЯЁ]`, so the
+  lower-case "игрока" was read as the race name and a free-floating class was built.
+  The flag is gone, a `NOT_A_RACE_NAME` stop-list covers "расы игрока / мою расу", and
+  `isClassForRaceAsk` routes the unnamed case to a "назови расу" question. The stat
+  list in `data/knowledge.json` was aligned with the owner's template ("Здоровье" in
+  the physical block, "Хитрость" in the intellectual one).
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

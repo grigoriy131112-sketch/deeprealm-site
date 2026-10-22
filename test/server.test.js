@@ -96,6 +96,46 @@ test('the built-in engine answers about rules and lore', () => {
   assert.match(lore, /Подземелье/);
 });
 
+test('the guide answers about a class specializations instead of the class itself', () => {
+  // The complaint: "я его просил рассказать о специализациях мага, в итоге он
+  // выдавал только краткое описание самого мага". The plural "специализациях" used
+  // to stem differently from the stored "специализации", so the question fell back to
+  // the class overview.
+  const reply = localGuide({ messages: [{ role: 'user', content: 'Расскажи о специализациях мага' }], lang: 'ru' });
+  assert.match(reply, /Элементалист/);
+  assert.match(reply, /Арканный маг/);
+  assert.match(reply, /Хроник|Боевой маг/);
+  assert.doesNotMatch(reply, /Истощение/, 'the class overview is not the answer');
+});
+
+test('the guide prints the full character sheet when asked for the template', () => {
+  // The owner: "я буду тебя просить что бы ты засунул полную анкету, а не сократил её".
+  const reply = localGuide({ messages: [{ role: 'user', content: 'Покажи шаблон анкеты персонажа' }], lang: 'ru' });
+  for (const field of ['Имя:', 'Прозвище:', 'Рост / вес:', 'Ориентация:', 'Возраст:', 'Внешность:', 'Стартовое снаряжение:']) {
+    assert.match(reply, new RegExp(field.replace(/[/:]/g, (m) => `\\${m}`)), `field ${field}`);
+  }
+  assert.match(reply, /Физические характеристики/);
+  assert.match(reply, /Сила: 0–10/);
+  assert.match(reply, /Здоровье: 0–10/);
+  assert.match(reply, /Интеллектуальные способности/);
+  assert.match(reply, /Хитрость: 0–10/);
+  assert.match(reply, /Эмпатия: 0–10/);
+});
+
+test('a class requested for an unnamed race asks which race, and a named one is built', () => {
+  // The question the owner passed on: "сможет ли ии сделать класс для расы игрока".
+  // No race is named, so the engine must ask rather than invent a free-floating class.
+  for (const q of ['Можешь сделать класс для моей расы?', 'может ли ии сделать класс для расы игрока', 'Сделай класс под расу']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: q }], lang: 'ru', application: {} });
+    assert.match(reply, /назови расу/, `asks for the race: ${q}`);
+    assert.doesNotMatch(reply, /^Готово/, `does not invent a class: ${q}`);
+  }
+  // When the race is named, the class is tied to it.
+  const named = localInterview({ messages: [{ role: 'user', content: 'Сделай класс для расы «Пепельники»' }], lang: 'ru', application: {} });
+  assert.match(named, /Готово/);
+  assert.match(named, /Пепельники/);
+});
+
 test('the built-in interviewer accepts a filled sheet for hand-off', () => {
   const draft = { Имя: 'Лира', Раса: 'Эльф', Класс: 'Маг' };
   const reply = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: draft });
