@@ -108,7 +108,7 @@ const GUIDE_SYSTEM = (lang) => `Ты — Проводник чата Deeprealm: 
 3в. Если игрок просит рассказать короче — «в двух словах», «вкратце», «покороче», «сократи», «по сути», «суть» — дай сжатую суть в 1–2 предложения. Не повторяй предыдущий длинный ответ целиком.
 3г. КРАТКО О СПЕЦИАЛИЗАЦИЯХ. Если игрок просит «в двух словах» про специализации класса — перечисли все три направления и одной фразой объясни суть каждого (по «КРАТКО О СПЕЦИАЛИЗАЦИЯХ» ниже). Если «в двух словах» про конкретное направление — одна фраза про него. Так же кратко — про базовые классы и расы, классы игроков и расы игроков (одна суть на каждого).
 3д. ВНЕШНОСТЬ. На вопрос «как выглядит <раса>» или «как выглядит он» отвечай ОПИСАНИЕМ ВНЕШНОСТИ (рост, кожа, глаза, одежда) из поля «Внешность». Не подменяй ответ отношениями расы с другими народами. Если у вопроса нет названной расы («как выглядит он») — бери расу или класс из предыдущего вопроса игрока.
-3е. СПОСОБНОСТИ УРОВНЯ. На вопрос «способности <N> уровня» дай способности именно этого уровня класса или специализации, а не награды пасса уровней. Если класс не назван — бери его из предыдущего вопроса.
+3е. СПОСОБНОСТИ УРОВНЯ. На вопрос «способности <N> уровня» дай способности именно этого уровня класса или специализации, а не награды пасса уровней. Если класс не назван — бери его из предыдущего вопроса. Если в одном вопросе названо несколько классов с уровнями («способности 15 мага и 10 некроманта») — ответь по каждому классу отдельно, не пропускай ни одного.
 3ж. ЕСЛИ ВЫШЕ ДАНА «СПРАВКА» — это источник фактов: перескажи её своими словами и не добавляй ничего, чего в ней нет.
 4. Ссылки давай только те, что есть в информации ниже. Никогда не придумывай ссылки, кнопки, файлы и адреса.
 
@@ -1711,6 +1711,38 @@ function mentionsEntity(text) {
   return false;
 }
 
+// A question can ask about several classes at once: "способности 15 уровня мага и
+// 10 некроманта". Each "class + level" pair is a separate answer, so they are
+// detected and answered one after another instead of only the last one.
+function abilityRequests(text) {
+  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+  if (!/способност|умени|навык/.test(s)) return [];
+  const names = [...knownNames()].sort((a, b) => b.length - a.length);
+  const out = [];
+  for (const seg of s.split(/[,;]|\s+и\s+|\s+плюс\s+|\s+а\s+также\s+/)) {
+    if (!seg.trim()) continue;
+    // The level can stand alone before the class ("10 некроманта"), so a bare
+    // number is accepted as the level when the usual "уровня" wording is absent.
+    const bare = Number((seg.match(/\b(\d{1,2})\b/) || [])[1] || 0);
+    const lvl = levelFromQuery(seg) || bare;
+    if (!lvl) continue;
+    const name = names.find((n) => seg.includes(n));
+    if (name) out.push({ name, level: lvl });
+  }
+  return out;
+}
+
+// The per-level ability list for one class, used for the multi-class questions.
+function renderAbilityList(name, level, lang) {
+  const doc = docs().find((d) => d.classLevels && String(d.name).toLowerCase() === name);
+  if (!doc) return '';
+  return `${doc.title}:\n${renderDoc(doc, lang, level)}`;
+}
+
+function abilityAnswers(text, lang) {
+  return abilityRequests(text).map((r) => renderAbilityList(r.name, r.level, lang)).filter(Boolean);
+}
+
 // The race profile, appearance first: that is the question a looks query asks. When
 // the follow-up names one field ("а уязвимости?"), only that field is shown.
 function renderRaceDetails(doc, lang, focus) {
@@ -1791,8 +1823,12 @@ function pickAnswer(history) {
 // rendered the same way. Without it the live model has no appearance or per-level
 // facts and guesses, which is how "как выглядит эльф" produced the relations text.
 function guideReference({ messages = [], lang = 'ru' } = {}) {
-  const { brief, look, followUp, focus, level, best } = pickAnswer(Array.isArray(messages) ? messages : []);
-  if (!best) return '';
+  const history = Array.isArray(messages) ? messages : [];
+  const last = [...history].reverse().find((m) => m.role !== 'assistant');
+  const multi = abilityAnswers(String(last?.content || ''), lang);
+  if (multi.length > 1) return multi.join('\n\n');
+  const { brief, look, followUp, focus, level, best } = pickAnswer(history);
+  if (!best) return multi[0] || '';
   if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
   if (brief) return briefDoc(best, lang);
   return renderDoc(best, lang, level);
@@ -1808,6 +1844,9 @@ function localGuide({ messages = [], lang = 'ru' } = {}) {
   // A request for the template gets the whole sheet, not the shortened entry from
   // the corpus: the owner asked for the full form, not an abridged one.
   if (wantsTemplate(q)) return fullCharacterTemplate(lang);
+  // Two classes asked together ("способности 15 мага и 10 некроманта") get two answers.
+  const multi = abilityAnswers(q, lang);
+  if (multi.length > 1) return multi.join('\n\n');
   const { brief, look, followUp, focus, level, best } = pickAnswer(history);
   if (!best) {
     return [

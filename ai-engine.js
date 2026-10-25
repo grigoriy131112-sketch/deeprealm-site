@@ -496,6 +496,38 @@ function mentionsEntity(text) {
   return false;
 }
 
+// A question can ask about several classes at once: "способности 15 уровня мага и
+// 10 некроманта". Each "class + level" pair is a separate answer, so they are
+// detected and answered one after another instead of only the last one.
+function abilityRequests(text) {
+  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+  if (!/способност|умени|навык/.test(s)) return [];
+  const names = [...knownNames()].sort((a, b) => b.length - a.length);
+  const out = [];
+  for (const seg of s.split(/[,;]|\s+и\s+|\s+плюс\s+|\s+а\s+также\s+/)) {
+    if (!seg.trim()) continue;
+    // The level can stand alone before the class ("10 некроманта"), so a bare
+    // number is accepted as the level when the usual "уровня" wording is absent.
+    const bare = Number((seg.match(/\b(\d{1,2})\b/) || [])[1] || 0);
+    const lvl = levelFromQuery(seg) || bare;
+    if (!lvl) continue;
+    const name = names.find((n) => seg.includes(n));
+    if (name) out.push({ name, level: lvl });
+  }
+  return out;
+}
+
+// The per-level ability list for one class, used for the multi-class questions.
+function renderAbilityList(name, level, lang) {
+  const doc = docs().find((d) => d.classLevels && String(d.name).toLowerCase() === name);
+  if (!doc) return '';
+  return `${doc.title}:\n${renderDoc(doc, lang, level)}`;
+}
+
+function abilityAnswers(text, lang) {
+  return abilityRequests(text).map((r) => renderAbilityList(r.name, r.level, lang)).filter(Boolean);
+}
+
 // The race profile, appearance first: that is the question a looks query asks. When
 // the follow-up names one field ("а уязвимости?"), only that field is shown.
 function renderRaceDetails(doc, lang, focus) {
@@ -576,8 +608,12 @@ function pickAnswer(history) {
 // rendered the same way. Without it the live model has no appearance or per-level
 // facts and guesses, which is how "как выглядит эльф" produced the relations text.
 export function guideReference({ messages = [], lang = 'ru' } = {}) {
-  const { brief, look, followUp, focus, level, best } = pickAnswer(Array.isArray(messages) ? messages : []);
-  if (!best) return '';
+  const history = Array.isArray(messages) ? messages : [];
+  const last = [...history].reverse().find((m) => m.role !== 'assistant');
+  const multi = abilityAnswers(String(last?.content || ''), lang);
+  if (multi.length > 1) return multi.join('\n\n');
+  const { brief, look, followUp, focus, level, best } = pickAnswer(history);
+  if (!best) return multi[0] || '';
   if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
   if (brief) return briefDoc(best, lang);
   return renderDoc(best, lang, level);
@@ -593,6 +629,9 @@ export function localGuide({ messages = [], lang = 'ru' } = {}) {
   // A request for the template gets the whole sheet, not the shortened entry from
   // the corpus: the owner asked for the full form, not an abridged one.
   if (wantsTemplate(q)) return fullCharacterTemplate(lang);
+  // Two classes asked together ("способности 15 мага и 10 некроманта") get two answers.
+  const multi = abilityAnswers(q, lang);
+  if (multi.length > 1) return multi.join('\n\n');
   const { brief, look, followUp, focus, level, best } = pickAnswer(history);
   if (!best) {
     return [

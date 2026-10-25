@@ -384,6 +384,8 @@ permission is missing. Probe that way before starting any long operation.
   follow-up shows only that field. `guideReference()` hands the live model the exact
   same source text, so the model path cannot fall back to the wrong document.
   The terse "Способности 14" (no word "уровень") is read as level 14 too.
+  A question naming several classes at once ("способности 15 уровня мага и 10
+  некроманта") is split into one answer per class, so none is dropped.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

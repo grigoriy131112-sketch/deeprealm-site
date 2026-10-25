@@ -312,6 +312,26 @@ test('the terse "Способности 14" is read as level 14', () => {
   assert.doesNotMatch(reply, /Пасс уровней/);
 });
 
+test('two classes with levels in one question are both answered', () => {
+  // The owner: "скажи мне способности 15 уровня мага и 10 некроманта" — only the
+  // last pair was answered before.
+  const reply = localGuide({
+    messages: [{ role: 'user', content: 'Хорошо. Теперь скажи мне способности 15 уровня мага и 10 некроманта' }],
+    lang: 'ru'
+  });
+  assert.match(reply, /Способности Маг — 15 уровень/);
+  assert.match(reply, /Божественный гнев/);
+  assert.match(reply, /Способности Некромант — 10 уровень/);
+  assert.match(reply, /Повелитель смерти/);
+});
+
+test('three classes with levels in one question are all answered', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'способности 5 воина, 7 лучника и 9 мага' }], lang: 'ru' });
+  assert.match(reply, /Способности Воин — 5 уровень/);
+  assert.match(reply, /Способности Лучник — 7 уровень/);
+  assert.match(reply, /Способности Маг — 9 уровень/);
+});
+
 test('the model reference carries the appearance text for a looks question', () => {
   const reference = guideReference({ messages: [{ role: 'user', content: 'как выглядит эльф' }], lang: 'ru' });
   assert.match(reference, /Внешность:/);
