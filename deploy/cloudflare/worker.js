@@ -158,10 +158,15 @@ export default {
       const url = new URL(request.url);
       if (url.pathname === '/api/version') {
         // A read-only summary for the owner: enough to tell whether a token was
-        // picked up, without ever echoing the token itself.
+        // picked up, without ever echoing the token itself. `features` lets the
+        // copy page spot a stale deploy: a Worker pasted before a feature existed
+        // still answers here but would silently drop that field from a message,
+        // so the owner is told to paste the code again instead of wondering why
+        // the nick is missing.
         return json({
           ok: true,
-          rev: 6,
+          rev: 7,
+          features: ['nick', 'dialog'],
           hasToken: Boolean(findToken(env)),
           chatId: parseChatIds([(env.TELEGRAM_CHAT_IDS || ''), env.TELEGRAM_CHAT_ID || DEFAULT_CHAT_ID])[0] || null,
           keyAccepted: DEFAULT_KEY

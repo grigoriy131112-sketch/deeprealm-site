@@ -570,6 +570,16 @@ permission is missing. Probe that way before starting any long operation.
 - `public/app.js` treats only a 2xx `/api/visit` as "our server handled it";
   static hosting answers `/api` with its own 404 page, which is a response, not a
   rejection, and would otherwise silently swallow the visit ping.
+- The Cloudflare Worker relay is deployed **by hand**, separately from Pages: the
+  owner pastes `deploy/cloudflare/worker.js` into the dashboard via the
+  `worker-copy.html` page and clicks Deploy. Pushing to `main` updates the Pages
+  site but **not** the running Worker, so a field added to a message shape (the
+  nick, the finished dialogue) is silently dropped until the Worker is pasted
+  again. That is why `GET /api/version` lists `features` and the copy page refuses
+  to say "everything works" while a feature is missing; bump `rev` and extend
+  `features` whenever the message shapes change, and tell the owner to re-paste.
+  `docs/worker.js` is only the copy Pages serves next to the copy page, never a
+  live deploy.
 
 ## Permanent hosting: GitHub Pages (decided 2026-09-25)
 

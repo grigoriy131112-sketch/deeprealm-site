@@ -211,6 +211,19 @@ document.getElementById('check').onclick = async () => {
     return;
   }
 
+  // A Worker pasted before the nick/dialog features existed still answers here and
+  // still forwards messages, but it drops the fields it does not know: the owner
+  // would get a visit without a nick. Detect that and ask for a fresh paste rather
+  // than let the owner wonder where the nick went.
+  const features = Array.isArray(data.features) ? data.features : [];
+  const missing = ['nick', 'dialog'].filter((f) => !features.includes(f));
+  if (missing.length) {
+    say(checkState, 'Сервер отвечает, но в нём ещё старый код: он не присылает ник '
+      + 'игрока и итог диалога. Нажмите «Скопировать код» и разверните его в Cloudflare '
+      + 'заново.', 'bad');
+    return;
+  }
+
   say(checkState, 'Сервер видит токен. Отправляю тест в Телеграм…');
   try {
     const res = await fetch(base + '/api/notify', {

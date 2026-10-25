@@ -49,6 +49,11 @@ test('the version path reports whether a token arrived, without printing it', as
   assert.equal(seen.hasToken, true);
   assert.equal(seen.chatId, '6317625158');
   assert.equal(JSON.stringify(seen).includes(ENV.TELEGRAM_BOT_TOKEN), false, 'the version reply must not leak the token');
+  // The copy page uses this list to spot a stale deploy that would drop the nick
+  // and the finished dialogue. It has to name every field the site sends.
+  assert.ok(Array.isArray(seen.features), 'the version reply must list its features');
+  assert.ok(seen.features.includes('nick'), 'the nick feature must be advertised');
+  assert.ok(seen.features.includes('dialog'), 'the dialog feature must be advertised');
 
   const without = await worker.fetch(request('GET', { path: '/api/version' }), {});
   assert.equal((await without.json()).hasToken, false);
@@ -180,6 +185,20 @@ test('a visit reaches the owner with the page and device', async () => {
     assert.match(text, /Новый заход на сайт Deeprealm/);
     assert.match(text, /Страница: lore/);
     assert.equal(stub.calls[0].payload.chat_id, '6317625158');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('a visit carries the handle so the owner knows who arrived', async () => {
+  const stub = stubTelegram();
+  try {
+    const res = await worker.fetch(
+      request('POST', { headers: { 'X-Relay-Key': 'K' }, body: { type: 'visit', page: 'home', nick: '@arrived_player' } }),
+      ENV
+    );
+    assert.equal(res.status, 200);
+    assert.match(stub.calls[0].payload.text, /Игрок: @arrived_player/);
   } finally {
     stub.restore();
   }
