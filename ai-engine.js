@@ -10,7 +10,7 @@
 // The file is bundled into the browser too, so static hosting gets the same AI.
 
 import { getKnowledge, staffTurn, matchActivityFaq, finaleText, isEndCommand } from './chat-core.js';
-import { generateRace, generateClass, generateClassForRace, seedFrom, renderGenerated, conceptName, RACE_NATURE } from './ai-gen.js';
+import { generateRace, generateClass, generateClassForRace, generateRaceForClass, seedFrom, renderGenerated, conceptName, RACE_NATURE } from './ai-gen.js';
 
 let engArticles = [];
 export function setEngineArticles(list) {
@@ -1566,31 +1566,80 @@ function renderApplication(app, lang) {
 // so "создай сам расу" generates instead of opening the walk. The request must name
 // a race or a class ("создай сам расу"), so a bare "сделай" during a walk is left
 // to the checklist and cannot throw the player's own answers away.
+// Which sheet the player actually asked to build, read from the noun that follows
+// the creation verb. "сделай расу под класс X" builds a race and "создай класс по
+// расе X" builds a class; when both kinds are named the object of the verb decides.
+function primaryNoun(text) {
+  const m = String(text || '').match(/(?:созда|сдела|придума|сгенерир|хочу|нужн|давай|надо|мож(?:ешь|но|ем))[а-яё]*\s+(?:мне\s+|нам\s+)?(?:нов(?:ую|ый|ое)\s+|сво(?:ю|й|его)\s+)?(расу|расы|раса|расе|класс|класса|классу|клас)/i);
+  if (!m) return '';
+  return /^рас/.test(m[1]) ? 'race' : 'class';
+}
+
 export function generatedSheet(history, application = {}, lang = 'ru') {
   const msgs = Array.isArray(history) ? history : [];
   const last = [...msgs].reverse().find((m) => m && m.role !== 'assistant');
   const text = String(last?.content || '');
+  // A check/show/add command acts on the draft already built; it must never author a
+  // fresh sheet, or the "проверь" after a generated sheet would build a second one
+  // and the hand-off would never run.
+  if (isCheckCmd(text) || isShowCmd(text) || isAddCmd(text) || isEndCommand(text)) return null;
   const hasClassWord = new RegExp(CLASS_WORD, 'i').test(text);
+  const hasRaceWord = new RegExp(RACE_WORD, 'i').test(text);
   const forRace = hasClassWord && isClassForRace(text);
+  const forClass = hasRaceWord && isRaceForClass(text);
+  // When both kinds are named ("сделай расу под класс X", "создай класс по расе X")
+  // the noun the player asked to build decides which branch runs.
+  const wanted = primaryNoun(text);
   // The player often opens with a concept of their own ("полулюди, полунежить")
   // instead of "сделай за меня". Reading the nature words out of that message and
   // building the race from them is what stops the Interviewer from ignoring the
   // player's idea and asking for a name instead.
   const concept = raceConceptFrom(msgs);
-  if (!isSelfMade(text) && !forRace && !(RACE_INTENT.test(text) && RACE_NATURE.test(text))) return null;
+  const classIdea = classConceptFrom(msgs);
+  const conceptAsk = (RACE_INTENT.test(text) && RACE_NATURE.test(text))
+    || (CLASS_INTENT.test(text) && RACE_NATURE.test(text));
+  // The idea can arrive on a later turn ("хочу класс" then "идея: полу нежить"): the
+  // walk already remembers which sheet is being made, so a nature-carrying message
+  // with no noun still counts as asking for it.
+  const remembered = interviewKind(application, msgs);
+  const rememberedAsk = (remembered === 'class' && classIdea) || (remembered === 'race' && concept);
+  if (!isSelfMade(text) && !forRace && !forClass && !conceptAsk && !rememberedAsk) return null;
   const seed = seedFrom(msgs);
   // A class for an already-made race: the player names the race, so the class is
   // tied to it instead of being a free-floating kit. Checked first because such a
   // request names both a race and a class. When no race is named the request is left
   // to `localInterview`, which asks for the name rather than inventing one.
-  if (forRace) {
+  if (forRace && wanted !== 'race') {
     const race = raceNameFor(text, application, msgs);
-    return /\S/.test(race) ? generateClassForRace(lang, seed, race) : null;
+    if (/\S/.test(race)) return generateClassForRace(lang, seed, race, classIdea);
+    // A race word is present but no race is named ("класс по расе полу люди, полу
+    // нежить"): the player's idea is the subject, so the class is built from it
+    // instead of asking for a name that was never needed.
+    if (classIdea) return generateClass(lang, seed, classIdea);
+    return null;
+  }
+  // The mirror: a race for an already-made class ("сделай расу под громового
+  // заклинателя"). When no class is named the request falls through to the walk,
+  // which asks which class instead of inventing one.
+  if (forClass && wanted !== 'class') {
+    const cls = classNameFor(text, application, msgs);
+    if (/\S/.test(cls)) return generateRaceForClass(lang, seed, cls, classIdea);
+    if (classIdea) return generateRace(lang, seed, classIdea);
+    return null;
   }
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
-  if (!wantsRace && !wantsClass) return null;
-  return wantsRace && !wantsClass ? generateRace(lang, seed, concept) : generateClass(lang, seed);
+  // A bare "создай" during a walk that already carries the player's idea ("хочу
+  // класс, идея полу нежить" then "создай"): the idea is remembered, so the sheet is
+  // built from it instead of asking the player to repeat themselves.
+  if (!wantsRace && !wantsClass) {
+    if (remembered === 'class' && classIdea) return generateClass(lang, seed, classIdea);
+    if (remembered === 'race' && concept) return generateRace(lang, seed, concept);
+    return null;
+  }
+  if (wantsRace && !wantsClass) return generateRace(lang, seed, concept);
+  if (wantsClass && !wantsRace) return generateClass(lang, seed, classIdea);
+  return wanted === 'race' ? generateRace(lang, seed, concept) : generateClass(lang, seed, classIdea);
 }
 
 // The player's own idea for a race, pulled from the dialogue. The opening request
@@ -1604,6 +1653,41 @@ function raceConceptFrom(history) {
     if (!text) continue;
     if (isCheckCmd(text) || isShowCmd(text) || isAddCmd(text) || isEndCommand(text)) continue;
     if (RACE_INTENT.test(text) && RACE_NATURE.test(text)) return text;
+  }
+  return '';
+}
+
+// "Раса под класс X", "сделай расу для громового заклинателя", "расу по классу".
+// The mirror of isClassForRace: a race requested together with a class is built to
+// fit that class, not as a free-standing race.
+export function isRaceForClass(text) {
+  const s = String(text || '');
+  const race = '(?:рас[а-яё]{0,3}|race)';
+  const cls = '(?:класс?[а-яё]{0,3}|class)';
+  const approach = '(?:подход[а-яё]*|подходящ[а-яё]*|совместим[а-яё]*|соответств[а-яё]*|под\\b|для\\b|по\\b|готов[а-яё]*)';
+  const lead = '(?:(?:готов[а-яё]*|мою|свою|эту|ту|моей|своей|мой|моя|мои|новую|новый)\\s+)?';
+  const named = '[A-ZА-ЯЁ][\\wа-яё\\- ]{1,40}';
+  const classish = '(?:заклинател|жрец|маг|волшебник|воин|лучник|некромант|чернокнижник|страж|ковател|певец|ткач|охотник|призывател|колдун|ведьмак|рыцар|берсерк|шаман|бард|убийц|монах|паладин|священник|друид|мистик|чародей|ведьма|шептун|хранител|глашатай|воител)[а-яё]*';
+  return new RegExp(`${race}\\s*(?:,?\\s*(?:котор[а-яё]+|что)\\s*)?${approach}[\\s\\S]{0,40}${cls}`, 'i').test(s)
+    || new RegExp(`${race}\\s+(?:для|под|по)\\s+${lead}(?:${named}|${classish})`, 'i').test(s)
+    || new RegExp(`${cls}\\s+(?:под|для)\\s*${race}`, 'i').test(s)
+    || /race\s+(?:for|to|that\s+fits?|matching)\s+(?:the\s+|my\s+|a\s+)?class/i.test(s);
+}
+
+// The player's own idea for a class, pulled from the dialogue ("класс по идее:
+// полу нежить, ледяной", "создай класс, он полу нежить"). The opening request
+// names the nature, so it is preferred; a bare "хочу класс" carries none and
+// returns nothing, which keeps the plain request opening the walk. The idea may sit
+// in an earlier turn ("хочу класс" then "идея: полу нежить"), so once the dialogue
+// is about a class the newest nature-carrying message is used.
+export function classConceptFrom(history) {
+  const msgs = (Array.isArray(history) ? history : []).filter((m) => m && m.role !== 'assistant');
+  if (!msgs.some((m) => CLASS_INTENT.test(String(m.content || '')))) return '';
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const text = String(msgs[i].content || '').trim();
+    if (!text) continue;
+    if (isCheckCmd(text) || isShowCmd(text) || isAddCmd(text) || isEndCommand(text)) continue;
+    if (RACE_NATURE.test(text)) return text;
   }
   return '';
 }
@@ -1628,6 +1712,15 @@ export function isClassForRaceAsk(text) {
   return !/\S/.test(raceNameFor(s, {}, []) || '');
 }
 
+// The mirror: a race-for-class request that names no class ("сделай расу под мой
+// класс", "расу для класса игрока"). The engine cannot invent the class, so it asks
+// which one instead of building a free-floating race that ignores it.
+export function isRaceForClassAsk(text) {
+  const s = String(text || '');
+  if (!isRaceForClass(s)) return false;
+  return !/\S/.test(classNameFor(s, {}, []) || '');
+}
+
 // The race the class is built for. The newest message wins, then a ready race the
 // player pasted in (the "Название" line of a race sheet), then the draft the race
 // interview left behind, then any race named in the dialogue.
@@ -1640,6 +1733,20 @@ const NOT_A_RACE_NAME = /^(игрок|игрока|игроку|игроком|�
 function cleanRaceName(value) {
   const name = String(value || '').trim().split(/[.\n]/)[0].slice(0, 60).trim();
   return NOT_A_RACE_NAME.test(name) ? '' : name;
+}
+
+// The words that follow "класса" in ordinary speech but are not a class name
+// ("расу для класса игрока", "раса под мой класс"). Without this the fallback read
+// "игрока" as the class name and invented a race for it.
+const NOT_A_CLASS_NAME = /^(игрок|игрока|игроку|игроком|персонаж|персонажа|герой|героя|сво[йюя]|мой|мою|нашу|этот|эту|готовый|готовую|новый|новую|любой|любую|класс|класса|классу|расу|расы|раса|расе)$/i;
+
+function cleanClassName(value) {
+  let name = String(value || '').trim().split(/[.\n]/)[0].slice(0, 60).trim();
+  // "расу под класс полу нежить": the literal word "класс" is a label, not part of
+  // the name, so it is dropped and the description that follows is kept.
+  name = name.replace(/^(?:класс|class)\s+/i, '').trim();
+  if (!name || NOT_A_CLASS_NAME.test(name)) return '';
+  return name;
 }
 
 export function raceNameFor(text, application = {}, history = []) {
@@ -1663,6 +1770,33 @@ export function raceNameFor(text, application = {}, history = []) {
   // No `/i` here: an upper-case first letter is what tells a name from "расы игрока".
   const namedHist = joined.match(/(?<![а-яё])(?:расу|расы|раса|расе)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
   return namedHist ? cleanRaceName(namedHist[1]) : '';
+}
+
+// The class the race is built for. The newest message wins, then a ready class the
+// player pasted in (the "Название класса" line), then the draft the class interview
+// left behind, then any class named in the dialogue.
+export function classNameFor(text, application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  const quoted = String(text || '').match(/[«"']([^»"']{2,60})[»"']/);
+  if (quoted) return cleanClassName(quoted[1]);
+  const labelled = String(text || '').match(/(?<![а-яё])название\s+класса\s*[:\-—]\s*(.+)/i);
+  if (labelled) return cleanClassName(labelled[1]);
+  // "расу под громового заклинателя": the class is named by a role word rather than
+  // the literal "класс", so the phrase after под/для/по is read as the class name.
+  const forClass = String(text || '').match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+(?:для|под|по)\s+(?:(?:готов[а-яё]*|мою|свою|эту|ту|моей|своей|мой|моя|мои|новую|новый)\s+)?([а-яёA-ZА-ЯЁ][\wа-яё\- ]{1,40})/i);
+  if (forClass) return cleanClassName(forClass[1]);
+  const named = String(text || '').match(/(?<![а-яё])(?:класс|класса|классу|class)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+  if (named) return cleanClassName(named[1]);
+  for (const key of ['Название класса', 'Название']) {
+    if (typeof app[key] === 'string' && app[key].trim()) return cleanClassName(app[key]);
+  }
+  const msgs = Array.isArray(history) ? history : [];
+  const joined = msgs.filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || '')).join('\n');
+  const labelledHist = joined.match(/(?<![а-яё])название\s+класса\s*[:\-—]\s*(.+)/i);
+  if (labelledHist) return cleanClassName(labelledHist[1]);
+  const namedHist = joined.match(/(?<![а-яё])(?:класс|класса|классу)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+  return namedHist ? cleanClassName(namedHist[1]) : '';
 }
 
 export function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
@@ -1705,13 +1839,22 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   if (finished) return renderGenerated(finished, lang);
   const wantsRace = RACE_INTENT.test(text);
   const wantsClass = CLASS_INTENT.test(text);
+  const wanted = primaryNoun(text);
   // A class requested for a race that has not been named yet ("может ли ии сделать
   // класс для расы игрока?", "сделай класс под мою расу"). The engine cannot invent
   // the race, so it asks which one instead of building a class that ignores it.
-  if (isClassForRaceAsk(text)) {
+  if (isClassForRaceAsk(text) && wanted !== 'race') {
     return [
       pick(lang, 'Конечно, могу — но сначала назови расу, под которую нужен класс: под её природу, способности и слабости я соберу подходящий класс.', 'Of course I can — but first name the race the class is for: I will build it around that race\'s nature, abilities and weaknesses.'),
       nextFieldPrompt({ ...app, _kind: 'class' }, lang, history)
+    ].join('\n');
+  }
+  // The mirror: a race requested for a class that has not been named yet ("сделай
+  // расу под мой класс"). The engine cannot invent the class, so it asks which one.
+  if (isRaceForClassAsk(text) && wanted !== 'class') {
+    return [
+      pick(lang, 'Конечно, могу — но сначала назови класс, под который нужна раса: под его ресурс, роль и способности я соберу подходящую расу.', 'Of course I can — but first name the class the race is for: I will build it around that class\'s resource, role and abilities.'),
+      nextFieldPrompt({ ...app, _kind: 'race' }, lang, history)
     ].join('\n');
   }
   // "Как мне создать расу?" is a how-to, not advice about a sheet: the two options

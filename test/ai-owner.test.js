@@ -12,7 +12,7 @@ import {
   STAFF_MAX_QUESTIONS, setSheetDetector
 } from '../chat-core.js';
 import { setNotifier, answerInterview, answerStaff, setLiveCaller, answerGuide } from '../chat-answers.js';
-import { localInterview, parseFieldEdit, finishSheet } from '../ai-engine.js';
+import { localInterview, parseFieldEdit, finishSheet, generatedSheet } from '../ai-engine.js';
 import { generateClass } from '../ai-gen.js';
 import { detectSheetKind } from '../publish.js';
 
@@ -555,6 +555,57 @@ test('a self-made class is stored, approved and sent to the owner', async () => 
   assert.equal(sent.length, 1, 'the generated class is sent to the owner');
   assert.equal(sent[0].kind, 'class');
   setNotifier(null);
+});
+
+test('a class is built from the race and idea the player named', () => {
+  // The owner: asked for a class for a half-human, half-undead race, the Registrar
+  // returned a storm mage. The idea must pick the matching kit.
+  const undead = localInterview({ messages: [{ role: 'user', content: 'создай класс по расе полу люди, полу нежить' }], lang: 'ru', application: {} });
+  assert.match(undead, /^Готово/m, 'the class is authored from the idea');
+  assert.match(undead, /Ресурс: Кости/, 'the undead idea picks the undead class, not a storm mage');
+  assert.match(undead, /Идея игрока: .*нежить/, 'the player\'s idea is quoted back');
+
+  const ice = localInterview({ messages: [{ role: 'user', content: 'создай ледяной класс' }], lang: 'ru', application: {} });
+  assert.match(ice, /Ресурс: Мороз/, 'an ice idea picks the ice class');
+});
+
+test('a race is built for the class the player named', () => {
+  // The mirror the owner asked for: a race made to fit a class.
+  const storm = localInterview({ messages: [{ role: 'user', content: 'сделай расу под громового заклинателя' }], lang: 'ru', application: {} });
+  assert.match(storm, /^Готово/m, 'the race is authored for the class');
+  assert.match(storm, /Магия: владеют — Молния и Ветер/, 'a storm class draws a storm-blooded race');
+
+  const undead = localInterview({ messages: [{ role: 'user', content: 'сделай расу под класс «Костепевец»' }], lang: 'ru', application: {} });
+  assert.match(undead, /Магия: владеют — Некромантия и Тьма/, 'a bone class draws an undead race');
+});
+
+test('a race built for a class is stored with the class it was made for', () => {
+  const made = generatedSheet([{ role: 'user', content: 'сделай расу под громового заклинателя' }], {}, 'ru');
+  assert.equal(made.kind, 'race', 'a race is produced');
+  assert.equal(made.app['Под класс'], 'громового заклинателя', 'the race is tied to the named class');
+  assert.ok(made.app['Совместимость с классом'], 'the compatibility line is stored');
+});
+
+test('a race requested for an unnamed class asks which class', () => {
+  for (const q of ['сделай расу под мой класс', 'сделай расу под класс игрока', 'нужна раса под класс']) {
+    const reply = localInterview({ messages: [{ role: 'user', content: q }], lang: 'ru', application: {} });
+    assert.match(reply, /назови класс/, `asks for the class: ${q}`);
+    assert.doesNotMatch(reply, /^Готово/m, `does not invent a race: ${q}`);
+  }
+});
+
+test('the class idea is remembered when the player then says "создай"', () => {
+  const first = localInterview({ messages: [{ role: 'user', content: 'хочу класс' }], lang: 'ru', application: {} });
+  assert.doesNotMatch(first, /^Готово/m, 'a plain request opens the walk');
+  const second = localInterview({
+    messages: [
+      { role: 'user', content: 'хочу класс' },
+      { role: 'assistant', content: first },
+      { role: 'user', content: 'идея: полу нежить' }
+    ], lang: 'ru', application: {}
+  });
+  assert.match(second, /^Готово/m, 'the remembered idea is used on the next turn');
+  assert.match(second, /Ресурс: Кости/, 'and it picks the undead kit');
 });
 
 test('a class built for an existing race names that race and its milestones', async () => {

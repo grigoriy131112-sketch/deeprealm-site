@@ -347,6 +347,21 @@ permission is missing. Probe that way before starting any long operation.
   `isClassForRaceAsk` routes the unnamed case to a "назови расу" question. The stat
   list in `data/knowledge.json` was aligned with the owner's template ("Здоровье" in
   the physical block, "Хитрость" in the intellectual one).
+- A generated class follows the player's idea, and a race can be built for a class
+  (added 2026-10-20). The owner: a player asked the Registrar for a class for a
+  half-human, half-undead race and got "Громовой заклинатель" — the class ignored
+  the race's nature because `classDraft` picked its theme from the seed alone.
+  `CLASS_THEME_HINTS` now scores the idea's words (нежить/кост → the bone kit,
+  лёд → the frost kit, гром → the storm kit), `classConceptFrom` pulls the idea out
+  of the dialogue (also from an earlier turn, e.g. "хочу класс" then "идея: полу
+  нежить"), and the idea is quoted as an `Идея игрока` line. The mirror path is new:
+  "сделай расу под громового заклинателя" builds a race whose nature matches the
+  class (`generateRaceForClass` + `RACE_FROM_CLASS_HINTS`, `classNameFor`,
+  `isRaceForClass` / `isRaceForClassAsk`), and an unnamed class draws a "назови
+  класс" question. When a request names both kinds ("создай класс по расе X",
+  "сделай расу под класс X") the noun after the creation verb (`primaryNoun`) decides
+  which sheet is built. A check/show/add turn never authors a fresh sheet, so the
+  "проверь" after a generated sheet still hands off instead of building a second one.
 - A request to answer in a few words gives the gist (added 2026-10-19). The player
   asked "А можно ты просто расскажешь в двух словах?" and the Guide re-printed the
   whole branch description, which reads as "he did not listen". `localGuide` now

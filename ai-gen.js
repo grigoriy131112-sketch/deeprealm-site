@@ -189,8 +189,8 @@ export function conceptName(concept) {
 // what makes every generated race pass the "minimum two weaknesses" rule. When the
 // player brought a concept, the theme is chosen to match it and the idea is quoted
 // in the sheet, so the race answers what was asked for instead of a random theme.
-function raceDraft(lang, seed, concept = '') {
-  const t = RACE_THEMES[themeIndexForConcept(concept, seed)];
+function raceDraft(lang, seed, concept = '', chooser = themeIndexForConcept) {
+  const t = RACE_THEMES[chooser(concept, seed)];
   const name = t.names[(seed >>> 5) % t.names.length];
   const self = t.selves[(seed >>> 9) % t.selves.length];
   const [magic, noMagic] = t.magic;
@@ -227,6 +227,21 @@ function raceDraft(lang, seed, concept = '') {
   };
   if (idea) app['Идея игрока'] = idea;
   return { kind: 'race', name, app, text: lines.join('\n'), concept: idea };
+}
+
+// A race built for a class the player already has ("сделай расу под громового
+// заклинателя"). The nature is drawn from the class name and idea, so the race's
+// magic and abilities match the class instead of landing on a random theme.
+export function generateRaceForClass(lang, seed, className, concept = '') {
+  const cls = String(className || '').trim();
+  const themeText = `${cls} ${concept}`.trim();
+  const draft = raceDraft(lang, seed, concept, (c, s) => themeIndexForRaceClassConcept(themeText, s));
+  if (!cls) return draft;
+  draft.app['Под класс'] = cls;
+  draft.app['Совместимость с классом'] = `Раса создана под класс «${cls}»: её природа и магия питают ресурс класса, а слабости не мешают его роли.`;
+  draft.text = `Раса под готовый класс «${cls}»\n${draft.text}`;
+  draft.forClass = cls;
+  return draft;
 }
 
 // --- classes ---------------------------------------------------------------
@@ -414,6 +429,53 @@ const CLASS_THEMES = [
 const ABILITY_CD_CAP = 3;
 const SPEC_CD_CAP = 5;
 
+// Which class theme fits what the player asked for. A class idea ("полу нежить",
+// "ледяной", "громовой") must pick the matching kit, otherwise a request for a
+// half-undead class came back as a storm mage. Each theme is scored by the idea's
+// words; a blank idea falls back to the seed so the same request stays stable.
+const CLASS_THEME_HINTS = [
+  [/(пепел|огн|жар|уголь|обсидиан|дым|тле|лав|выжиг|пламя)/i, 0],
+  [/(лёд|лед|мороз|снег|стуж|зим|холод|иней|замороз|мерзл)/i, 1],
+  [/(кост|скелет|мёртв|мертв|гроб|склеп|могил|нежить|могиль|катакомб|погреб|подня|призыв|смерт|вампир|душ|тьм|тёмн|темн)/i, 2],
+  [/(солён|солен|соль|мор|океан|вод|прилив|болот|утопл|гавань|глубин|охотник|острог)/i, 3],
+  [/(камен|скал|пещер|подзем|руд|базальт|шахт|гранит|ковател|молот|кузн|брон|металл)/i, 4],
+  [/(гроз|молн|неб|ветр|бур|гром|разряд|электр|шторм|заклинател)/i, 5]
+];
+
+function themeIndexForClassConcept(concept, seed) {
+  const text = String(concept || '');
+  let best = -1;
+  let bestScore = 0;
+  CLASS_THEME_HINTS.forEach(([re, idx]) => {
+    const hits = (text.match(new RegExp(re.source, 'gi')) || []).length;
+    if (hits > bestScore) { bestScore = hits; best = idx; }
+  });
+  return bestScore > 0 ? best : seed % CLASS_THEMES.length;
+}
+
+// The race themes, as chosen by a class idea when the player asks for a race to fit
+// their class ("сделай расу под громового заклинателя"). Same idea words as the
+// classes, plus the class nouns, so a storm class draws a storm-blooded race.
+const RACE_FROM_CLASS_HINTS = [
+  [/(пепел|огн|жар|уголь|обсидиан|дым|тле|лав|выжиг|пламя)/i, 0],
+  [/(лёд|лед|мороз|снег|стуж|зим|холод|иней|замороз|мерзл)/i, 1],
+  [/(кост|скелет|мёртв|мертв|гроб|склеп|могил|нежить|могиль|катакомб|погреб|подня|призыв|смерт|вампир|душ)/i, 2],
+  [/(солён|солен|соль|мор|океан|вод|прилив|болот|утопл|гавань|перепонк|охотник)/i, 3],
+  [/(камен|скал|пещер|подзем|руд|базальт|шахт|гранит|ковател|молот|кузн|страж)/i, 4],
+  [/(гроз|молн|неб|ветр|бур|гром|разряд|электр|шторм|заклина|маг)/i, 5]
+];
+
+function themeIndexForRaceClassConcept(concept, seed) {
+  const text = String(concept || '');
+  let best = -1;
+  let bestScore = 0;
+  RACE_FROM_CLASS_HINTS.forEach(([re, idx]) => {
+    const hits = (text.match(new RegExp(re.source, 'gi')) || []).length;
+    if (hits > bestScore) { bestScore = hits; best = idx; }
+  });
+  return bestScore > 0 ? best : seed % RACE_THEMES.length;
+}
+
 function turnsWord(n) {
   const m = n % 100;
   if (m >= 11 && m <= 14) return 'ходов';
@@ -589,9 +651,10 @@ function specializationLines(t) {
   return out;
 }
 
-function classDraft(lang, seed) {
-  const t = CLASS_THEMES[seed % CLASS_THEMES.length];
+function classDraft(lang, seed, concept = '') {
+  const t = CLASS_THEMES[themeIndexForClassConcept(concept, seed)];
   const name = t.names[(seed >>> 5) % t.names.length];
+  const idea = conceptName(concept);
   const abilities = classAbilityLines(t).join('\n');
   const [u1n, u1cd, u1cost, u1e] = t.ult1;
   const [u2n, u2cd, u2cost, u2e] = t.ult2;
@@ -614,40 +677,38 @@ function classDraft(lang, seed) {
     `Слабости: ${t.weak}`,
     `Истощение ресурса: ${t.exhaust}`
   ];
+  if (idea) lines.splice(1, 0, `Идея игрока: ${idea}`);
   const abilityText = [
     ...classAbilityLines(t),
     `Ультимейт (10 уровень): ${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
     `Ультимейт 2 (15 уровень): ${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`
   ].join('\n');
-  return {
-    kind: 'class',
-    name,
-    app: {
-      _kind: 'class',
-      'Название класса': name,
-      'Роль': t.role,
-      'Ресурс': t.resource,
-      'ХП': `${t.hp} (+${t.hpGrow} за уровень)`,
-      'Базовая атака': t.basic,
-      'Способности': abilityText,
-      'Ультимейт': `${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
-      'Ультимейт 2': `${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
-      'Специализации и вехи': `${specIntro}\n${specs}`,
-      'Ограничения и слабости': `${t.limits}; ${t.weak}`,
-      'Истощение ресурса': t.exhaust
-    },
-    text: lines.join('\n')
+  const app = {
+    _kind: 'class',
+    'Название класса': name,
+    'Роль': t.role,
+    'Ресурс': t.resource,
+    'ХП': `${t.hp} (+${t.hpGrow} за уровень)`,
+    'Базовая атака': t.basic,
+    'Способности': abilityText,
+    'Ультимейт': `${u1n} — ${u1e}. Стоимость: ${u1cost}. Перезарядка: ${u1cd}.`,
+    'Ультимейт 2': `${u2n} — ${u2e}. Стоимость: ${u2cost}. Перезарядка: ${u2cd}.`,
+    'Специализации и вехи': `${specIntro}\n${specs}`,
+    'Ограничения и слабости': `${t.limits}; ${t.weak}`,
+    'Истощение ресурса': t.exhaust
   };
+  if (idea) app['Идея игрока'] = idea;
+  return { kind: 'class', name, app, text: lines.join('\n'), concept: idea };
 }
 
 export function generateRace(lang, seed, concept = '') { return raceDraft(lang, seed, concept); }
-export function generateClass(lang, seed) { return classDraft(lang, seed); }
+export function generateClass(lang, seed, concept = '') { return classDraft(lang, seed, concept); }
 
 // A class built for an existing, ready race. The player hands over a race they
 // already made (or a base race) and asks for a class to match it, so the kit keeps
 // the standard balance but is tied to that race by name and a compatibility line.
-export function generateClassForRace(lang, seed, raceName) {
-  const draft = classDraft(lang, seed);
+export function generateClassForRace(lang, seed, raceName, concept = '') {
+  const draft = classDraft(lang, seed, concept);
   const race = String(raceName || '').trim();
   if (!race) return draft;
   draft.app['Под расу'] = race;
@@ -679,6 +740,8 @@ export function renderGenerated(draft, lang) {
   const byIdea = draft.kind === 'race' && draft.concept;
   const head = draft.finished
     ? genPick(lang, 'Готово. Дописал всё, что оставалось, — твои ответы сохранил:', 'Done. I filled in what was left — I kept your answers:')
+    : draft.forClass
+    ? genPick(lang, `Готово. Собрал расу под твой класс «${draft.forClass}» — по правилам баланса, со способностями и слабостями:`, `Done. I built a race for your class "${draft.forClass}" — balanced, with its own powers and weaknesses:`)
     : draft.kind === 'race'
     ? (byIdea
         ? genPick(lang, 'Готово. Собрал расу по твоей идее — с её природой, способностями и слабостями:', 'Done. I built the race from your idea — its nature, powers and weaknesses:')
