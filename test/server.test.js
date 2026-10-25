@@ -350,12 +350,15 @@ test('a race comparison follow-up stays on the race instead of the character she
     ], lang: 'ru'
   });
   assert.match(reply, /Эльф/i);
-  assert.match(reply, /Уязвимости и слабые стороны:/);
   assert.match(reply, /К Людям/);
   assert.doesNotMatch(reply, /Шаблон анкеты персонажа/);
+  // The answer compares, so it must not be the appearance list repeated: the looks
+  // fields belong to "как выглядит", not to "чем отличается".
+  assert.doesNotMatch(reply, /Внешность:/);
+  assert.doesNotMatch(reply, /^Раса Эльф:/m);
 });
 
-test('the comparison reference for a race carries its profile and relations', () => {
+test('the comparison reference for a race carries its essence and relations', () => {
   const reference = guideReference({
     messages: [
       { role: 'user', content: 'Как выглядят эльфы' },
@@ -363,9 +366,9 @@ test('the comparison reference for a race carries its profile and relations', ()
       { role: 'user', content: 'А чем они отличаются от других расс?' }
     ], lang: 'ru'
   });
-  assert.match(reference, /Внешность:/);
   assert.match(reference, /К Людям/);
   assert.doesNotMatch(reference, /Шаблон анкеты/);
+  assert.doesNotMatch(reference, /Внешность:/);
 });
 
 test('an anaphoric follow-up keeps the entity named two turns back', () => {
@@ -376,9 +379,10 @@ test('an anaphoric follow-up keeps the entity named two turns back', () => {
       { role: 'user', content: 'А какие у них преимущества над другими расами?' }
     ], lang: 'ru'
   });
-  assert.match(reply, /^Раса Орк/m, 'the follow-up stays on the orc, not the race list');
-  assert.match(reply, /Уязвимости и слабые стороны:/);
+  assert.match(reply, /Орк/, 'the follow-up stays on the orc, not the race list');
+  assert.match(reply, /К Людям/);
   assert.doesNotMatch(reply, /Шаблон анкеты персонажа/);
+  assert.doesNotMatch(reply, /Базовые расы:/);
 });
 
 test('a list question still returns the overview, not one member', () => {

@@ -389,7 +389,8 @@ permission is missing. Probe that way before starting any long operation.
 - A longer anaphoric follow-up ("А чем они отличаются от других расс?", "а какие у
   них плюсы и минусы?") names no entity either. When it carries a comparison or a
   pronoun, the previous turn is folded in as well; for a race the comparison answer
-  is its profile plus its relations. Without this the retrieval left the race and
+  is its essence (strengths and weaknesses) plus its relations with each other race,
+  not the appearance list repeated. Without this the retrieval left the race and
   returned the character template. The list check is narrowed to a category word
   next to "какие/список" so "какие у них преимущества" is not read as a request for
   the races overview.

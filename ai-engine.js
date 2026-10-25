@@ -460,12 +460,17 @@ const COMPARE_RE = /отлича|различ|сравн|сильнее|слаб
 // carry their own boundaries.
 const ANAPHORA_RE = /(?:^|[^а-яёa-z])(?:они|она|оно|он|их|них|него|неё|нее|ему|ей)(?![а-яёa-z])/i;
 
-// The comparison answer for a race: its own profile (strengths and weaknesses) plus
-// its relations, which is what "чем они отличаются от других расс" asks for.
+// The comparison answer for a race. "Чем они отличаются от других расс" is not a
+// request for the appearance: dumping the profile's field list just repeats the
+// looks answer and says nothing about the others. So the essence (strengths and
+// weaknesses) comes first, then the relations with each other race - that is what
+// the question actually compares.
 function renderRaceComparison(doc, lang) {
-  const profile = renderRaceDetails(doc, lang);
-  const rel = raceRelationsDoc(doc.raceDetailsName || doc.raceName);
-  return [profile, rel ? rel.text : ''].filter(Boolean).join('\n\n');
+  const name = doc.raceDetailsName || doc.raceName;
+  const rel = raceRelationsDoc(name);
+  const head = `${pick(lang, 'Чем отличается', 'How it differs')} ${name} ${pick(lang, 'от других рас', 'from other races')}:`;
+  const essence = doc.raceBrief ? `${name} — ${doc.raceBrief}.` : '';
+  return [head, essence, '', rel ? rel.text : ''].filter((p) => p !== undefined).join('\n').trim();
 }
 
 const ORDINALS = {

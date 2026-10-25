@@ -111,7 +111,7 @@ const GUIDE_SYSTEM = (lang) => `Ты — Проводник чата Deeprealm: 
 3е. СПОСОБНОСТИ УРОВНЯ. На вопрос «способности <N> уровня» дай способности именно этого уровня класса или специализации, а не награды пасса уровней. Если класс не назван — бери его из предыдущего вопроса. Если в одном вопросе названо несколько классов с уровнями («способности 15 мага и 10 некроманта») — ответь по каждому классу отдельно, не пропускай ни одного.
 3ж. ЕСЛИ ВЫШЕ ДАНА «СПРАВКА» — это источник фактов: перескажи её своими словами и не добавляй ничего, чего в ней нет.
 3з. СПРАВКА относится ТОЛЬКО к текущему вопросу. Не отвечай на текущий вопрос содержанием прошлых ответов: если игрок раньше спрашивал про способности классов, а теперь спросил «как выглядят эльфы» — отвечай про внешность эльфов, а не про способности. Не подменяй шаблоном анкеты вопрос о расе, классе или их отличиях.
-3и. СРАВНЕНИЕ РАС. На вопрос «чем они отличаются от других расс», «какие у них плюсы и минусы», «преимущества и недостатки по сравнению с другими» отвечай по «СПРАВКЕ»: сильные стороны, уязвимости и отношения этой расы с другими. Не выдавай вместо этого анкету персонажа.
+3и. СРАВНЕНИЕ РАС. На вопрос «чем они отличаются от других расс», «какие у них плюсы и минусы», «преимущества и недостатки по сравнению с другими» отвечай по «СПРАВКЕ»: сначала суть расы (сильные стороны и слабости), затем её отношения с другими народами. Не пересказывай список полей внешности — это ответ на «как выглядит», а не на «чем отличается». Не выдавай вместо этого анкету персонажа.
 4. Ссылки давай только те, что есть в информации ниже. Никогда не придумывай ссылки, кнопки, файлы и адреса.
 
 ССЫЛКИ И КОНТАКТЫ:
@@ -1677,12 +1677,17 @@ const COMPARE_RE = /отлича|различ|сравн|сильнее|слаб
 // carry their own boundaries.
 const ANAPHORA_RE = /(?:^|[^а-яёa-z])(?:они|она|оно|он|их|них|него|неё|нее|ему|ей)(?![а-яёa-z])/i;
 
-// The comparison answer for a race: its own profile (strengths and weaknesses) plus
-// its relations, which is what "чем они отличаются от других расс" asks for.
+// The comparison answer for a race. "Чем они отличаются от других расс" is not a
+// request for the appearance: dumping the profile's field list just repeats the
+// looks answer and says nothing about the others. So the essence (strengths and
+// weaknesses) comes first, then the relations with each other race - that is what
+// the question actually compares.
 function renderRaceComparison(doc, lang) {
-  const profile = renderRaceDetails(doc, lang);
-  const rel = raceRelationsDoc(doc.raceDetailsName || doc.raceName);
-  return [profile, rel ? rel.text : ''].filter(Boolean).join('\n\n');
+  const name = doc.raceDetailsName || doc.raceName;
+  const rel = raceRelationsDoc(name);
+  const head = `${pick(lang, 'Чем отличается', 'How it differs')} ${name} ${pick(lang, 'от других рас', 'from other races')}:`;
+  const essence = doc.raceBrief ? `${name} — ${doc.raceBrief}.` : '';
+  return [head, essence, '', rel ? rel.text : ''].filter((p) => p !== undefined).join('\n').trim();
 }
 
 const ORDINALS = {
