@@ -386,6 +386,13 @@ permission is missing. Probe that way before starting any long operation.
   The terse "Способности 14" (no word "уровень") is read as level 14 too.
   A question naming several classes at once ("способности 15 уровня мага и 10
   некроманта") is split into one answer per class, so none is dropped.
+- A longer anaphoric follow-up ("А чем они отличаются от других расс?", "а какие у
+  них плюсы и минусы?") names no entity either. When it carries a comparison or a
+  pronoun, the previous turn is folded in as well; for a race the comparison answer
+  is its profile plus its relations. Without this the retrieval left the race and
+  returned the character template. The list check is narrowed to a category word
+  next to "какие/список" so "какие у них преимущества" is not read as a request for
+  the races overview.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

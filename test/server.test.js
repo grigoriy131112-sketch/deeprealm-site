@@ -339,6 +339,53 @@ test('the model reference carries the appearance text for a looks question', () 
   assert.doesNotMatch(reference, /К Людям/);
 });
 
+test('a race comparison follow-up stays on the race instead of the character sheet', () => {
+  // The owner: after "как выглядят эльфы" the follow-up "А чем они отличаются от
+  // других расс?" came back as the character template.
+  const reply = localGuide({
+    messages: [
+      { role: 'user', content: 'Как выглядят эльфы' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'А чем они отличаются от других расс? И какие у них плюсы и минусы?' }
+    ], lang: 'ru'
+  });
+  assert.match(reply, /Эльф/i);
+  assert.match(reply, /Уязвимости и слабые стороны:/);
+  assert.match(reply, /К Людям/);
+  assert.doesNotMatch(reply, /Шаблон анкеты персонажа/);
+});
+
+test('the comparison reference for a race carries its profile and relations', () => {
+  const reference = guideReference({
+    messages: [
+      { role: 'user', content: 'Как выглядят эльфы' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'А чем они отличаются от других расс?' }
+    ], lang: 'ru'
+  });
+  assert.match(reference, /Внешность:/);
+  assert.match(reference, /К Людям/);
+  assert.doesNotMatch(reference, /Шаблон анкеты/);
+});
+
+test('an anaphoric follow-up keeps the entity named two turns back', () => {
+  const reply = localGuide({
+    messages: [
+      { role: 'user', content: 'Расскажи про орков' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'А какие у них преимущества над другими расами?' }
+    ], lang: 'ru'
+  });
+  assert.match(reply, /^Раса Орк/m, 'the follow-up stays on the orc, not the race list');
+  assert.match(reply, /Уязвимости и слабые стороны:/);
+  assert.doesNotMatch(reply, /Шаблон анкеты персонажа/);
+});
+
+test('a list question still returns the overview, not one member', () => {
+  assert.match(localGuide({ messages: [{ role: 'user', content: 'Какие есть расы?' }], lang: 'ru' }), /Базовые расы:/);
+  assert.match(localGuide({ messages: [{ role: 'user', content: 'какие есть классы' }], lang: 'ru' }), /Базовые классы:/);
+});
+
 test('the built-in interviewer accepts a filled sheet for hand-off', () => {
   const draft = { Имя: 'Лира', Раса: 'Эльф', Класс: 'Маг' };
   const reply = localInterview({ messages: [{ role: 'user', content: 'проверь' }], lang: 'ru', application: draft });

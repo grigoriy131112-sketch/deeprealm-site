@@ -110,6 +110,8 @@ const GUIDE_SYSTEM = (lang) => `Ты — Проводник чата Deeprealm: 
 3д. ВНЕШНОСТЬ. На вопрос «как выглядит <раса>» или «как выглядит он» отвечай ОПИСАНИЕМ ВНЕШНОСТИ (рост, кожа, глаза, одежда) из поля «Внешность». Не подменяй ответ отношениями расы с другими народами. Если у вопроса нет названной расы («как выглядит он») — бери расу или класс из предыдущего вопроса игрока.
 3е. СПОСОБНОСТИ УРОВНЯ. На вопрос «способности <N> уровня» дай способности именно этого уровня класса или специализации, а не награды пасса уровней. Если класс не назван — бери его из предыдущего вопроса. Если в одном вопросе названо несколько классов с уровнями («способности 15 мага и 10 некроманта») — ответь по каждому классу отдельно, не пропускай ни одного.
 3ж. ЕСЛИ ВЫШЕ ДАНА «СПРАВКА» — это источник фактов: перескажи её своими словами и не добавляй ничего, чего в ней нет.
+3з. СПРАВКА относится ТОЛЬКО к текущему вопросу. Не отвечай на текущий вопрос содержанием прошлых ответов: если игрок раньше спрашивал про способности классов, а теперь спросил «как выглядят эльфы» — отвечай про внешность эльфов, а не про способности. Не подменяй шаблоном анкеты вопрос о расе, классе или их отличиях.
+3и. СРАВНЕНИЕ РАС. На вопрос «чем они отличаются от других расс», «какие у них плюсы и минусы», «преимущества и недостатки по сравнению с другими» отвечай по «СПРАВКЕ»: сильные стороны, уязвимости и отношения этой расы с другими. Не выдавай вместо этого анкету персонажа.
 4. Ссылки давай только те, что есть в информации ниже. Никогда не придумывай ссылки, кнопки, файлы и адреса.
 
 ССЫЛКИ И КОНТАКТЫ:
@@ -1286,8 +1288,11 @@ const tokenSet = (text) => new Set(tokens(text));
 
 // A question about a whole category ("какие есть классы", "что за расы") should
 // return the overview, not one member of it. The overview documents are marked
-// with a plural list tag and win when the question itself asks for a list.
-const LIST_RE = /какие|список|перечисли|list|what .* (races|classes)|сколько/i;
+// with a plural list tag and win when the question itself asks for a list. The
+// wording must sit next to a category word: a bare "какие" also opens a comparison
+// ("какие у них преимущества"), which is about the entity just discussed, not the
+// overview.
+const LIST_RE = /\b(какие|список|перечисли|сколько|list)\b[^?.!]{0,20}\b(расы|раса|расс|классы|класс|специализации|направления)\b|\b(расы|расса|расы|классы|список рас|список классов)\b[^?.!]{0,20}\b(есть|существует|перечисли|список)\b|what .* (races|classes)/i;
 const isListDoc = (doc) => doc.id === 'classes' || doc.id === 'races';
 
 // ------------------------------------------------------------------- corpus
@@ -1662,6 +1667,24 @@ function fieldFocus(text) {
   return keys;
 }
 
+// A continuation that still talks about the entity just discussed without naming
+// it: "А чем они отличаются от других расс?", "а какие у них плюсы и минусы?".
+// Without folding the previous turn in, the retrieval drifts to an unrelated
+// document - the owner's race question came back as the character template and, on
+// the live model, as another player's race.
+const COMPARE_RE = /отлича|различ|сравн|сильнее|слабее|лучше|хуже|преимуществ|недостат|(?:^|[^а-яёa-z])(?:плюс|минус)|против\s+друг|по\s+сравнению|над\s+другими|перед\s+другими/i;
+// JS \b is ASCII-only and never fires between Cyrillic letters, so the pronouns
+// carry their own boundaries.
+const ANAPHORA_RE = /(?:^|[^а-яёa-z])(?:они|она|оно|он|их|них|него|неё|нее|ему|ей)(?![а-яёa-z])/i;
+
+// The comparison answer for a race: its own profile (strengths and weaknesses) plus
+// its relations, which is what "чем они отличаются от других расс" asks for.
+function renderRaceComparison(doc, lang) {
+  const profile = renderRaceDetails(doc, lang);
+  const rel = raceRelationsDoc(doc.raceDetailsName || doc.raceName);
+  return [profile, rel ? rel.text : ''].filter(Boolean).join('\n\n');
+}
+
 const ORDINALS = {
   '1': 1, 'перв': 1, '2': 2, 'втор': 2, '3': 3, 'трет': 3, '4': 4, 'четверт': 4, '5': 5, 'пят': 5,
   '6': 6, 'шест': 6, '7': 7, 'седьм': 7, '8': 8, 'восьм': 8, '9': 9, 'девят': 9, '10': 10, 'десят': 10,
@@ -1775,13 +1798,18 @@ function pickAnswer(history) {
   // "А уязвимости?", "а способности?" — a short follow-up about a field of the entity
   // just discussed. It names no entity, so it borrows the previous turn too.
   const followUp = FOLLOW_FIELD_RE.test(q) && tokens(q).length <= 2;
+  // A longer continuation ("А чем они отличаются от других расс?") names no entity
+  // either, so it borrows the previous turn as well; otherwise the retrieval leaves
+  // the race behind and answers with an unrelated document.
+  const continuation = !mentionsEntity(q) && (COMPARE_RE.test(q) || ANAPHORA_RE.test(q));
+  const compare = COMPARE_RE.test(q);
   const priorTurns = [...history].reverse()
     .filter((m) => m.role !== 'assistant' && String(m.content || '') !== q)
     .map((m) => String(m.content || ''));
   const prior = priorTurns[0] || '';
   const priorEntity = priorTurns.find((c) => mentionsEntity(c)) || '';
   let query = q;
-  if ((brief || look || followUp) && !mentionsEntity(q)) {
+  if ((brief || look || followUp || continuation) && !mentionsEntity(q)) {
     if (prior && tokens(prior).length) query = `${prior} ${q}`;
   }
   let hits = retrieve(query, docs(), 3);
@@ -1816,7 +1844,7 @@ function pickAnswer(history) {
     const rel = raceRelationsDoc(best.doc.raceDetailsName || best.doc.raceName);
     if (rel) return { q, brief, look, followUp, focus, level, best: rel };
   }
-  return { q, brief, look, followUp, focus, level, best: best && best.score >= 2 ? best.doc : null };
+  return { q, brief, look, followUp, focus, level, compare, best: best && best.score >= 2 ? best.doc : null };
 }
 
 // The source text for the model prompt: the same document the local answer would use,
@@ -1827,8 +1855,9 @@ function guideReference({ messages = [], lang = 'ru' } = {}) {
   const last = [...history].reverse().find((m) => m.role !== 'assistant');
   const multi = abilityAnswers(String(last?.content || ''), lang);
   if (multi.length > 1) return multi.join('\n\n');
-  const { brief, look, followUp, focus, level, best } = pickAnswer(history);
+  const { brief, look, followUp, focus, level, compare, best } = pickAnswer(history);
   if (!best) return multi[0] || '';
+  if (compare && best.raceFields) return renderRaceComparison(best, lang);
   if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
   if (brief) return briefDoc(best, lang);
   return renderDoc(best, lang, level);
@@ -1847,7 +1876,7 @@ function localGuide({ messages = [], lang = 'ru' } = {}) {
   // Two classes asked together ("способности 15 мага и 10 некроманта") get two answers.
   const multi = abilityAnswers(q, lang);
   if (multi.length > 1) return multi.join('\n\n');
-  const { brief, look, followUp, focus, level, best } = pickAnswer(history);
+  const { brief, look, followUp, focus, level, compare, best } = pickAnswer(history);
   if (!best) {
     return [
       pick(lang, 'Честно: в моих материалах нет ответа на этот вопрос.', 'Honestly, my materials have no answer to that.'),
@@ -1855,6 +1884,7 @@ function localGuide({ messages = [], lang = 'ru' } = {}) {
     ].join('\n');
   }
   if (brief) return briefDoc(best, lang);
+  if (compare && best.raceFields) return renderRaceComparison(best, lang);
   if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
   const body = renderDoc(best, lang, level);
   const tail = wantsLink(q) || best.kind === 'chat' ? linkLine(lang) : '';
