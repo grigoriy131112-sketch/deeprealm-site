@@ -630,6 +630,61 @@ test('a class built for an existing race names that race and its milestones', as
   setNotifier(null);
 });
 
+test('a class is built for a race the player pasted a turn earlier', async () => {
+  // The owner: a player pastes a ready race, then asks for a class for it, and the
+  // Registrar does not build one. The pasted sheet is one turn back, so its race must
+  // be read from the dialogue, not only the newest message.
+  const sent = [];
+  setNotifier(async (info) => { sent.push(info); return { ok: true }; });
+  const pasted = 'Название: Пепельники\nСамоназвание: Тлеющие\nВнешность: пепельная кожа\nГде живут: пустоши\nЧем занимаются: собирают пепел\nБоевые навыки: швыряют обломки\nСпособности: Жар ядра\nУязвимости: вода\nМагия: Огонь';
+  const history = [{ role: 'user', content: pasted }, { role: 'assistant', content: 'Принял' }];
+  for (const ask of ['сделай для этой расы класс', 'создай класс для этой расы', 'сделай класс для неё']) {
+    const made = generatedSheet([...history, { role: 'user', content: ask }], { _kind: 'race' }, 'ru');
+    assert.ok(made, `a class is built: ${ask}`);
+    assert.equal(made.kind, 'class', `the sheet is a class: ${ask}`);
+    assert.equal(made.app['Под расу'], 'Пепельники', `the pasted race is the subject: ${ask}`);
+  }
+  // The reply names the race, so the player can see it was read.
+  const reply = localInterview({ messages: [...history, { role: 'user', content: 'сделай для этой расы класс' }], lang: 'ru', application: {} });
+  assert.match(reply, /^Готово/m, 'the class is authored');
+  assert.match(reply, /Пепельники/, 'the pasted race is named in the reply');
+  assert.doesNotMatch(reply, /назови расу/, 'no second question about the race');
+  // And the finished class is handed off as a class, not filed as the pasted race.
+  const messages = [...history, { role: 'user', content: 'сделай для этой расы класс' }];
+  const first = await answerInterview({ messages, lang: 'ru' });
+  assert.equal(first.application._kind, 'class', 'the draft is a class');
+  messages.push({ role: 'assistant', content: first.reply }, { role: 'user', content: 'проверь' });
+  const second = await answerInterview({ messages, lang: 'ru', application: first.application });
+  assert.match(second.reply, /передан[а]? владельцу/, 'the class is handed off');
+  assert.equal(sent[0].kind, 'class', 'the owner gets it as a class');
+  setNotifier(null);
+});
+
+test('a class is built for a race named from the blog without the word "раса"', () => {
+  // The owner: a player names their own race ("разумные растения") from the blog and
+  // asks for a class, and the Registrar does not build one. The name must be read
+  // from the corpus, not only from the literal "раса" word.
+  for (const [ask, race] of [
+    ['сделай класс для расы разумные растения', 'разумные растения'],
+    ['хочу класс для расы разумные цветы', 'Разумные цветы'],
+    ['создай класс для синтетиков', 'Синтетики'],
+    ['сделай класс для эльфа', 'Эльф']
+  ]) {
+    const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+    assert.match(reply, /^Готово/m, `the class is authored: ${ask}`);
+    assert.match(reply, new RegExp(race), `the named race is honoured: ${ask}`);
+    assert.doesNotMatch(reply, /назови расу/, `no question when the race is named: ${ask}`);
+  }
+});
+
+test('a class built for a ready race follows that race\'s nature', () => {
+  // A fire race ("Пепельники") must not draw a random kit: the race name picks the
+  // class theme.
+  const made = generatedSheet([{ role: 'user', content: 'сделай класс под готовую расу Пепельники' }], {}, 'ru');
+  assert.equal(made.app['Под расу'], 'Пепельники');
+  assert.match(made.text, /Ресурс: Жар/, 'the fire race draws the fire class, not a random one');
+});
+
 test('a ready sheet pasted by the player is checked as its own kind', async () => {
   const sent = [];
   setNotifier(async (info) => { sent.push(info); return { ok: true }; });

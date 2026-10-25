@@ -1365,13 +1365,21 @@ export function interviewKind(application = {}, history = []) {
   if (CLASS_INTENT.test(lastText)) return 'class';
   if (STORY_INTENT.test(lastText)) return 'story';
   // A pasted ready sheet wins over the remembered kind, so a player can bring an
-  // already-finished race or class and have it checked on the spot. The sheet is not
-  // always the newest message (the check command may follow it), so the last few
-  // player messages are scanned rather than only the last one.
-  const recent = msgs.slice(-4).map((m) => String(m.content || '')).join('\n');
-  const fromSheet = kindFromSheetText(recent);
+  // already-finished race or class and have it checked on the spot. Only the most
+  // recent message that is not a bare command is the one being submitted; an older
+  // pasted sheet must not override the draft the player has since built from it (a
+  // race pasted, then a class made for it, is still a class at the check).
+  const meaningful = [...msgs].reverse().find((m) => {
+    const t = String(m.content || '');
+    return t.trim() && !isCheckCmd(t) && !isShowCmd(t) && !isAddCmd(t) && !isEndCommand(t);
+  });
+  const fromSheet = meaningful ? kindFromSheetText(String(meaningful.content || '')) : null;
   if (fromSheet) return fromSheet;
   if (['race', 'class', 'story', 'character'].includes(app._kind)) return app._kind;
+  // No draft kind yet: a sheet pasted across the last few turns still names its kind.
+  const recent = msgs.slice(-4).map((m) => String(m.content || '')).join('\n');
+  const fromRecent = kindFromSheetText(recent);
+  if (fromRecent) return fromRecent;
   const text = msgs.map((m) => String(m.content || '')).join('\n');
   if (RACE_INTENT.test(text)) return 'race';
   if (CLASS_INTENT.test(text)) return 'class';
@@ -1585,7 +1593,11 @@ export function generatedSheet(history, application = {}, lang = 'ru') {
   if (isCheckCmd(text) || isShowCmd(text) || isAddCmd(text) || isEndCommand(text)) return null;
   const hasClassWord = new RegExp(CLASS_WORD, 'i').test(text);
   const hasRaceWord = new RegExp(RACE_WORD, 'i').test(text);
-  const forRace = hasClassWord && isClassForRace(text);
+  // A race the player names without the word "раса" — a base race or one from the
+  // blog ("сделай класс для разумные растения"). `corpusRace` is passed down so
+  // `isClassForRace` does not have to look it up twice.
+  const corpusRace = corpusNameIn('race', text);
+  const forRace = hasClassWord && isClassForRace(text, corpusRace);
   const forClass = hasRaceWord && isRaceForClass(text);
   // When both kinds are named ("сделай расу под класс X", "создай класс по расе X")
   // the noun the player asked to build decides which branch runs.
@@ -1603,13 +1615,20 @@ export function generatedSheet(history, application = {}, lang = 'ru') {
   // with no noun still counts as asking for it.
   const remembered = interviewKind(application, msgs);
   const rememberedAsk = (remembered === 'class' && classIdea) || (remembered === 'race' && concept);
-  if (!isSelfMade(text) && !forRace && !forClass && !conceptAsk && !rememberedAsk) return null;
+  // "сделай класс для неё" / "класс под эту расу": the race is named only by a
+  // pronoun, but the walk remembers a race was being made (or a race sheet was pasted
+  // a turn earlier), so it is still a class-for-race request and the race comes from
+  // the dialogue.
+  const raceWalk = application._kind === 'race' || kindFromSheetText(msgs.slice(-4).map((m) => String(m.content || '')).join('\n')) === 'race';
+  const anaphoraClass = raceWalk && hasClassWord
+    && /(?<![а-яё])(?:для|под|по)\s+(?:не[её]|нег[оа]|эт[аоыу]й?|эту|ту|мо[юй]|сво[юй]|нашу)(?![а-яё])/i.test(text);
+  if (!isSelfMade(text) && !forRace && !forClass && !conceptAsk && !rememberedAsk && !anaphoraClass) return null;
   const seed = seedFrom(msgs);
   // A class for an already-made race: the player names the race, so the class is
   // tied to it instead of being a free-floating kit. Checked first because such a
   // request names both a race and a class. When no race is named the request is left
   // to `localInterview`, which asks for the name rather than inventing one.
-  if (forRace && wanted !== 'race') {
+  if ((forRace || anaphoraClass) && wanted !== 'race') {
     const race = raceNameFor(text, application, msgs);
     if (/\S/.test(race)) return generateClassForRace(lang, seed, race, classIdea);
     // A race word is present but no race is named ("класс по расе полу люди, полу
@@ -1692,38 +1711,139 @@ export function classConceptFrom(history) {
   return '';
 }
 
-// "Класс под готовую расу X", "сделай класс для расы X", "класс по расе X". A class
-// requested together with a race is a different request from a free-standing class.
-export function isClassForRace(text) {
+// "Класс под готовую расу X", "сделай класс для расы X", "класс по расе X", and the
+// pronoun form "сделай для этой расы класс". A class requested together with a race
+// is a different request from a free-standing class. The names the corpus can answer
+// about, so a race or class the player names without the literal "раса"/"класс" word
+// (a bare blog name such as "разумные растения") still counts. A new blog entry
+// therefore works with no code change.
+function corpusNames(kind) {
+  const k = getKnowledge() || {};
+  const names = new Map();
+  const add = (n) => { const s = String(n || '').trim(); if (s) names.set(s.toLowerCase(), s); };
+  if (kind === 'race') {
+    for (const n of k.races?.list || []) add(n);
+    for (const n of Object.keys(k.races?.details || {})) add(n);
+    for (const r of k.races?.player_races || []) add(r.name);
+  } else {
+    for (const n of Object.keys(k.classes?.base_classes || {})) add(n);
+    for (const c of k.classes?.player_classes || []) add(c.name);
+  }
+  return names;
+}
+
+function corpusNameIn(kind, text) {
   const s = String(text || '');
-  return /класс[а-яё]{0,3}\s*(?:,?\s*(?:котор[а-яё]+|что)\s*)?(?:подход[а-яё]*|подходящ[а-яё]*|под\b|для\b|по\b|под\s+готов)/i.test(s) && /рас[а-яё]{0,3}/i.test(s)
+  if (!s) return '';
+  for (const [lower, original] of corpusNames(kind)) {
+    // Trailing vowels are dropped so the everyday inflections players type match too
+    // ("для синтетиков" from "Синтетики", "для драконорождённого" from
+    // "Драконорождённый"). Word boundaries keep a short base name ("Орк") from
+    // matching inside a longer word ("оркестр").
+    const stem = escapeRe(lower.replace(/[аеёиоуыэюяйь]+$/, ''));
+    if (stem.length < 2) continue;
+    const re = new RegExp(`(?<![\\wа-яё])${stem}[а-яё]{0,4}(?![\\wа-яё])`, 'i');
+    if (re.test(s)) return original;
+  }
+  return '';
+}
+
+// "Класс под готовую расу X", "сделай класс для расы X", "класс по расе X", and the
+// pronoun form "сделай для этой расы класс". A class requested together with a race
+// is a different request from a free-standing class. `corpusRace` lets the caller
+// pass a race name it already found (a base race or a player's own from the blog) so
+// a bare name counts even when the "раса" word is absent.
+export function isClassForRace(text, corpusRace = null) {
+  const s = String(text || '');
+  const raceNamed = corpusRace !== null ? corpusRace : corpusNameIn('race', s);
+  const hasRaceWord = /рас[а-яё]{0,3}/i.test(s);
+  const hasClassWord = /класс[а-яё]{0,3}/i.test(s);
+  const classLead = /класс[а-яё]{0,3}\s*(?:,?\s*(?:котор[а-яё]+|что)\s*)?(?:подход[а-яё]*|подходящ[а-яё]*|совместим[а-яё]*|соответств[а-яё]*|под\b|для\b|по\b|готов[а-яё]*)/i;
+  // A race named from the corpus plus any mention of a class is a class-for-race
+  // request even when the player never types "раса" ("сделай класс для разумные
+  // растения").
+  if (raceNamed && (hasClassWord || classLead.test(s))) return true;
+  return classLead.test(s) && hasRaceWord
     || /класс[а-яё]{0,3}\s*(?:под|для|по)\s*(?:(?:готов[а-яё]*|мою|свою|эту|ту|моей|своей)\s+)?рас/i.test(s)
     || /рас[а-яё]{0,3}\s*(?:под|для)\s*класс/i.test(s)
-    || /класс[а-яё]{0,3}[\s\S]{0,40}рас[а-яё]{0,3}/i.test(s) && /подход|подходящ|совместим|соответств/i.test(s)
+    || (hasClassWord && hasRaceWord && /подход|подходящ|совместим|соответств/i.test(s))
+    // "сделай для этой расы класс", "создай класс под эту расу": the race is named
+    // by a demonstrative, so the class word and the race reference are enough.
+    || (hasClassWord && /(?<![а-яё])(?:для|под|по)\s+(?:эт[аоыу]й?|эту|ту|мо[юй]|сво[юй]|нашу|готов[а-яё]*|нов[а-яё]+)\s+рас[а-яё]{0,3}/i.test(s))
     || /class\s+(?:for|to|that\s+fits?|matching)\s+(?:the\s+|my\s+|a\s+)?race/i.test(s);
 }
 
 // A class-for-race request that names no race ("сделай класс под мою расу",
 // "может ли ии сделать класс для расы игрока"). The engine cannot invent the race,
 // so it asks for the name instead of building a free-floating class that ignores it.
-export function isClassForRaceAsk(text) {
+// The whole dialogue is checked, so a race the player pasted a turn earlier counts
+// as named and no second question is asked.
+export function isClassForRaceAsk(text, history = []) {
   const s = String(text || '');
   if (!isClassForRace(s)) return false;
-  return !/\S/.test(raceNameFor(s, {}, []) || '');
+  return !/\S/.test(raceNameFor(s, {}, history) || '');
 }
 
 // The mirror: a race-for-class request that names no class ("сделай расу под мой
 // класс", "расу для класса игрока"). The engine cannot invent the class, so it asks
 // which one instead of building a free-floating race that ignores it.
-export function isRaceForClassAsk(text) {
+export function isRaceForClassAsk(text, history = []) {
   const s = String(text || '');
   if (!isRaceForClass(s)) return false;
-  return !/\S/.test(classNameFor(s, {}, []) || '');
+  return !/\S/.test(classNameFor(s, {}, history) || '');
 }
 
 // The race the class is built for. The newest message wins, then a ready race the
-// player pasted in (the "Название" line of a race sheet), then the draft the race
-// interview left behind, then any race named in the dialogue.
+// player pasted in (the "Название" line of a race sheet), then a race known to the
+// corpus (a base race or a player's own from the blog), then the draft the race
+// interview left behind, then any race named in the dialogue. The dialogue is walked
+// newest-first, so a pasted sheet one turn back still names its race.
+export function raceNameFor(text, application = {}, history = []) {
+  const app = application && typeof application === 'object' ? application : {};
+  const own = (s) => {
+    const str = String(s || '');
+    const quoted = str.match(/[«"']([^»"']{2,60})[»"']/);
+    if (quoted) return cleanRaceName(quoted[1]);
+    // A pasted race sheet carries its own "Название: X" line. The lookbehind keeps
+    // "Самоназвание: X" from being read as the race name.
+    const labelled = str.match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)/i);
+    if (labelled) return cleanRaceName(labelled[1]);
+    const named = str.match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+    if (named) return cleanRaceName(named[1]);
+    return '';
+  };
+  const direct = own(text);
+  if (direct) return direct;
+  for (const key of ['Название', 'Название расы']) {
+    if (typeof app[key] === 'string' && app[key].trim()) return cleanRaceName(app[key]);
+  }
+  const msgs = Array.isArray(history) ? history : [];
+  // The player's pasted sheet and any race named a turn earlier are read newest-first.
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (!m || m.role === 'assistant') continue;
+    const found = own(String(m.content || ''));
+    if (found) return found;
+  }
+  // A bare corpus name ("разумные растения", "Эльф") counts even without the word
+  // "раса", so a class can be built for it with no extra question.
+  const corpusNow = corpusNameIn('race', text);
+  if (corpusNow) return corpusNow;
+  // A lower-case name the player typed after "расы" ("расы разумные растения") that
+  // is not in the corpus yet: the stop-list keeps "расы игрока" from being a name.
+  const phraseNow = raceNameFromPhrase(text);
+  if (phraseNow) return phraseNow;
+  const joined = msgs.filter((m) => m && m.role !== 'assistant')
+    .map((m) => String(m.content || '')).join('\n');
+  const corpusHist = corpusNameIn('race', joined);
+  if (corpusHist) return corpusHist;
+  const phraseHist = raceNameFromPhrase(joined);
+  if (phraseHist) return phraseHist;
+  // No `/i` here: an upper-case first letter is what tells a name from "расы игрока".
+  const namedHist = joined.match(/(?<![а-яё])(?:расу|расы|раса|расе)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+  return namedHist ? cleanRaceName(namedHist[1]) : '';
+}
+
 // Words that follow "расы/раса" in ordinary speech but are not a race name
 // ("класс для расы игрока", "под мою расу"). Without this the history fallback read
 // "игрока" as the race name, so "сделай класс для расы игрока" was taken as a
@@ -1733,6 +1853,25 @@ const NOT_A_RACE_NAME = /^(игрок|игрока|игроку|игроком|�
 function cleanRaceName(value) {
   const name = String(value || '').trim().split(/[.\n]/)[0].slice(0, 60).trim();
   return NOT_A_RACE_NAME.test(name) ? '' : name;
+}
+
+// A race name written after the word "раса" ("сделай класс для расы разумные
+// растения"). Unlike a proper name this may be lower-case, so the stop-list (not a
+// capital letter) is what tells a name from "расы игрока". A description with a comma
+// ("полу люди, полу нежить") is an idea, not a name, and is left to the concept path.
+const RACE_NAME_LEAD = /(?<![а-яё])(?:расу|расы|раса|расе|race)\s+(?:под\s+|для\s+|по\s+)?(?:готов[а-яё]*|нов[а-яё]+|сво[юй]|мо[юй]|эту|ту|любую)?\s*[«"']?([^.!?\n]{2,60})/i;
+
+function raceNameFromPhrase(text) {
+  const m = String(text || '').match(RACE_NAME_LEAD);
+  if (!m) return '';
+  const raw = m[1].replace(/\s+/g, ' ').trim();
+  // A comma marks a description ("полу люди, полу нежить"), which is the player's
+  // idea rather than a name; the idea path builds the class from it instead.
+  if (/[,;]/.test(raw)) return '';
+  let name = raw.replace(/^(?:и|а|но|или|в|во|на|с|со|для|под|по|о|об)\s+/i, '').trim();
+  name = name.split(/\s+(?:и|а|но|или)\s+/i)[0].trim();
+  if (!name || NOT_A_RACE_NAME.test(name)) return '';
+  return cleanRaceName(name);
 }
 
 // The words that follow "класса" in ordinary speech but are not a class name
@@ -1749,54 +1888,44 @@ function cleanClassName(value) {
   return name;
 }
 
-export function raceNameFor(text, application = {}, history = []) {
-  const app = application && typeof application === 'object' ? application : {};
-  const quoted = String(text || '').match(/[«"']([^»"']{2,60})[»"']/);
-  if (quoted) return cleanRaceName(quoted[1]);
-  // A pasted race sheet carries its own "Название: X" line. The lookbehind keeps
-  // "Самоназвание: X" from being read as the race name.
-  const labelled = String(text || '').match(/(?<![а-яё])(?:название\s+расы|название)\s*[:\-—]\s*(.+)/i);
-  if (labelled) return cleanRaceName(labelled[1]);
-  const named = String(text || '').match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
-  if (named) return cleanRaceName(named[1]);
-  for (const key of ['Название', 'Название расы']) {
-    if (typeof app[key] === 'string' && app[key].trim()) return cleanRaceName(app[key]);
-  }
-  const msgs = Array.isArray(history) ? history : [];
-  const joined = msgs.filter((m) => m && m.role !== 'assistant')
-    .map((m) => String(m.content || '')).join('\n');
-  const labelledHist = joined.match(/(?<![а-яё])[Нн]азвание(?:\s+расы)?\s*[:\-—]\s*(.+)/);
-  if (labelledHist) return cleanRaceName(labelledHist[1]);
-  // No `/i` here: an upper-case first letter is what tells a name from "расы игрока".
-  const namedHist = joined.match(/(?<![а-яё])(?:расу|расы|раса|расе)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
-  return namedHist ? cleanRaceName(namedHist[1]) : '';
-}
-
 // The class the race is built for. The newest message wins, then a ready class the
-// player pasted in (the "Название класса" line), then the draft the class interview
-// left behind, then any class named in the dialogue.
+// player pasted in (the "Название класса" line), then a class known to the corpus,
+// then the draft the class interview left behind, then any class named in the
+// dialogue. The dialogue is walked newest-first, so a pasted sheet one turn back
+// still names its class.
 export function classNameFor(text, application = {}, history = []) {
   const app = application && typeof application === 'object' ? application : {};
-  const quoted = String(text || '').match(/[«"']([^»"']{2,60})[»"']/);
-  if (quoted) return cleanClassName(quoted[1]);
-  const labelled = String(text || '').match(/(?<![а-яё])название\s+класса\s*[:\-—]\s*(.+)/i);
-  if (labelled) return cleanClassName(labelled[1]);
-  // "расу под громового заклинателя": the class is named by a role word rather than
-  // the literal "класс", so the phrase after под/для/по is read as the class name.
-  const forClass = String(text || '').match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+(?:для|под|по)\s+(?:(?:готов[а-яё]*|мою|свою|эту|ту|моей|своей|мой|моя|мои|новую|новый)\s+)?([а-яёA-ZА-ЯЁ][\wа-яё\- ]{1,40})/i);
-  if (forClass) return cleanClassName(forClass[1]);
-  const named = String(text || '').match(/(?<![а-яё])(?:класс|класса|классу|class)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
-  if (named) return cleanClassName(named[1]);
+  const own = (s) => {
+    const str = String(s || '');
+    const quoted = str.match(/[«"']([^»"']{2,60})[»"']/);
+    if (quoted) return cleanClassName(quoted[1]);
+    const labelled = str.match(/(?<![а-яё])название\s+класса\s*[:\-—]\s*(.+)/i);
+    if (labelled) return cleanClassName(labelled[1]);
+    // "расу под громового заклинателя": the class is named by a role word rather than
+    // the literal "класс", so the phrase after под/для/по is read as the class name.
+    const forClass = str.match(/(?<![а-яё])(?:расу|расы|раса|расе|race)\s+(?:для|под|по)\s+(?:(?:готов[а-яё]*|мою|свою|эту|ту|моей|своей|мой|моя|мои|новую|новый)\s+)?([а-яёA-ZА-ЯЁ][\wа-яё\- ]{1,40})/i);
+    if (forClass) return cleanClassName(forClass[1]);
+    const named = str.match(/(?<![а-яё])(?:класс|класса|классу|class)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
+    if (named) return cleanClassName(named[1]);
+    return '';
+  };
+  const direct = own(text);
+  if (direct) return direct;
   for (const key of ['Название класса', 'Название']) {
     if (typeof app[key] === 'string' && app[key].trim()) return cleanClassName(app[key]);
   }
   const msgs = Array.isArray(history) ? history : [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (!m || m.role === 'assistant') continue;
+    const found = own(String(m.content || ''));
+    if (found) return found;
+  }
+  const corpusNow = corpusNameIn('class', text);
+  if (corpusNow) return corpusNow;
   const joined = msgs.filter((m) => m && m.role !== 'assistant')
     .map((m) => String(m.content || '')).join('\n');
-  const labelledHist = joined.match(/(?<![а-яё])название\s+класса\s*[:\-—]\s*(.+)/i);
-  if (labelledHist) return cleanClassName(labelledHist[1]);
-  const namedHist = joined.match(/(?<![а-яё])(?:класс|класса|классу)\s+[«"']?([A-ZА-ЯЁ][\wа-яё\- ]{1,40})/);
-  return namedHist ? cleanClassName(namedHist[1]) : '';
+  return corpusNameIn('class', joined);
 }
 
 export function localInterview({ messages = [], lang = 'ru', application = {} } = {}) {
@@ -1843,7 +1972,7 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   // A class requested for a race that has not been named yet ("может ли ии сделать
   // класс для расы игрока?", "сделай класс под мою расу"). The engine cannot invent
   // the race, so it asks which one instead of building a class that ignores it.
-  if (isClassForRaceAsk(text) && wanted !== 'race') {
+  if (isClassForRaceAsk(text, history) && wanted !== 'race') {
     return [
       pick(lang, 'Конечно, могу — но сначала назови расу, под которую нужен класс: под её природу, способности и слабости я соберу подходящий класс.', 'Of course I can — but first name the race the class is for: I will build it around that race\'s nature, abilities and weaknesses.'),
       nextFieldPrompt({ ...app, _kind: 'class' }, lang, history)
@@ -1851,7 +1980,7 @@ export function localInterview({ messages = [], lang = 'ru', application = {} } 
   }
   // The mirror: a race requested for a class that has not been named yet ("сделай
   // расу под мой класс"). The engine cannot invent the class, so it asks which one.
-  if (isRaceForClassAsk(text) && wanted !== 'class') {
+  if (isRaceForClassAsk(text, history) && wanted !== 'class') {
     return [
       pick(lang, 'Конечно, могу — но сначала назови класс, под который нужна раса: под его ресурс, роль и способности я соберу подходящую расу.', 'Of course I can — but first name the class the race is for: I will build it around that class\'s resource, role and abilities.'),
       nextFieldPrompt({ ...app, _kind: 'race' }, lang, history)

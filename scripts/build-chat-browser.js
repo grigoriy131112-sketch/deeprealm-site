@@ -96,8 +96,10 @@ ${parts.join('\n\n')}
     var race = [/самоназвание/i, /особые приметы/i, /уязвимост/i, /форма правления/i, /социальная структура/i];
     var klass = [/роль\\s*:/i, /ресурс\\s*:/i, /\\bHP\\s*:/i, /\\bХП\\s*:/i, /базов\\s*урон/i];
     var count = function (list) { return list.filter(function (re) { return re.test(text); }).length; };
-    if (count(klass) >= 3) return 'class';
-    if (count(race) >= 3) return 'race';
+    var c = count(klass), r = count(race);
+    if (c > r) return 'class';
+    if (r > c) return 'race';
+    // A tie means a race was pasted and a class built from it, so the draft decides.
     var kind = application && application._kind;
     return kind === 'race' || kind === 'class' ? kind : 'character';
   }

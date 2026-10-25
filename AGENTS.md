@@ -362,6 +362,22 @@ permission is missing. Probe that way before starting any long operation.
   "сделай расу под класс X") the noun after the creation verb (`primaryNoun`) decides
   which sheet is built. A check/show/add turn never authors a fresh sheet, so the
   "проверь" after a generated sheet still hands off instead of building a second one.
+- A class is built for a race the player already has (added 2026-10-25). The owner: a
+  player pasted a finished race and asked for a class for it, and the Registrar would
+  not build one; a player who named their own blog race ("разумные растения") got no
+  class either. `corpusNames`/`corpusNameIn` now read the race and class names from the
+  knowledge base (`races.list`, `races.details`, `races.player_races`,
+  `classes.base_classes`, `classes.player_classes`), so a bare name counts without the
+  literal "раса"/"класс" word, and the trailing vowels are stripped so inflections
+  ("для синтетиков", "для драконорождённого") match. `raceNameFor`/`classNameFor` walk
+  the dialogue newest-first, so a sheet pasted a turn earlier still names its race, and
+  `raceNameFromPhrase` reads a lower-case name after "расы" without mistaking "расы
+  игрока" for one. `isClassForRace` also recognises the pronoun form ("сделай для этой
+  расы класс") and, when a race walk is remembered, "сделай класс для неё". A generated
+  class now takes its theme from the race name (`classDraft(..., themeText)`), so a fire
+  race draws the fire kit. `interviewKind` lets only the newest non-command message's
+  pasted sheet set the kind, so a class built from a pasted race is still filed as a
+  class, and `detectSheetKind` resolves a race/class marker tie with the draft's kind.
 - A request to answer in a few words gives the gist (added 2026-10-19). The player
   asked "А можно ты просто расскажешь в двух словах?" and the Guide re-printed the
   whole branch description, which reads as "he did not listen". `localGuide` now

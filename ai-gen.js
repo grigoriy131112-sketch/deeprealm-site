@@ -651,8 +651,8 @@ function specializationLines(t) {
   return out;
 }
 
-function classDraft(lang, seed, concept = '') {
-  const t = CLASS_THEMES[themeIndexForClassConcept(concept, seed)];
+function classDraft(lang, seed, concept = '', themeText = '') {
+  const t = CLASS_THEMES[themeIndexForClassConcept(themeText || concept, seed)];
   const name = t.names[(seed >>> 5) % t.names.length];
   const idea = conceptName(concept);
   const abilities = classAbilityLines(t).join('\n');
@@ -708,8 +708,11 @@ export function generateClass(lang, seed, concept = '') { return classDraft(lang
 // already made (or a base race) and asks for a class to match it, so the kit keeps
 // the standard balance but is tied to that race by name and a compatibility line.
 export function generateClassForRace(lang, seed, raceName, concept = '') {
-  const draft = classDraft(lang, seed, concept);
   const race = String(raceName || '').trim();
+  // The race's own name picks the class theme, so a "Пепельники" race (fire) gets a
+  // fire class instead of one drawn from the seed alone. The player's idea still
+  // counts, but the race they named comes first.
+  const draft = classDraft(lang, seed, concept, `${race} ${concept}`.trim());
   if (!race) return draft;
   draft.app['Под расу'] = race;
   draft.app['Совместимость с расой'] = `Класс создан под готовую расу «${race}»: его ресурс и способности опираются на её природу, а магия класса не спорит с её школами.`;
@@ -742,6 +745,8 @@ export function renderGenerated(draft, lang) {
     ? genPick(lang, 'Готово. Дописал всё, что оставалось, — твои ответы сохранил:', 'Done. I filled in what was left — I kept your answers:')
     : draft.forClass
     ? genPick(lang, `Готово. Собрал расу под твой класс «${draft.forClass}» — по правилам баланса, со способностями и слабостями:`, `Done. I built a race for your class "${draft.forClass}" — balanced, with its own powers and weaknesses:`)
+    : draft.kind === 'class' && draft.forRace
+    ? genPick(lang, `Готово. Собрал класс под твою расу «${draft.forRace}» — по правилам баланса, с перезарядкой в ходах:`, `Done. I built a class for your race "${draft.forRace}" — balanced, with cooldowns in turns:`)
     : draft.kind === 'race'
     ? (byIdea
         ? genPick(lang, 'Готово. Собрал расу по твоей идее — с её природой, способностями и слабостями:', 'Done. I built the race from your idea — its nature, powers and weaknesses:')

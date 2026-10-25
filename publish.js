@@ -30,10 +30,14 @@ export function detectSheetKind(messages, application = {}) {
   // The draft remembers the checklist the interviewer walked, so a thin sheet still
   // gets filed under the right heading even when its own markers are too few to score.
   if (best < 2) return ['race', 'class', 'story'].includes(app._kind) ? app._kind : null;
-  // A tie is not guessed at: without a clear winner the sheet is left unpublished
+  // A tie is not guessed at blindly: a player who pasted a race and then built a
+  // class from it leaves both kinds' markers in the dialogue, and the draft they are
+  // actually submitting decides. Without a draft kind the sheet is left unpublished
   // rather than filed under the wrong heading.
   const winners = [
     ['class', classScore], ['race', raceScore], ['story', storyScore]
   ].filter(([, score]) => score === best);
-  return winners.length === 1 ? winners[0][0] : null;
+  if (winners.length === 1) return winners[0][0];
+  const draftKind = ['race', 'class', 'story'].includes(app._kind) ? app._kind : null;
+  return draftKind && winners.some(([k]) => k === draftKind) ? draftKind : null;
 }
