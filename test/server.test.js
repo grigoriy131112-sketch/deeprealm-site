@@ -429,6 +429,36 @@ test('an ability question still resolves the class alias to its canonical name',
   assert.match(reply, /Способности Некромант — 10 уровень/);
 });
 
+test('a head-to-head race question answers the first race, not the second', () => {
+  // The owner: "А чем люди отличаются от орков" answered with the orc's relations.
+  // The subject is the first race named; both sides are shown.
+  const reply = localGuide({ messages: [{ role: 'user', content: 'А чем люди отличаются от орков' }], lang: 'ru' });
+  assert.match(reply, /Чем отличается Человек от Орк/);
+  assert.match(reply, /Человек о них/);
+  assert.match(reply, /Орк о них/);
+  assert.doesNotMatch(reply, /^Раса Орк/m);
+});
+
+test('a head-to-head race question keeps the order the player wrote', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'Чем эльфы отличаются от орков?' }], lang: 'ru' });
+  assert.match(reply, /Чем отличается Эльф от Орк/);
+  assert.match(reply, /Эльф о них/);
+  assert.match(reply, /Орк о них/);
+});
+
+test('a head-to-head class question shows both classes', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'Чем маг отличается от воина?' }], lang: 'ru' });
+  assert.match(reply, /Чем отличается Маг от Воин/);
+  assert.match(reply, /Маг — мана и стихии/);
+  assert.match(reply, /Воин — сила и выносливость/);
+});
+
+test('a race is found through its everyday inflections too', () => {
+  assert.match(localGuide({ messages: [{ role: 'user', content: 'расскажи про павших' }], lang: 'ru' }), /Раса Павший/);
+  assert.match(localGuide({ messages: [{ role: 'user', content: 'расскажи про гномов' }], lang: 'ru' }), /Раса Дворф/);
+  assert.match(localGuide({ messages: [{ role: 'user', content: 'расскажи про драконов' }], lang: 'ru' }), /Раса Драконорождённый/);
+});
+
 test('a list question still returns the overview, not one member', () => {
   assert.match(localGuide({ messages: [{ role: 'user', content: 'Какие есть расы?' }], lang: 'ru' }), /Базовые расы:/);
   assert.match(localGuide({ messages: [{ role: 'user', content: 'какие есть классы' }], lang: 'ru' }), /Базовые классы:/);

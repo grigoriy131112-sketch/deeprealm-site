@@ -114,6 +114,7 @@ const GUIDE_SYSTEM = (lang) => `Ты — Проводник чата Deeprealm: 
 3и. СРАВНЕНИЕ РАС. На вопрос «чем они отличаются от других расс», «какие у них плюсы и минусы», «преимущества и недостатки по сравнению с другими» отвечай по «СПРАВКЕ»: сначала суть расы (сильные стороны и слабости), затем её отношения с другими народами. Не пересказывай список полей внешности — это ответ на «как выглядит», а не на «чем отличается». Не выдавай вместо этого анкету персонажа.
 3к. СРАВНЕНИЕ КЛАССОВ. На вопрос «чем <класс> отличается от других классов», «в чём его преимущества над другими» отвечай по «СПРАВКЕ»: суть класса (для чего он), ресурс, базовую атаку и его специализации. Не выдавай вместо этого список способностей по уровням.
 3л. ИМЯ В ВОПРОСЕ — ГЛАВНОЕ. Если игрок назвал расу или класс (в том числе во множественном числе: «люди», «эльфы», «маги», «воины») — отвечай именно про них, даже если прошлый вопрос был про другую расу или класс. Не продолжай прошлую тему вопреки названному существу.
+3м. СРАВНЕНИЕ ДВУХ. На вопрос «чем <A> отличаются от <B>» (например, «чем люди отличаются от орков») отвечай про A — это первое названное существо, а не второе: суть A, затем отношение A к B и отношение B к A. Не отвечай одной лишь справкой про B.
 4. Ссылки давай только те, что есть в информации ниже. Никогда не придумывай ссылки, кнопки, файлы и адреса.
 
 ССЫЛКИ И КОНТАКТЫ:
@@ -1347,13 +1348,13 @@ function buildDocs(k) {
   for (const [name, fields] of Object.entries(races.details || {})) {
     const body = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n');
     add(`race-det:${name}`, pick('ru', `Раса ${name}`, `Race ${name}`), body, 'race',
-      ['раса', name, 'внешность', 'внешний вид', 'как выглядит', 'как выглядят', 'описание', 'appearance', 'look'],
+      ['раса', name, ...(RACE_ALIASES[name] || []), 'внешность', 'внешний вид', 'как выглядит', 'как выглядят', 'описание', 'appearance', 'look'],
       { raceName: name, raceDetailsName: name, raceFields: fields, ...raceBriefFor(name) });
   }
   for (const [name, value] of Object.entries(races.relations || {})) {
     const text = typeof value === 'string' ? value : Object.entries(value || {}).map(([n, v]) => `${n}: ${v}`).join('\n');
     add(`race-rel:${name}`, pick('ru', `Раса ${raceBriefFor(name).raceBriefName}`, `Race ${raceBriefFor(name).raceBriefName}`), text, 'race',
-      ['раса', name, 'отношения', 'отношение', 'дружба', 'вражда'], { raceName: name, ...raceBriefFor(name) });
+      ['раса', name, ...(RACE_ALIASES[raceBriefFor(name).raceBriefName] || []), 'отношения', 'отношение', 'дружба', 'вражда'], { raceName: name, ...raceBriefFor(name) });
   }
   if (races.race_template_rules) add('race-rules', pick('ru', 'Правила создания расы', 'Race creation rules'), races.race_template_rules.map((r) => `— ${r}`).join('\n'), 'race', ['раса', 'правила', 'баланс']);
   if (races.race_template_fields) add('race-fields', pick('ru', 'Поля анкеты расы', 'Race sheet fields'), races.race_template_fields.map((f) => `— ${f}`).join('\n'), 'race', ['раса', 'шаблон', 'поля']);
@@ -1378,7 +1379,7 @@ function buildDocs(k) {
       `Базовая атака: ${d.basic_attack}`,
       `Способности: ${d.abilities}`,
       `Истощение: ${d.exhaustion}`
-    ].join('\n'), 'class', ['класс', name, 'class'], { data: d, name, classBrief: d.brief || '' });
+    ].join('\n'), 'class', ['класс', name, ...(CLASS_ALIASES[name] || []), 'class'], { data: d, name, classBrief: d.brief || '' });
     // The per-level ability list, so "способности первого уровня" answers with the
     // abilities themselves instead of falling through to the level pass rewards.
     if (Array.isArray(d.levels) && d.levels.length) {
@@ -1712,6 +1713,66 @@ function renderClassComparison(doc, lang) {
   return lines.filter(Boolean).join('\n');
 }
 
+// "Чем люди отличаются от орков" names two races: the subject (first) and the one
+// it is measured against (second). The answer leads with the subject's essence, then
+// the subject's attitude to the other race - that is exactly the difference asked
+// for - and closes with the other race's view, so both sides are visible.
+function renderRaceVersus(aName, bName, lang) {
+  const a = docs().find((d) => d.id === `race-det:${aName}`);
+  if (!a) return '';
+  const aLabel = a.raceDetailsName || a.raceName;
+  const bKey = canonicalName(bName);
+  const b = docs().find((d) => d.id === `race-det:${bKey}`);
+  const bLabel = b ? (b.raceDetailsName || b.raceName) : bKey;
+  const relA = raceRelationsDoc(aName);
+  const relB = raceRelationsDoc(bKey);
+  // The relation lines are keyed by the other race's everyday name ("К Оркам"),
+  // which inflects, so the match is on stems rather than the exact base name.
+  const forms = (base) => new Set([base, ...(RACE_ALIASES[base] || [])].map(stem));
+  const toward = (rel, otherBase) => {
+    if (!rel) return '';
+    const want = forms(otherBase);
+    const line = String(rel.text).split('\n').find((l) => {
+      const m = /^к\s+(.+?)\s*:/i.exec(l);
+      return m ? tokens(m[1]).some((t) => want.has(t)) : false;
+    });
+    return line ? line.replace(/^[^:]*:\s*/, '') : '';
+  };
+  const head = `${pick(lang, 'Чем отличается', 'How it differs')} ${aLabel} ${pick(lang, 'от', 'from')} ${bLabel}:`;
+  const lines = [head, a.raceBrief ? `${aLabel} — ${a.raceBrief}.` : ''];
+  const aView = toward(relA, bName);
+  if (aView) lines.push('', `${aLabel} ${pick(lang, 'о них', 'on them')}: ${aView}`);
+  const bView = toward(relB, aName);
+  if (bView) lines.push(`${bLabel} ${pick(lang, 'о них', 'on them')}: ${bView}`);
+  return lines.filter((l) => l !== '').join('\n');
+}
+
+// The class counterpart: two classes are told apart by their essence and how each
+// one fights (resource, attack, specializations), so both profiles are shown.
+function renderClassVersus(aName, bName, lang) {
+  const a = docs().find((d) => d.id === `class:${aName}`);
+  if (!a) return '';
+  const bKey = canonicalName(bName);
+  const b = docs().find((d) => d.id === `class:${bKey}`);
+  const bLabel = b ? b.name : bKey;
+  const essence = (doc) => (doc.classBrief ? `${doc.name} — ${doc.classBrief}.` : doc.name);
+  const specOf = (name) => {
+    const s = docs().find((d) => d.id === `spec:${name}`);
+    return s && s.specNames.length ? `${pick(lang, 'Специализации', 'Specializations')}: ${s.specNames.join(', ')}.` : '';
+  };
+  const lines = [`${pick(lang, 'Чем отличается', 'How it differs')} ${aName} ${pick(lang, 'от', 'from')} ${bLabel}:`, essence(a)];
+  if (a.data && a.data.resource) lines.push(`${pick(lang, 'Ресурс', 'Resource')}: ${a.data.resource}.`);
+  const aSpec = specOf(aName);
+  if (aSpec) lines.push(aSpec);
+  if (b) {
+    lines.push('', essence(b));
+    if (b.data && b.data.resource) lines.push(`${pick(lang, 'Ресурс', 'Resource')}: ${b.data.resource}.`);
+    const bSpec = specOf(bLabel);
+    if (bSpec) lines.push(bSpec);
+  }
+  return lines.filter(Boolean).join('\n');
+}
+
 const ORDINALS = {
   '1': 1, 'перв': 1, '2': 2, 'втор': 2, '3': 3, 'трет': 3, '4': 4, 'четверт': 4, '5': 5, 'пят': 5,
   '6': 6, 'шест': 6, '7': 7, 'седьм': 7, '8': 8, 'восьм': 8, '9': 9, 'девят': 9, '10': 10, 'десят': 10,
@@ -1743,23 +1804,24 @@ function levelFromQuery(text) {
 // fails to see the entity, folding in the wrong previous turn. Each entry maps a
 // written form to the base name it means.
 const RACE_ALIASES = {
-  'человек': ['люди', 'людей', 'людям', 'людьми', 'людях', 'людь', 'человек', 'люд'],
-  'эльф': ['эльф', 'эльфы', 'эльфов', 'эльфам', 'эльфами', 'эльфах'],
-  'драконорождённый': ['драконорожденный', 'драконорождённые', 'драконорожденные', 'драконы', 'дракон', 'драконам', 'драконами'],
-  'дворф': ['дворф', 'дворфы', 'дворфов', 'дворфам', 'дворфами', 'гном', 'гномы', 'гномов'],
-  'орк': ['орк', 'орки', 'орков', 'оркам', 'орками', 'орках'],
-  'павший': ['павший', 'павшие', 'павших', 'павшим', 'павшими']
+  'Человек': ['люди', 'людей', 'людям', 'людьми', 'людях', 'человек', 'человека'],
+  'Эльф': ['эльф', 'эльфа', 'эльфы', 'эльфов', 'эльфам', 'эльфами', 'эльфах'],
+  'Драконорождённый': ['драконорожденный', 'драконорождённые', 'драконорожденные', 'драконы', 'дракон', 'дракона', 'драконам', 'драконами', 'драконорождённого'],
+  'Дворф': ['дворф', 'дворфа', 'дворфы', 'дворфов', 'дворфам', 'дворфами', 'гном', 'гнома', 'гномы', 'гномов'],
+  'Орк': ['орк', 'орка', 'орки', 'орков', 'оркам', 'орками', 'орках'],
+  'Павший': ['павший', 'павшего', 'павшие', 'павших', 'павшим', 'павшими']
 };
 
 // The base race name a piece of text refers to, or '' when it names none. Both the
 // canonical name and every alias are matched.
 function raceNameIn(text) {
-  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
-  for (const [base, forms] of Object.entries(RACE_ALIASES)) {
-    const all = [base.replace(/ё/g, 'е'), ...forms];
-    if (all.some((f) => hasWord(s, f))) return base;
-  }
-  return '';
+  return raceNamesIn(text)[0] || '';
+}
+
+// Every base race named in the text, in the order the player wrote them. "Чем люди
+// отличаются от орков" names two, and the first one is the subject of the question.
+function raceNamesIn(text) {
+  return namesIn(text, RACE_ALIASES, (b) => b);
 }
 
 // The base classes, known by the same everyday inflections the races are. The
@@ -1781,14 +1843,39 @@ function hasWord(s, w) {
   return new RegExp(`(?:^|[^а-яёa-z])${escaped}(?![а-яёa-z])`).test(s);
 }
 
+// The earliest position at which any of a name's written forms appears, or -1.
+function firstIndexOf(s, forms) {
+  let idx = -1;
+  for (const f of forms) {
+    if (!f) continue;
+    const escaped = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = new RegExp(`(?:^|[^а-яёa-z])${escaped}(?![а-яёa-z])`).exec(s);
+    if (m && (idx === -1 || m.index < idx)) idx = m.index;
+  }
+  return idx;
+}
+
+// The base names of one category named in the text, ordered by first mention.
+function namesIn(text, aliases, canonical) {
+  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+  const found = [];
+  for (const [base, forms] of Object.entries(aliases)) {
+    const all = [canonical(base), ...forms].map((f) => f.replace(/ё/g, 'е'));
+    const idx = firstIndexOf(s, all);
+    if (idx !== -1) found.push({ base, idx });
+  }
+  found.sort((a, b) => a.idx - b.idx);
+  return found.map((f) => f.base);
+}
+
 // The base class name a piece of text refers to, or '' when it names none.
 function classNameIn(text) {
-  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
-  for (const [base, forms] of Object.entries(CLASS_ALIASES)) {
-    const all = [base.toLowerCase().replace(/ё/g, 'е'), ...forms];
-    if (all.some((f) => hasWord(s, f))) return base;
-  }
-  return '';
+  return classNamesIn(text)[0] || '';
+}
+
+// Every base class named in the text, ordered by first mention.
+function classNamesIn(text) {
+  return namesIn(text, CLASS_ALIASES, (b) => b.toLowerCase());
 }
 
 // The canonical stored name behind a matched alias ("мага" -> "Маг", "эльфов" ->
@@ -1799,7 +1886,7 @@ function canonicalName(name) {
     if (n === base.toLowerCase().replace(/ё/g, 'е') || forms.includes(n)) return base;
   }
   for (const [base, forms] of Object.entries(RACE_ALIASES)) {
-    if (n === base || forms.includes(n)) return base;
+    if (n === base.toLowerCase().replace(/ё/g, 'е') || forms.includes(n)) return base;
   }
   return name;
 }
@@ -1900,6 +1987,13 @@ function pickAnswer(history) {
   // the race behind and answers with an unrelated document.
   const continuation = !mentionsEntity(q) && (COMPARE_RE.test(q) || ANAPHORA_RE.test(q));
   const compare = COMPARE_RE.test(q);
+  // Two entities of the same kind named together ("чем люди отличаются от орков")
+  // are a head-to-head: the first is the subject, the second the one compared
+  // against. The answer needs both, so it is rendered from the pair.
+  const versusRaces = compare ? raceNamesIn(q) : [];
+  const versusClasses = compare ? classNamesIn(q) : [];
+  const versus = versusRaces.length >= 2 ? { kind: 'race', a: versusRaces[0], b: versusRaces[1] }
+    : versusClasses.length >= 2 ? { kind: 'class', a: versusClasses[0], b: versusClasses[1] } : null;
   const priorTurns = [...history].reverse()
     .filter((m) => m.role !== 'assistant' && String(m.content || '') !== q)
     .map((m) => String(m.content || ''));
@@ -1955,7 +2049,7 @@ function pickAnswer(history) {
     const rel = raceRelationsDoc(best.doc.raceDetailsName || best.doc.raceName);
     if (rel) return { q, brief, look, followUp, focus, level, best: rel };
   }
-  return { q, brief, look, followUp, focus, level, compare, best: best && best.score >= 2 ? best.doc : null };
+  return { q, brief, look, followUp, focus, level, compare, versus, best: best && best.score >= 2 ? best.doc : null };
 }
 
 // The source text for the model prompt: the same document the local answer would use,
@@ -1966,7 +2060,11 @@ function guideReference({ messages = [], lang = 'ru' } = {}) {
   const last = [...history].reverse().find((m) => m.role !== 'assistant');
   const multi = abilityAnswers(String(last?.content || ''), lang);
   if (multi.length > 1) return multi.join('\n\n');
-  const { brief, look, followUp, focus, level, compare, best } = pickAnswer(history);
+  const { brief, look, followUp, focus, level, compare, versus, best } = pickAnswer(history);
+  if (versus) {
+    const out = versus.kind === 'race' ? renderRaceVersus(versus.a, versus.b, lang) : renderClassVersus(versus.a, versus.b, lang);
+    if (out) return out;
+  }
   if (!best) return multi[0] || '';
   if (compare && best.raceFields) return renderRaceComparison(best, lang);
   if (compare && best.data) return renderClassComparison(best, lang);
@@ -1988,7 +2086,11 @@ function localGuide({ messages = [], lang = 'ru' } = {}) {
   // Two classes asked together ("способности 15 мага и 10 некроманта") get two answers.
   const multi = abilityAnswers(q, lang);
   if (multi.length > 1) return multi.join('\n\n');
-  const { brief, look, followUp, focus, level, compare, best } = pickAnswer(history);
+  const { brief, look, followUp, focus, level, compare, versus, best } = pickAnswer(history);
+  if (versus) {
+    const out = versus.kind === 'race' ? renderRaceVersus(versus.a, versus.b, lang) : renderClassVersus(versus.a, versus.b, lang);
+    if (out) return out;
+  }
   if (!best) {
     return [
       pick(lang, 'Честно: в моих материалах нет ответа на этот вопрос.', 'Honestly, my materials have no answer to that.'),

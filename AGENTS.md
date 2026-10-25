@@ -405,6 +405,13 @@ permission is missing. Probe that way before starting any long operation.
 - The aliases also canonicalise class names for the per-level ability list
   (`abilityRequests` -> `canonicalName`), so "способности 15 мага" still finds the
   "Маг" document after "мага" was added as an alias.
+- A question naming two entities of one kind ("чем люди отличаются от орков", "чем
+  маг отличается от воина") is a head-to-head, not a generic comparison. The first
+  name is the subject, the second the one measured against; answering the second was
+  the bug behind "он пишет про орков, а спросили про людей". `raceNamesIn` /
+  `classNamesIn` return every name ordered by first mention, and `renderRaceVersus`
+  / `renderClassVersus` lead with the subject, then the two sides' views of each
+  other (for races) or both profiles (for classes).
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo
