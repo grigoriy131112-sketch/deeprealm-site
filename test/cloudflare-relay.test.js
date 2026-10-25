@@ -185,6 +185,27 @@ test('a visit reaches the owner with the page and device', async () => {
   }
 });
 
+test('a finished dialogue reaches the owner as a dialogue', async () => {
+  const stub = stubTelegram();
+  try {
+    const res = await worker.fetch(
+      request('POST', {
+        headers: { 'X-Relay-Key': 'K' },
+        body: { type: 'dialog', assistant: 'Регистратор', nick: '@someone', text: 'Игрок: привет\nРегистратор: привет' }
+      }),
+      ENV
+    );
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).telegram, true);
+    const text = stub.calls[0].payload.text;
+    assert.match(text, /^Пользователь: @someone закончил диалог Регистратор/);
+    assert.match(text, /Вот диалог:/);
+    assert.match(text, /Регистратор: привет/);
+  } finally {
+    stub.restore();
+  }
+});
+
 test('a plot sheet arrives labelled as a plot, not as a character', async () => {
   const stub = stubTelegram();
   try {

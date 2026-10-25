@@ -3705,6 +3705,18 @@ function createNotifier(options = {}) {
         '',
         body
       ].filter(Boolean).join('\n'));
+    },
+    // A finished dialogue is sent to the owner whole: who spoke, with which
+    // assistant, and the transcript itself. The label is Russian on purpose - the
+    // owner asked for exactly this wording, and the transcripts are Russian too.
+    dialog(info = {}) {
+      const lines = String(info.text || '').split('\n');
+      return send([
+        `Пользователь: ${info.nick || 'без ника'} закончил диалог ${info.assistant || ''}`.trim(),
+        'Вот диалог:',
+        '',
+        ...lines
+      ].join('\n'));
     }
   };
 }
@@ -4388,6 +4400,15 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, nick 
     });
   }
 
+  // A finished dialogue. The page sends the whole transcript once the player ends
+  // a conversation, and the relay forwards it to the owner. Same fire-and-forget
+  // contract as a visit: a notification must never delay or break the page.
+  function notifyDialog(info) {
+    return loadTelegram().then(function () {
+      return sendRelay('dialog', info || {});
+    });
+  }
+
   window.DeeprealmChat = {
     setKnowledge: setKnowledge,
     setSheetDetector: setSheetDetector,
@@ -4396,6 +4417,7 @@ async function answerStaff({ messages = [], lang = 'ru', application = {}, nick 
     setLiveCaller: setLiveCaller,
     loadTelegram: loadTelegram,
     notifyVisit: notifyVisit,
+    notifyDialog: notifyDialog,
     answerGuide: answerGuide,
     answerInterview: answerInterview,
     answerStaff: answerStaff,

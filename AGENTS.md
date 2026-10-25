@@ -542,9 +542,21 @@ permission is missing. Probe that way before starting any long operation.
   lives in `.env` / `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` and never in a
   tracked file. `data/telegram.json` (also copied to `docs/`) is public and holds
   only `relay.url`/`relay.key`.
-- Notifications cover three things the owner asked for: every site visit
+- Notifications cover four things the owner asked for: every site visit
   (`/api/visit`, throttled per browser session), every approved character/race/
-  class sheet, and every answer a staff candidate gave (paired question ‚Üí answer).
+  class sheet, every answer a staff candidate gave (paired question → answer), and
+  every finished dialogue (`/api/dialog`). The visit and the dialogue ping are sent
+  only once the handle is known: a visitor who has not passed the gate has no handle
+  to report, and sending first without it would throttle the ping that does carry
+  the handle.
+- The finished-dialogue notification is sent when a chat reply comes back with
+  `finale: true` (the player said "конец"/"finish", or the sheet was accepted). The page
+  builds the transcript from the conversation's own messages, labels the speaker
+  with the stored handle and the assistant with its role name, and reports it once:
+  the `finished` flag is stored with the conversation, so a reload or a follow-up
+  message cannot resend the same transcript. The owner's message reads
+  `Пользователь: <ник> закончил диалог <ассистент>` then `Вот диалог:`
+  and the transcript.
 - An approved interview now forwards the sheet to the owner, so `handoffText`
   no longer sends the player to an application desk. The closing line comes from
   `sentToOwnerText`: it says the sheet was sent, or names the owner when delivery

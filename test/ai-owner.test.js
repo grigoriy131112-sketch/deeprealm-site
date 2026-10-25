@@ -146,6 +146,30 @@ test('a staff notification lists every question with its answer', async () => {
   assert.match(text, /РЕКОМЕНДОВАН/);
 });
 
+test('a dialog notification names the speaker and carries the transcript', async () => {
+  const fetchImpl = fakeFetch({ ok: true });
+  const notifier = createNotifier({ config: { token: 't', chatId: 'c' }, fetchImpl });
+  const result = await notifier.dialog({
+    assistant: 'Регистратор',
+    nick: '@candidate_one',
+    text: 'Игрок: придумай мне расу\nРегистратор: вот раса'
+  });
+  assert.equal(result.ok, true);
+  const text = fetchImpl.calls[0].body.text;
+  assert.match(text, /^Пользователь: @candidate_one закончил диалог Регистратор/);
+  assert.match(text, /Вот диалог:/);
+  assert.match(text, /Игрок: придумай мне расу/);
+  assert.match(text, /Регистратор: вот раса/);
+});
+
+test('a long dialogue is split into several messages', async () => {
+  const fetchImpl = fakeFetch({ ok: true });
+  const notifier = createNotifier({ config: { token: 't', chatId: 'c' }, fetchImpl });
+  await notifier.dialog({ assistant: 'Регистратор', nick: '@n', text: 'и'.repeat(9000) });
+  assert.ok(fetchImpl.calls.length >= 3, 'the dialogue arrives in parts');
+  assert.match(fetchImpl.calls[0].body.text, /закончил диалог/, 'the header travels with the first part');
+});
+
 test('a long sheet is split into several messages', async () => {
   const fetchImpl = fakeFetch({ ok: true });
   const notifier = createNotifier({ config: { token: 't', chatId: 'c' }, fetchImpl });

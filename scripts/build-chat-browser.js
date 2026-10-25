@@ -179,6 +179,15 @@ ${parts.join('\n\n')}
     });
   }
 
+  // A finished dialogue. The page sends the whole transcript once the player ends
+  // a conversation, and the relay forwards it to the owner. Same fire-and-forget
+  // contract as a visit: a notification must never delay or break the page.
+  function notifyDialog(info) {
+    return loadTelegram().then(function () {
+      return sendRelay('dialog', info || {});
+    });
+  }
+
   window.DeeprealmChat = {
     setKnowledge: setKnowledge,
     setSheetDetector: setSheetDetector,
@@ -187,6 +196,7 @@ ${parts.join('\n\n')}
     setLiveCaller: setLiveCaller,
     loadTelegram: loadTelegram,
     notifyVisit: notifyVisit,
+    notifyDialog: notifyDialog,
     answerGuide: answerGuide,
     answerInterview: answerInterview,
     answerStaff: answerStaff,

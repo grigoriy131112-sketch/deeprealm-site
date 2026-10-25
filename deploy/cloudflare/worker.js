@@ -130,6 +130,16 @@ function staffText(info) {
   ].filter(Boolean).join('\n');
 }
 
+// A finished dialogue: who spoke, with which assistant, and the transcript.
+function dialogText(info) {
+  return [
+    `Пользователь: ${info.nick || 'без ника'} закончил диалог ${info.assistant || ''}`.trim(),
+    'Вот диалог:',
+    '',
+    ...String(info.text || '').split('\n')
+  ].join('\n');
+}
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -186,7 +196,10 @@ export default {
     if (!token || !to.length) return json({ ok: true, telegram: false });
 
     const type = body.type;
-    const text = type === 'staff' ? staffText(body) : type === 'visit' ? visitText(body) : sheetText(body);
+    const text = type === 'staff' ? staffText(body)
+      : type === 'visit' ? visitText(body)
+        : type === 'dialog' ? dialogText(body)
+          : sheetText(body);
     const parts = splitMessage(text);
     const results = [];
 

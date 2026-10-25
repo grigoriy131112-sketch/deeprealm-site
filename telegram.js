@@ -184,6 +184,18 @@ export function createNotifier(options = {}) {
         '',
         body
       ].filter(Boolean).join('\n'));
+    },
+    // A finished dialogue is sent to the owner whole: who spoke, with which
+    // assistant, and the transcript itself. The label is Russian on purpose - the
+    // owner asked for exactly this wording, and the transcripts are Russian too.
+    dialog(info = {}) {
+      const lines = String(info.text || '').split('\n');
+      return send([
+        `Пользователь: ${info.nick || 'без ника'} закончил диалог ${info.assistant || ''}`.trim(),
+        'Вот диалог:',
+        '',
+        ...lines
+      ].join('\n'));
     }
   };
 }

@@ -215,6 +215,16 @@ app.post('/api/visit', (req, res) => {
   res.json({ ok: true, telegram: notifier.enabled });
 });
 
+// A finished dialogue. The page sends the whole transcript once the player ends a
+// conversation, and the owner gets who spoke, with which assistant, and the
+// transcript itself. Like /api/visit it always answers 200: a notification is never
+// worth an error on the visitor's screen.
+app.post('/api/dialog', (req, res) => {
+  const { assistant, nick, text } = req.body || {};
+  notifier.dialog({ assistant, nick, text }).catch(() => {});
+  res.json({ ok: true, telegram: notifier.enabled });
+});
+
 // The static site (GitHub Pages) cannot run this server, so it posts its
 // notifications here and the server relays them to Telegram. That is what keeps
 // the bot token private: it never leaves the server, only the relay key does, and
@@ -253,7 +263,10 @@ app.post('/api/notify', (req, res) => {
   const body = { ...(req.body || {}) };
   delete body.key;
   const type = body.type;
-  const work = type === 'staff' ? notifier.staff(body) : type === 'visit' ? notifier.visit(body) : notifier.sheet(body);
+  const work = type === 'staff' ? notifier.staff(body)
+    : type === 'visit' ? notifier.visit(body)
+      : type === 'dialog' ? notifier.dialog(body)
+        : notifier.sheet(body);
   work.catch(() => {});
   res.json({ ok: true, telegram: notifier.enabled });
 });

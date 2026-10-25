@@ -82,6 +82,9 @@ const I18N = {
     'chat.end': 'Конец',
     'chat.endTitle': 'Завершить диалог',
     'chat.endCommand': 'конец',
+    'chat.assistantGuide': 'Проводник',
+    'chat.assistantInterview': 'Регистратор',
+    'chat.assistantStaff': 'Регистратор по кандидатам',
     guideWelcome: 'Привет, путник. Я Проводник Deeprealm. Спрошу тебя о правилах, лоре, расах, классах — или подскажу, как вступить в чат.',
     appWelcome: 'Привет. Я Регистратор Deeprealm. Расскажи о своём персонаже: имя, раса, класс, характер, сильные и слабые стороны. Хочешь — придумаю расу или класс за тебя: просто скажи «придумай мне расу сам». Если сомневаешься — спрашивай, я подскажу, что ослабить или добавить. Когда захочешь сохранить детали — напиши «добавь в анкету». Когда анкета будет готова — скажи «проверь», и я передам её владельцу.',
     chipsGuide: ['Как вступить в чат?', 'Какие есть расы?', 'Какие есть классы?', 'Расскажи про Воина', 'Что такое пасс уровней?', 'Кто в администрации?', 'Что такое Подземелье?', 'Правила про метагейм?'],
@@ -170,6 +173,9 @@ const I18N = {
     'chat.end': 'Finish',
     'chat.endTitle': 'Finish the conversation',
     'chat.endCommand': 'finish',
+    'chat.assistantGuide': 'the Guide',
+    'chat.assistantInterview': 'the Registrar',
+    'chat.assistantStaff': 'the Registrar for candidates',
     guideWelcome: 'Greetings, traveler. I am the Deeprealm Guide. Ask me about the rules, lore, races or classes — or how to join the chat.',
     appWelcome: 'Hi. I am the Deeprealm Registrar. Tell me about your character: name, race, class, personality, strengths and weaknesses. I can also make a race or a class for you — just say "make a race for me". If you are unsure, ask me and I will suggest what to weaken or add. Say "add to the application" to save details. When the sheet is ready — say "check" and I will pass it to the owner.',
     chipsGuide: ['How do I join?', 'What races are there?', 'What classes are there?', 'Tell me about the Warrior', 'What is the level pass?', 'Who is in the administration?', 'What is the Dungeon?', 'Rules on metagaming?'],
@@ -292,7 +298,10 @@ function saveNick(value) {
 }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-function newConvo() { return { id: uid(), messages: [], application: {} }; }
+// `finished` marks a conversation the player has ended. It is what tells the send
+// helpers to report the whole dialogue to the owner once, and it is remembered in
+// storage so a reload cannot make the same dialogue arrive twice.
+function newConvo() { return { id: uid(), messages: [], application: {}, finished: false }; }
 
 function loadStore() {
   let raw = null;
@@ -364,7 +373,16 @@ async function boot() {
   wireChats();
   wireLang();
   showAiStatus();
-  reportVisit();
+  // The notifier the bundled rules use must be installed even before there is a
+  // handle: it is what lets a later staff or sheet notification reach the owner on
+  // static hosting. Loading it does not send anything.
+  const chat = localChat();
+  if (chat && typeof chat.loadTelegram === 'function') chat.loadTelegram().catch(() => {});
+  // The owner wants to hear who arrives, so the ping carries the handle. It is
+  // sent only once there is one: a visitor who has not passed the gate yet has no
+  // handle to report, and sending first without it would throttle the ping that
+  // does carry the handle.
+  if (state.nick) reportVisit();
   // The player races and classes are read from the blog after the page is up, so
   // the first paint is never waiting on the network. The snapshot is shown until
   // the live list arrives.
@@ -405,6 +423,10 @@ function submitNick() {
   if (error) error.hidden = true;
   saveNick(value);
   closeNickGate();
+  // The owner asked to hear who arrives, so the handle is reported the moment the
+  // gate is passed. reportVisit() runs again here because the first one, on page
+  // load, fired before there was a handle to send.
+  reportVisit();
   return true;
 }
 
@@ -454,6 +476,47 @@ function reportVisit() {
 async function sendVisit(payload) {
   try {
     const res = await fetch('/api/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// The owner asked to be sent the whole dialogue once a player finishes it: "who
+// finished, with which assistant, here is the dialogue". This builds that
+// transcript and reports it. The labels are Russian regardless of the site
+// language, because the notification itself and the owner's reading are Russian;
+// the transcript is never shown to the player. On our server it goes through
+// /api/dialog; on static hosting there is no server, so the bundled notifier
+// relays it to Telegram. It is fire-and-forget, exactly like a visit: a
+// notification must never delay or break the chat.
+function reportDialog(type) {
+  const convo = activeConvo(type);
+  const messages = convo && Array.isArray(convo.messages) ? convo.messages : [];
+  // Nothing was said, so there is nothing to report. Sending a header over an empty
+  // transcript would only be noise.
+  if (!messages.length) return;
+  const assistant = I18N.ru['chat.assistant' + type[0].toUpperCase() + type.slice(1)] || t('chat.assistant' + type[0].toUpperCase() + type.slice(1));
+  const transcript = messages
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+    .map((m) => `${m.role === 'user' ? 'Игрок' : assistant}: ${String(m.content || '').trim()}`)
+    .join('\n');
+  if (!transcript) return;
+  const payload = { assistant, nick: state.nick || '', text: transcript };
+  sendDialog(payload).then((handled) => {
+    if (handled) return;
+    const chat = localChat();
+    if (chat && typeof chat.notifyDialog === 'function') chat.notifyDialog(payload).catch(() => {});
+  });
+}
+
+async function sendDialog(payload) {
+  try {
+    const res = await fetch('/api/dialog', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1152,6 +1215,17 @@ function attachLive(type, promise) {
   }).catch(() => {});
 }
 
+// A dialogue the player ended is reported to the owner whole, and only once per
+// conversation: the `finished` flag is stored with the chat, so a reload or a
+// follow-up message cannot make the same transcript arrive again.
+function finishDialog(type) {
+  const convo = activeConvo(type);
+  if (!convo || convo.finished) return;
+  convo.finished = true;
+  saveStore();
+  reportDialog(type);
+}
+
 async function sendGuide(text) {
   text = String(text || '').trim();
   if (!text) return;
@@ -1171,6 +1245,7 @@ async function sendGuide(text) {
     }
     addMessage('guide', 'assistant', data.reply);
     attachLive('guide', live);
+    if (data.finale) finishDialog('guide');
   } catch (err) {
     pending.remove();
     pushMsg('guideLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());
@@ -1199,6 +1274,7 @@ async function sendInterview(text) {
     // class interview keeps its template even after the opening request scrolls out
     // of the history window the engine reads.
     if (data && data.application) { convo.application = data.application; saveStore(); }
+    if (data.finale) finishDialog('interview');
   } catch (err) {
     pending.remove();
     pushMsg('interviewLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());
@@ -1237,6 +1313,7 @@ async function sendStaff(text) {
     addMessage('staff', 'assistant', data.reply);
     attachLive('staff', live);
     if (data && data.application) { convo.application = data.application; saveStore(); }
+    if (data.finale) finishDialog('staff');
   } catch (err) {
     pending.remove();
     pushMsg('staffLog', 'system', `${t('chat.error')} ${err.message || ''}`.trim());

@@ -607,3 +607,70 @@ test('the stored handle travels with a sheet sent to the owner', async () => {
   assert.equal(sheets[0].nick, '@candidate_one', 'the owner sees who it came from');
 });
 
+// --- reporting the arrival and the finished dialogue -------------------------
+// The owner asked to be told who arrives, and to be sent the whole dialogue once a
+// player finishes one: "who finished, with which assistant, here is the dialogue".
+
+test('the handle is reported to the owner the moment the gate is passed', async () => {
+  const { state, opts, calls } = relayBoot();
+  const win = await boot(state, opts);
+  // Nothing is reported before the gate is passed: there is no handle to send yet.
+  assert.equal(calls.filter((c) => c.type === 'visit').length, 0, 'no visit is sent before the handle is known');
+
+  win.document.getElementById('nickInput').value = 'arrived_player';
+  win.document.getElementById('nickSave').click();
+  await sleep(120);
+
+  const visits = calls.filter((c) => c.type === 'visit');
+  assert.equal(visits.length, 1, 'the arrival is reported once');
+  assert.equal(visits[0].nick, '@arrived_player', 'the owner sees who arrived');
+});
+
+test('finishing a dialogue sends the whole transcript to the owner once', async () => {
+  const { state, opts, calls } = relayBoot({ dr_nick: '@candidate_one' });
+  const win = await boot(state, opts);
+  await say(win, 'interview', 'придумай мне расу сам');
+  await say(win, 'interview', 'конец');
+  await sleep(120);
+
+  const dialogs = calls.filter((c) => c.type === 'dialog');
+  assert.equal(dialogs.length, 1, 'the finished dialogue is reported exactly once');
+  assert.equal(dialogs[0].nick, '@candidate_one', 'the owner sees who finished');
+  assert.match(dialogs[0].assistant, /Регистратор/, 'the owner sees which assistant it was');
+  assert.match(dialogs[0].text, /Игрок: конец/, 'the transcript carries the player, not just the assistant');
+  assert.match(dialogs[0].text, /Регистратор:/, 'the transcript carries the assistant too');
+
+  // A later message in the same, already-finished conversation must not resend it.
+  await say(win, 'interview', 'конец');
+  await sleep(120);
+  assert.equal(calls.filter((c) => c.type === 'dialog').length, 1, 'the same dialogue is not sent twice');
+});
+
+test('a dialogue report survives a reload without being repeated', async () => {
+  const state = { dr_nick: '@candidate_one' };
+  const { opts, calls } = relayBoot(state);
+  const win = await boot(state, opts);
+  await say(win, 'interview', 'конец');
+  await sleep(120);
+  assert.equal(calls.filter((c) => c.type === 'dialog').length, 1);
+
+  // A reload rebuilds the app from storage; the finished flag travels with the
+  // conversation, so the transcript is not sent again.
+  const again = await boot(state, opts);
+  await say(again, 'interview', 'конец');
+  await sleep(120);
+  assert.equal(calls.filter((c) => c.type === 'dialog').length, 1, 'a reload does not resend the dialogue');
+});
+
+test('the guide dialogue is reported with the guide named', async () => {
+  const { state, opts, calls } = relayBoot({ dr_nick: '@traveler' });
+  const win = await boot(state, opts);
+  await say(win, 'guide', 'Какие есть расы?');
+  await say(win, 'guide', 'конец');
+  await sleep(120);
+
+  const dialogs = calls.filter((c) => c.type === 'dialog');
+  assert.equal(dialogs.length, 1);
+  assert.match(dialogs[0].assistant, /Проводник/);
+  assert.match(dialogs[0].text, /Игрок: Какие есть расы\?/);
+});
