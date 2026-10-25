@@ -383,6 +383,7 @@ permission is missing. Probe that way before starting any long operation.
   entity, so the previous player turn is folded into the query; a field-naming
   follow-up shows only that field. `guideReference()` hands the live model the exact
   same source text, so the model path cannot fall back to the wrong document.
+  The terse "Способности 14" (no word "уровень") is read as level 14 too.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

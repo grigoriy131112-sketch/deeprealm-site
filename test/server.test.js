@@ -298,6 +298,20 @@ test('a short field follow-up answers with that field only', () => {
   assert.doesNotMatch(abilities, /Ресурс: Выносливость/, 'not the class overview again');
 });
 
+test('the terse "Способности 14" is read as level 14', () => {
+  const reply = localGuide({
+    messages: [
+      { role: 'user', content: 'класс воин' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'Способности 14' }
+    ], lang: 'ru'
+  });
+  assert.match(reply, /14 уровень/);
+  assert.match(reply, /Удар бога/);
+  assert.doesNotMatch(reply, /1 уровень/);
+  assert.doesNotMatch(reply, /Пасс уровней/);
+});
+
 test('the model reference carries the appearance text for a looks question', () => {
   const reference = guideReference({ messages: [{ role: 'user', content: 'как выглядит эльф' }], lang: 'ru' });
   assert.match(reference, /Внешность:/);

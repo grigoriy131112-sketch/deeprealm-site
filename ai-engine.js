@@ -454,13 +454,17 @@ const ORDINALS = {
   '15': 15, 'пятнадцат': 15
 };
 
-// "способности первого уровня", "что на 5 уровне", "уровень 3". Returns the level
-// number or 0 when the question is not pinned to one.
+// "способности первого уровня", "что на 5 уровне", "уровень 3", and the terse
+// "способности 14". Returns the level number or 0 when the question is not pinned
+// to one.
 function levelFromQuery(text) {
   const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
   let m = s.match(/уровен[ья][\s-]*(\d{1,2})/);
   if (m) return Number(m[1]);
   m = s.match(/(\d{1,2})\s*(?:-?го\s*)?уровн/);
+  if (m) return Number(m[1]);
+  // "способности 14" / "способности на 14" — no word "уровень" at all.
+  m = s.match(/способност[а-я]*\s*(?:на\s+)?(\d{1,2})/);
   if (m) return Number(m[1]);
   for (const [key, value] of Object.entries(ORDINALS)) {
     if (new RegExp(`(?:^|[^а-яa-z])${key}[а-я]*\\s+уровн`).test(s)) return value;
