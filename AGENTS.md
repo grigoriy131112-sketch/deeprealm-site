@@ -394,6 +394,17 @@ permission is missing. Probe that way before starting any long operation.
   returned the character template. The list check is narrowed to a category word
   next to "какие/список" so "какие у них преимущества" is not read as a request for
   the races overview.
+- A comparison that names its subject ("чем люди отличаются от других", "чем маг
+  отличается от других классов") forces the named race or class to the front of the
+  hits. The everyday plural ("люди") and the short stem ("маг") are not the stored
+  key ("Человек", "Маг"), so the right profile could lose the match and the answer
+  compared a different entity. `RACE_ALIASES` / `CLASS_ALIASES` map the written
+  forms to the base name; matching is boundary-aware (`hasWord`) so "маг" does not
+  swallow "магия". The classes' comparison shows the essence, resource, attack and
+  specializations - a class has no relations, its branches are how it differs.
+- The aliases also canonicalise class names for the per-level ability list
+  (`abilityRequests` -> `canonicalName`), so "способности 15 мага" still finds the
+  "Маг" document after "мага" was added as an alias.
 - The noun is matched loosely (`рас+[а-яё]{0,3}`, `класс?[а-яё]{0,3}`) because
   players type "рассу" and "клас" as often as the dictionary spelling. A strict
   "расу" was the bug behind "he keeps asking me to describe the race": the typo

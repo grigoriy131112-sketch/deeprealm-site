@@ -112,6 +112,8 @@ const GUIDE_SYSTEM = (lang) => `Ты — Проводник чата Deeprealm: 
 3ж. ЕСЛИ ВЫШЕ ДАНА «СПРАВКА» — это источник фактов: перескажи её своими словами и не добавляй ничего, чего в ней нет.
 3з. СПРАВКА относится ТОЛЬКО к текущему вопросу. Не отвечай на текущий вопрос содержанием прошлых ответов: если игрок раньше спрашивал про способности классов, а теперь спросил «как выглядят эльфы» — отвечай про внешность эльфов, а не про способности. Не подменяй шаблоном анкеты вопрос о расе, классе или их отличиях.
 3и. СРАВНЕНИЕ РАС. На вопрос «чем они отличаются от других расс», «какие у них плюсы и минусы», «преимущества и недостатки по сравнению с другими» отвечай по «СПРАВКЕ»: сначала суть расы (сильные стороны и слабости), затем её отношения с другими народами. Не пересказывай список полей внешности — это ответ на «как выглядит», а не на «чем отличается». Не выдавай вместо этого анкету персонажа.
+3к. СРАВНЕНИЕ КЛАССОВ. На вопрос «чем <класс> отличается от других классов», «в чём его преимущества над другими» отвечай по «СПРАВКЕ»: суть класса (для чего он), ресурс, базовую атаку и его специализации. Не выдавай вместо этого список способностей по уровням.
+3л. ИМЯ В ВОПРОСЕ — ГЛАВНОЕ. Если игрок назвал расу или класс (в том числе во множественном числе: «люди», «эльфы», «маги», «воины») — отвечай именно про них, даже если прошлый вопрос был про другую расу или класс. Не продолжай прошлую тему вопреки названному существу.
 4. Ссылки давай только те, что есть в информации ниже. Никогда не придумывай ссылки, кнопки, файлы и адреса.
 
 ССЫЛКИ И КОНТАКТЫ:
@@ -1690,6 +1692,26 @@ function renderRaceComparison(doc, lang) {
   return [head, essence, '', rel ? rel.text : ''].filter((p) => p !== undefined).join('\n').trim();
 }
 
+// The class counterpart: a class is not compared by relations but by what it is for
+// and how it plays. "Чем маг отличается от других классов" gets the class's essence,
+// its resource and attack, and its three specializations - the ways it can branch,
+// which is how the classes actually differ.
+function renderClassComparison(doc, lang) {
+  const d = doc.data || {};
+  const name = doc.name;
+  const specDoc = docs().find((s) => s.id === `spec:${name}`);
+  const specs = specDoc ? specDoc.specNames : [];
+  const head = `${pick(lang, 'Чем отличается', 'How it differs')} ${name} ${pick(lang, 'от других классов', 'from other classes')}:`;
+  const lines = [
+    head,
+    doc.classBrief ? `${name} — ${doc.classBrief}.` : '',
+    d.resource ? `${pick(lang, 'Ресурс', 'Resource')}: ${d.resource}.` : '',
+    d.basic_attack ? `${pick(lang, 'Базовая атака', 'Basic attack')}: ${d.basic_attack}.` : '',
+    specs.length ? `${pick(lang, 'Специализации', 'Specializations')}: ${specs.join(', ')}.` : ''
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
 const ORDINALS = {
   '1': 1, 'перв': 1, '2': 2, 'втор': 2, '3': 3, 'трет': 3, '4': 4, 'четверт': 4, '5': 5, 'пят': 5,
   '6': 6, 'шест': 6, '7': 7, 'седьм': 7, '8': 8, 'восьм': 8, '9': 9, 'девят': 9, '10': 10, 'десят': 10,
@@ -1715,6 +1737,73 @@ function levelFromQuery(text) {
   return 0;
 }
 
+// A race is known by its singular base name ("Человек", "Эльф"), but players write
+// the plural everyday word ("люди", "эльфы", "дворфы"). The plural is a different
+// stem, so retrieval on the noun alone can miss the race and the pronoun rule then
+// fails to see the entity, folding in the wrong previous turn. Each entry maps a
+// written form to the base name it means.
+const RACE_ALIASES = {
+  'человек': ['люди', 'людей', 'людям', 'людьми', 'людях', 'людь', 'человек', 'люд'],
+  'эльф': ['эльф', 'эльфы', 'эльфов', 'эльфам', 'эльфами', 'эльфах'],
+  'драконорождённый': ['драконорожденный', 'драконорождённые', 'драконорожденные', 'драконы', 'дракон', 'драконам', 'драконами'],
+  'дворф': ['дворф', 'дворфы', 'дворфов', 'дворфам', 'дворфами', 'гном', 'гномы', 'гномов'],
+  'орк': ['орк', 'орки', 'орков', 'оркам', 'орками', 'орках'],
+  'павший': ['павший', 'павшие', 'павших', 'павшим', 'павшими']
+};
+
+// The base race name a piece of text refers to, or '' when it names none. Both the
+// canonical name and every alias are matched.
+function raceNameIn(text) {
+  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+  for (const [base, forms] of Object.entries(RACE_ALIASES)) {
+    const all = [base.replace(/ё/g, 'е'), ...forms];
+    if (all.some((f) => hasWord(s, f))) return base;
+  }
+  return '';
+}
+
+// The base classes, known by the same everyday inflections the races are. The
+// short stem "маг" must not swallow "магия" or "магический", so matching is
+// boundary-aware rather than a substring test.
+const CLASS_ALIASES = {
+  'Воин': ['воин', 'воины', 'воинов', 'воинам', 'воинами', 'воина'],
+  'Лучник': ['лучник', 'лучники', 'лучников', 'лучникам', 'лучниками', 'лучника'],
+  'Маг': ['маг', 'маги', 'магов', 'магам', 'магами', 'магах', 'мага'],
+  'Некромант': ['некромант', 'некроманты', 'некромантов', 'некромантам', 'некромантами', 'некроманта'],
+  'Чернокнижник': ['чернокнижник', 'чернокнижники', 'чернокнижников', 'чернокнижникам', 'чернокнижника']
+};
+
+// A Cyrillic-safe whole-word test: JS \b is ASCII-only and never fires between
+// Cyrillic letters, so the boundaries are written out.
+function hasWord(s, w) {
+  if (!w) return false;
+  const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^а-яёa-z])${escaped}(?![а-яёa-z])`).test(s);
+}
+
+// The base class name a piece of text refers to, or '' when it names none.
+function classNameIn(text) {
+  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+  for (const [base, forms] of Object.entries(CLASS_ALIASES)) {
+    const all = [base.toLowerCase().replace(/ё/g, 'е'), ...forms];
+    if (all.some((f) => hasWord(s, f))) return base;
+  }
+  return '';
+}
+
+// The canonical stored name behind a matched alias ("мага" -> "Маг", "эльфов" ->
+// "эльф"), so a caller that found the alias still looks up the real document.
+function canonicalName(name) {
+  const n = String(name || '').toLowerCase().replace(/ё/g, 'е');
+  for (const [base, forms] of Object.entries(CLASS_ALIASES)) {
+    if (n === base.toLowerCase().replace(/ё/g, 'е') || forms.includes(n)) return base;
+  }
+  for (const [base, forms] of Object.entries(RACE_ALIASES)) {
+    if (n === base || forms.includes(n)) return base;
+  }
+  return name;
+}
+
 // The names the corpus can answer about, used to tell "он/она" (no topic) from a
 // real question that merely lacks a noun.
 function knownNames() {
@@ -1723,6 +1812,9 @@ function knownNames() {
   for (const n of Object.keys(k.classes?.base_classes || {})) names.add(n.toLowerCase());
   for (const n of k.races?.list || []) names.add(String(n).toLowerCase());
   for (const n of Object.keys(k.races?.details || {})) names.add(String(n).toLowerCase());
+  // The everyday plural forms ("люди", "эльфы", "маги") count as naming the entity too.
+  for (const forms of Object.values(RACE_ALIASES)) for (const f of forms) names.add(f);
+  for (const forms of Object.values(CLASS_ALIASES)) for (const f of forms) names.add(f);
   for (const list of Object.values(k.classes?.specializations || {})) {
     for (const s of (Array.isArray(list) ? list : Object.keys(list || {}))) names.add(String(s).toLowerCase());
   }
@@ -1755,14 +1847,14 @@ function abilityRequests(text) {
     const lvl = levelFromQuery(seg) || bare;
     if (!lvl) continue;
     const name = names.find((n) => seg.includes(n));
-    if (name) out.push({ name, level: lvl });
+    if (name) out.push({ name: canonicalName(name), level: lvl });
   }
   return out;
 }
 
 // The per-level ability list for one class, used for the multi-class questions.
 function renderAbilityList(name, level, lang) {
-  const doc = docs().find((d) => d.classLevels && String(d.name).toLowerCase() === name);
+  const doc = docs().find((d) => d.classLevels && String(d.name).toLowerCase() === String(name).toLowerCase());
   if (!doc) return '';
   return `${doc.title}:\n${renderDoc(doc, lang, level)}`;
 }
@@ -1818,6 +1910,20 @@ function pickAnswer(history) {
     if (prior && tokens(prior).length) query = `${prior} ${q}`;
   }
   let hits = retrieve(query, docs(), 3);
+  // A comparison names its subject ("чем люди отличаются от других"), but the
+  // everyday plural ("люди") and the short stem ("маг") are not the stored key, so
+  // the right profile can lose the match and the answer compares the wrong thing.
+  // Only the comparison forces the named entity to the front; a sub-aspect question
+  // ("специализации мага") keeps its own document.
+  if (compare) {
+    const race = raceNameIn(q);
+    const cls = classNameIn(q);
+    const wantId = race ? `race-det:${race}` : cls ? `class:${cls}` : '';
+    if (wantId) {
+      const own = docs().find((d) => d.id === wantId);
+      if (own) hits = [{ doc: own, score: 99 }, ...hits.filter((h) => h.doc !== own)];
+    }
+  }
   // "Какие есть классы?" scores on the shared word "класс", which every class
   // document contains. Prefer the overview in that case so the answer is the list.
   if (LIST_RE.test(q)) {
@@ -1863,6 +1969,7 @@ function guideReference({ messages = [], lang = 'ru' } = {}) {
   const { brief, look, followUp, focus, level, compare, best } = pickAnswer(history);
   if (!best) return multi[0] || '';
   if (compare && best.raceFields) return renderRaceComparison(best, lang);
+  if (compare && best.data) return renderClassComparison(best, lang);
   if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
   if (brief) return briefDoc(best, lang);
   return renderDoc(best, lang, level);
@@ -1890,6 +1997,7 @@ function localGuide({ messages = [], lang = 'ru' } = {}) {
   }
   if (brief) return briefDoc(best, lang);
   if (compare && best.raceFields) return renderRaceComparison(best, lang);
+  if (compare && best.data) return renderClassComparison(best, lang);
   if ((look || followUp) && best.raceFields) return renderRaceDetails(best, lang, focus);
   const body = renderDoc(best, lang, level);
   const tail = wantsLink(q) || best.kind === 'chat' ? linkLine(lang) : '';

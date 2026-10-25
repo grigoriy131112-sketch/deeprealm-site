@@ -385,6 +385,50 @@ test('an anaphoric follow-up keeps the entity named two turns back', () => {
   assert.doesNotMatch(reply, /Базовые расы:/);
 });
 
+test('a comparison names the race in the everyday plural, not the stored singular', () => {
+  // The owner: after a player race, "а чем люди отличаются от других?" answered with
+  // the player race instead of the humans. "люди" is a different stem than the stored
+  // "Человек", so the named race must be forced to the front.
+  const reply = localGuide({
+    messages: [
+      { role: 'user', content: 'Расскажи про разумные цветы' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'Хорошо, а чем люди отличаются от других?' }
+    ], lang: 'ru'
+  });
+  assert.match(reply, /Человек/);
+  assert.match(reply, /К Эльфам/);
+  assert.doesNotMatch(reply, /разумные цветы/i);
+});
+
+test('a class comparison gives its essence, resource and specializations', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'Чем маг отличается от других классов?' }], lang: 'ru' });
+  assert.match(reply, /Чем отличается Маг/);
+  assert.match(reply, /мана и стихии/);
+  assert.match(reply, /Ресурс: Мана/);
+  assert.match(reply, /Специализации: Элементалист, Арканный маг, Хронист\/Боевой маг/);
+});
+
+test('a class comparison also works from the plural and as a follow-up', () => {
+  const plural = localGuide({ messages: [{ role: 'user', content: 'А чем воины отличаются от других?' }], lang: 'ru' });
+  assert.match(plural, /Чем отличается Воин/);
+  const followUp = localGuide({
+    messages: [
+      { role: 'user', content: 'Расскажи про магов' },
+      { role: 'assistant', content: '...' },
+      { role: 'user', content: 'А чем они отличаются от других?' }
+    ], lang: 'ru'
+  });
+  assert.match(followUp, /Чем отличается Маг/);
+  assert.doesNotMatch(followUp, /Человек/);
+});
+
+test('an ability question still resolves the class alias to its canonical name', () => {
+  const reply = localGuide({ messages: [{ role: 'user', content: 'способности 15 мага и 10 некроманта' }], lang: 'ru' });
+  assert.match(reply, /Способности Маг — 15 уровень/);
+  assert.match(reply, /Способности Некромант — 10 уровень/);
+});
+
 test('a list question still returns the overview, not one member', () => {
   assert.match(localGuide({ messages: [{ role: 'user', content: 'Какие есть расы?' }], lang: 'ru' }), /Базовые расы:/);
   assert.match(localGuide({ messages: [{ role: 'user', content: 'какие есть классы' }], lang: 'ru' }), /Базовые классы:/);
