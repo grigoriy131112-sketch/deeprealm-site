@@ -218,13 +218,17 @@ document.getElementById('check').onclick = async () => {
   const features = Array.isArray(data.features) ? data.features : [];
   const missing = ['nick', 'dialog'].filter((f) => !features.includes(f));
   if (missing.length) {
-    say(checkState, 'Сервер отвечает, но в нём ещё старый код: он не присылает ник '
-      + 'игрока и итог диалога. Нажмите «Скопировать код» и разверните его в Cloudflare '
-      + 'заново.', 'bad');
+    // The rev is shown on purpose: the owner can read it back to tell a saved-but-
+    // not-deployed Worker (still the old rev) from a genuinely new one.
+    say(checkState, 'Сервер отвечает, но в нём ещё старый код (rev '
+      + (data.rev == null ? '?' : data.rev) + '): он не присылает ник игрока и итог '
+      + 'диалога. Нажмите «Скопировать код», вставьте его в Cloudflare и нажмите '
+      + 'именно «Deploy» — одного «Save» мало.', 'bad');
     return;
   }
 
-  say(checkState, 'Сервер видит токен. Отправляю тест в Телеграм…');
+  say(checkState, 'Сервер видит токен (rev ' + (data.rev == null ? '?' : data.rev)
+    + '). Отправляю тест в Телеграм…');
   try {
     const res = await fetch(base + '/api/notify', {
       method: 'POST',
