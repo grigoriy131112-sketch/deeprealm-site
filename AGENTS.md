@@ -580,6 +580,14 @@ permission is missing. Probe that way before starting any long operation.
   `features` whenever the message shapes change, and tell the owner to re-paste.
   `docs/worker.js` is only the copy Pages serves next to the copy page, never a
   live deploy.
+- The Worker can also be deployed from a sandbox with a Cloudflare API token
+  (Account → Workers Scripts: Edit), which avoids the owner's manual paste. It is
+  an ES module, so the PUT must send `metadata.main_module` and the part as
+  `type=application/javascript+module`, or Cloudflare rejects it with
+  "Unexpected token 'export'". The bot token is not a dashboard secret in this
+  setup - it sits in `DEFAULT_TOKEN` inside the live script - so read the live
+  script first and carry that value into the new one before uploading, otherwise
+  notifications stop. Verify with `/api/version` (expect the new `rev`).
 
 ## Permanent hosting: GitHub Pages (decided 2026-09-25)
 
