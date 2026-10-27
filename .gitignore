@@ -6,3 +6,9 @@ node_modules/
 # Telegraph account token for scripts/publish-telegraph.js
 .telegraph-token
 .telegraph-page
+
+# RP bot: saved player sheets
+bot/data/
+
+# Bundled Cloudflare Worker (built by deploy/cloudflare/rp-bot/build.mjs)
+deploy/cloudflare/rp-bot/dist/

@@ -754,3 +754,45 @@ permission is missing. Probe that way before starting any long operation.
 - `scripts/publish-telegraph.js` publishes the Russian game article to telegra.ph.
   The account token (`.telegraph-token`) and page path (`.telegraph-page`) are
   gitignored; the script edits the same page on later runs.
+
+## RP dice bot (bot/, added 2026-10-04)
+
+- A second, independent Telegram bot (**@koobboobbot**) that only rolls dice for
+  the role-play. It is not the owner-notification bot (`@deeprealbot`); they share
+  no code path.
+- Flow: a player registers **in a private chat** with `/reg Имя` plus the fourteen
+  ratings, and in the **game group** ends a post with `/roll`. The bot answers in
+  the group with three d20 rolls - crit, block, dodge - each with **half of the
+  matching characteristic added, rounded down** (Strength 8 -> +4, Reaction 5 ->
+  +2). `bot/stats.js` `bonus()` is the only place that halving happens.
+- An attack **always lands**; the dice decide only crit, block and dodge. Crit is a
+  natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a natural 1
+  on the crit roll is the fumble. A post may add `если крит — <действие>`, which the
+  bot echoes only when the crit roll lands (`bot/parse.js` `extractConditional`).
+- The rules and the 8-10 feats live **inside the bot** as data: `bot/rules/combat.js`
+  and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
+  spoken rules and the rolled rules cannot drift. Turn economy: 1 full + 2 partial
+  actions, movement up to 2 cells per partial slot.
+- Run it with `npm run bot`. The token goes in `TELEGRAM_RP_BOT_TOKEN` (repo `.env`,
+  gitignored) - never in code. Sheets are stored at `bot/data/players.json`
+  (gitignored), keyed by Telegram id.
+- **Live host: a Cloudflare Worker** (`deploy/cloudflare/rp-bot/`), not Render. A
+  webhook worker is always on and free; a Render instance would sleep and drop
+  updates. Telegram POSTs each update to
+  `https://deeprealm-rp-bot.grigoriy131112.workers.dev/`; the worker bundles the
+  same `bot/bot.js` core (via `esbuild`, `npm run build:rp-bot`) and swaps the
+  store for KV (`kv-store.js`, namespace `deeprealm-rp-bot-players`,
+  `e5b0b5d3492640c9a0e6b0ca259e595e`). Redeploy with
+  `node scripts/deploy-rp-bot.mjs` (needs `CLOUDFLARE_API_TOKEN`,
+  `CLOUDFLARE_ACCOUNT_ID`, `TELEGRAM_RP_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
+  `RP_KV_ID`). The worker rejects any POST whose
+  `X-Telegram-Bot-Api-Secret-Token` header does not match.
+- **Group privacy**: the bot must have privacy mode **off** in @BotFather
+  (`/setprivacy` -> Disable), otherwise it never sees a group post ending in
+  `/roll`. `can_read_all_group_messages: false` in `getMe` means it is still on.
+  This is a manual @BotFather step and cannot be set from the API.
+- The site server (`server.js`) can also run the bot on the same process when
+  `TELEGRAM_RP_BOT_TOKEN` is set (set `RP_BOT=off` to keep it off) - useful if the
+  site is already always-on. Only one of the Worker webhook and the long-poll loop
+  may run at a time, or the two will fight over updates; `getWebhookInfo` /
+  `deleteWebhook` switch between them.

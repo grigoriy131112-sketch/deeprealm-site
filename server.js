@@ -354,6 +354,15 @@ if (process.env.NODE_ENV !== 'test') {
     console.log('ИИ-чаты работают без ключа: встроенный движок отвечает всегда, а ключ лишь улучшает формулировки.');
   });
 
+  // The RP dice bot rides on the same always-on process as the site, so it needs
+  // no second host. It is optional: without a token it stays off and the site is
+  // unaffected. Set RP_BOT=off to keep it off even when a token is present.
+  if (String(process.env.RP_BOT || '').toLowerCase() !== 'off' && process.env.TELEGRAM_RP_BOT_TOKEN) {
+    import('./bot/run.js')
+      .then(({ startBot }) => startBot({ token: process.env.TELEGRAM_RP_BOT_TOKEN }))
+      .catch((err) => console.error('RP-бот не запустился:', err && err.message));
+  }
+
   // Keep player-made races/classes in sync with the blog; the site only reads the local cache.
   const SYNC_MINUTES = Number(process.env.BLOG_SYNC_MINUTES || 60);
   if (SYNC_MINUTES > 0) {

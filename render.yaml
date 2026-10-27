@@ -27,6 +27,13 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_IDS
         sync: false
+      # The RP dice bot runs on this same process, so it needs no second host.
+      # Leave the token unset to keep it off. Set RP_BOT=off to disable it even
+      # when a token is present.
+      - key: TELEGRAM_RP_BOT_TOKEN
+        sync: false
+      - key: RP_BOT
+        value: "on"
       # The static site (GitHub Pages) relays its notifications through this
       # server so the bot token never reaches the browser. The value goes in the
       # public docs/data/telegram.json as relay.key.

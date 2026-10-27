@@ -6,6 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "bot": "node bot/index.js",
+    "build:rp-bot": "node deploy/cloudflare/rp-bot/build.mjs",
     "test": "NODE_ENV=test node --test test/*.test.js",
     "build-chat-browser": "node scripts/build-chat-browser.js",
     "build-pages": "node scripts/build-chat-browser.js && node scripts/build-pages.js"
@@ -17,6 +19,7 @@
     "node": ">=18"
   },
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "jsdom": "^30.1.1"
   }
 }

@@ -1,0 +1,14 @@
+name = "deeprealm-rp-bot"
+main = "dist/worker.js"
+compatibility_date = "2026-09-27"
+
+# Player sheets. The namespace already exists for the live bot:
+#   deeprealm-rp-bot-players -> e5b0b5d3492640c9a0e6b0ca259e595e
+# Recreate it with `wrangler kv namespace create RP_PLAYERS` if starting over.
+[[kv_namespaces]]
+binding = "RP_PLAYERS"
+id = "e5b0b5d3492640c9a0e6b0ca259e595e"
+
+# Secrets (never in this file):
+#   wrangler secret put TELEGRAM_RP_BOT_TOKEN
+#   wrangler secret put TELEGRAM_WEBHOOK_SECRET
