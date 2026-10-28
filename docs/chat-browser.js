@@ -3918,6 +3918,24 @@ function callModel(messages, options) {
   return modelCaller(messages, options);
 }
 
+// A model endpoint can accept a request and then never answer. An unbounded call
+// would leave the chat stuck on "thinking" forever - the freeze a player reported
+// after "проверь", where the Interviewer kept "thinking" and then said nothing.
+// Every model call is therefore capped; a timeout is treated like any other
+// failure, so the built-in engine answers instead of the chat hanging.
+const TIMEOUT = Symbol('model-timeout');
+const MODEL_TIMEOUT_MS = 25000;
+function withTimeout(promise, ms) {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => { if (!done) { done = true; resolve(TIMEOUT); } }, ms);
+    Promise.resolve(promise).then(
+      (value) => { if (!done) { done = true; clearTimeout(timer); resolve(value); } },
+      () => { if (!done) { done = true; clearTimeout(timer); resolve(TIMEOUT); } }
+    );
+  });
+}
+
 // A notification must never hold the player's answer hostage. The relay and the
 // Telegram endpoint can accept a request and then never answer, and a send that
 // never settles leaves the chat stuck on "the Interviewer is thinking" - which is
@@ -3956,15 +3974,16 @@ async function askModelOrLocal(promptMessages, localAnswer, options = {}) {
     const better = (async () => {
       if (freeCaller && options.keyless) {
         try {
-          const reply = await freeCaller(promptMessages, options);
-          if (reply && String(reply).trim()) return stripMarkdown(withEnd(reply));
+          const reply = await withTimeout(freeCaller(promptMessages, options), options.modelTimeoutMs || MODEL_TIMEOUT_MS);
+          if (reply && reply !== TIMEOUT && String(reply).trim()) return stripMarkdown(withEnd(reply));
         } catch { /* the free public endpoint is often down: fall through */ }
       }
       if (!(liveCaller && options.live)) return '';
-      const spoken = await liveCaller(liveMessages(promptMessages, local, options), {
+      const spoken = await withTimeout(liveCaller(liveMessages(promptMessages, local, options), {
         temperature: 0.8,
         timeoutMs: options.liveTimeoutMs || 30000
-      });
+      }), options.modelTimeoutMs || MODEL_TIMEOUT_MS);
+      if (spoken === TIMEOUT) return '';
       // The patch replaces the message text directly, so it must carry the closing
       // word itself: the caller's own withEnd only touches what it returns first.
       return spoken && keepsEssentials(withEnd(spoken), withEnd(local)) ? stripMarkdown(withEnd(spoken)) : '';
@@ -3974,14 +3993,14 @@ async function askModelOrLocal(promptMessages, localAnswer, options = {}) {
   }
   if (modelCaller) {
     try {
-      const reply = await callModel(promptMessages, options);
-      if (reply && String(reply).trim()) return { reply: stripMarkdown(reply), by: 'model' };
+      const reply = await withTimeout(callModel(promptMessages, options), options.modelTimeoutMs || MODEL_TIMEOUT_MS);
+      if (reply !== TIMEOUT && reply && String(reply).trim()) return { reply: stripMarkdown(reply), by: 'model' };
     } catch { /* no key, expired key, quota or network: the built-in engine answers */ }
   }
   if (freeCaller && options.keyless) {
     try {
-      const reply = await freeCaller(promptMessages, options);
-      if (reply && String(reply).trim()) return { reply: stripMarkdown(reply), by: 'keyless' };
+      const reply = await withTimeout(freeCaller(promptMessages, options), options.modelTimeoutMs || MODEL_TIMEOUT_MS);
+      if (reply !== TIMEOUT && reply && String(reply).trim()) return { reply: stripMarkdown(reply), by: 'keyless' };
     } catch { /* the free public endpoint is often down: fall through */ }
   }
   const local = localAnswer();
@@ -3990,11 +4009,11 @@ async function askModelOrLocal(promptMessages, localAnswer, options = {}) {
   // discarded and the exact engine text is used instead.
   if (liveCaller && options.live) {
     try {
-      const spoken = await liveCaller(liveMessages(promptMessages, local, options), {
+      const spoken = await withTimeout(liveCaller(liveMessages(promptMessages, local, options), {
         temperature: 0.8,
         timeoutMs: options.liveTimeoutMs
-      });
-      if (spoken && keepsEssentials(withEnd(spoken), withEnd(local))) return { reply: stripMarkdown(spoken), by: 'live' };
+      }), options.modelTimeoutMs || MODEL_TIMEOUT_MS);
+      if (spoken !== TIMEOUT && spoken && keepsEssentials(withEnd(spoken), withEnd(local))) return { reply: stripMarkdown(spoken), by: 'live' };
     } catch { /* the free endpoint is unreliable: the engine's own text stands */ }
   }
   return { reply: local, by: 'local' };
@@ -4051,7 +4070,7 @@ async function answerGuide({ messages = [], lang = 'ru', onLive = null } = {}) {
   return { reply: withEnd(reply), source: by, livePending: Boolean(livePending) };
 }
 
-async function answerInterview({ messages = [], lang = 'ru', application = {}, nick = '', notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS } = {}) {
+async function answerInterview({ messages = [], lang = 'ru', application = {}, nick = '', notify = null, onLive = null, notifyTimeoutMs = NOTIFY_TIMEOUT_MS, modelTimeoutMs = MODEL_TIMEOUT_MS } = {}) {
   const history = toHistory(messages, 30);
   const appState = application && typeof application === 'object' ? application : {};
   // The checklist the walk is on is remembered in the draft, so a race or class
@@ -4092,6 +4111,7 @@ async function answerInterview({ messages = [], lang = 'ru', application = {}, n
       ], localReply, {
         live: true,
         role: 'interview',
+        modelTimeoutMs,
         onLive: onLive ? (attempt) => onLive(attempt.then((spoken) => (spoken ? decorate(spoken) : ''))) : null
       });
   const raw = asked.reply;

@@ -11,7 +11,7 @@ import {
   sentToOwnerText, applicationTitle, staffAnswerPairs, setKnowledge, findRole,
   STAFF_MAX_QUESTIONS, setSheetDetector
 } from '../chat-core.js';
-import { setNotifier, answerInterview, answerStaff, setLiveCaller, answerGuide } from '../chat-answers.js';
+import { setNotifier, answerInterview, answerStaff, setLiveCaller, answerGuide, setModelCaller } from '../chat-answers.js';
 import { localInterview, parseFieldEdit, finishSheet, generatedSheet } from '../ai-engine.js';
 import { generateClass } from '../ai-gen.js';
 import { detectSheetKind } from '../publish.js';
@@ -318,6 +318,18 @@ test('a notification that never settles cannot freeze the approval', async () =>
   assert.match(out.reply, /Отправить владельцу автоматически не удалось/);
   assert.match(out.reply, /Анкета уже у владельца/);
   setNotifier(null);
+});
+
+test('a model call that never answers cannot freeze the interview', async () => {
+  // The model endpoint can accept a request and then never answer. Without a cap
+  // the whole reply hangs, which is the "the Interviewer keeps thinking and then
+  // says nothing" freeze a player reported after "проверь". The capped call falls
+  // through to the built-in engine, so the player still gets an answer.
+  setModelCaller(() => new Promise(() => {}));
+  const out = await answerInterview({ messages: APPROVED_DIALOGUE, lang: 'ru', modelTimeoutMs: 40 });
+  assert.ok(out.reply && out.reply.length > 0, 'the player still gets a reply');
+  assert.match(out.reply, /конец/);
+  setModelCaller(null);
 });
 
 test('a finished staff interview sends all the answers to the owner', async () => {
