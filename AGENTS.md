@@ -796,3 +796,14 @@ permission is missing. Probe that way before starting any long operation.
   site is already always-on. Only one of the Worker webhook and the long-poll loop
   may run at a time, or the two will fight over updates; `getWebhookInfo` /
   `deleteWebhook` switch between them.
+- **The bot must be a member of the game group** (`t.me/Deeprealm5`,
+  `-1004302256948`) or it never receives group updates. `getChatMember` returning
+  `status: "left"` is the tell; add `@koobboobbot` to the group to fix it. Also,
+  that group is a **forum** (`is_forum: true`), so a reply must carry the
+  `message_thread_id` of the post it answers, or it lands in the wrong topic.
+- **Never fire `send()` without awaiting it.** `bot/bot.js`'s `reply()` is async
+  on purpose: a Worker that returns from `fetch` while `sendMessage` is still in
+  flight has that request cancelled by the runtime, so the player sees nothing and
+  the bot looks dead. `worker.js` reports each send's outcome in its JSON reply
+  (`replies`/`results`) precisely so a webhook test can tell "answered" from
+  "silently dropped"; check that field before concluding a webhook works.

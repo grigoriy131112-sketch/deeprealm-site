@@ -43,21 +43,22 @@ function sheetText(record) {
 }
 
 export function createBot({ store, send }) {
-  function reply(chatId, text, replyTo) {
-    for (const part of split(text)) send(chatId, part, replyTo);
+  // Must be awaited: a Worker that returns before sendMessage settles has its
+  // in-flight request cancelled, so the player never sees the reply. threadId is
+  // the forum topic the post came from, so the reply lands in that topic.
+  async function reply(chatId, text, replyTo, threadId) {
+    for (const part of split(text)) await send(chatId, part, replyTo, threadId);
   }
 
   async function handleReg(msg) {
     const chatId = msg.chat.id;
     const userId = msg.from && msg.from.id;
     if (msg.chat.type !== 'private') {
-      reply(chatId, 'Регистрация — только в личке со мной, чтобы статы не видел никто лишний. Напиши мне в ЛС: /reg Имя и статы.', msg.message_id);
-      return;
+      return reply(chatId, 'Регистрация — только в личке со мной, чтобы статы не видел никто лишний. Напиши мне в ЛС: /reg Имя и статы.', msg.message_id, msg.message_thread_id);
     }
     const parsed = parseSheet(msg.text || '');
     if (!parsed.name) {
-      reply(chatId, 'Напиши так:\n/reg Аттар\nСила 8, Скорость 6, Ловкость 5, Выносливость 6, Здоровье 8, Реакция 6, Хитрость 5, Интеллект 7, Сообразительность 6, Изворотливость 4, Агрессивность 3, Доброта 6, Харизма 5, Эмпатия 4', msg.message_id);
-      return;
+      return reply(chatId, 'Напиши так:\n/reg Аттар\nСила 8, Скорость 6, Ловкость 5, Выносливость 6, Здоровье 8, Реакция 6, Хитрость 5, Интеллект 7, Сообразительность 6, Изворотливость 4, Агрессивность 3, Доброта 6, Харизма 5, Эмпатия 4', msg.message_id, msg.message_thread_id);
     }
     const record = await store.set(userId, { name: parsed.name, stats: parsed.stats, tgUser: msg.from && msg.from.username });
     const lines = ['✅ Записал, ' + parsed.name + '.', '', sheetText(record)];
@@ -68,7 +69,7 @@ export function createBot({ store, send }) {
       const names = parsed.missing.map((k) => STAT_BY_KEY[k].ru).join(', ');
       lines.push('', 'Не хватает: ' + names + '. Их можно добавить позже — пришли /reg заново с полным списком.');
     }
-    reply(chatId, lines.join('\n'), msg.message_id);
+    return reply(chatId, lines.join('\n'), msg.message_id, msg.message_thread_id);
   }
 
   async function handleRoll(msg) {
@@ -76,8 +77,7 @@ export function createBot({ store, send }) {
     const userId = msg.from && msg.from.id;
     const record = await store.get(userId);
     if (!record) {
-      reply(chatId, 'Тебя ещё нет в списке. Напиши мне в ЛС /reg Имя и статы — и я начну кидать.', msg.message_id);
-      return;
+      return reply(chatId, 'Тебя ещё нет в списке. Напиши мне в ЛС /reg Имя и статы — и я начну кидать.', msg.message_id, msg.message_thread_id);
     }
     const results = rollSet(record);
     const lines = [formatRoll(record, results)];
@@ -89,7 +89,7 @@ export function createBot({ store, send }) {
         ? `💥 Крит удался — применяю: ${conditional}`
         : 'Крит не удался — условие не срабатывает.');
     }
-    reply(chatId, lines.join('\n'), msg.message_id);
+    return reply(chatId, lines.join('\n'), msg.message_id, msg.message_thread_id);
   }
 
   async function handleRules(msg) {
@@ -106,7 +106,7 @@ export function createBot({ store, send }) {
     lines.push(COMBAT.grid.diagonal);
     lines.push(COMBAT.grid.cover);
     lines.push('', COMBAT.conditional);
-    reply(msg.chat.id, lines.join('\n'), msg.message_id);
+    return reply(msg.chat.id, lines.join('\n'), msg.message_id, msg.message_thread_id);
   }
 
   async function handleFeats(msg) {
@@ -128,23 +128,23 @@ export function createBot({ store, send }) {
       const f = FEATS[s.key];
       if (f) lines.push(`• ${s.ru} — «${f.base}»`);
     }
-    reply(msg.chat.id, lines.join('\n'), msg.message_id);
+    return reply(msg.chat.id, lines.join('\n'), msg.message_id, msg.message_thread_id);
   }
 
   async function handleMy(msg) {
     const record = await store.get(msg.from && msg.from.id);
-    reply(msg.chat.id, record ? sheetText(record) : 'Тебя ещё нет в списке. Напиши в ЛС /reg Имя и статы.', msg.message_id);
+    return reply(msg.chat.id, record ? sheetText(record) : 'Тебя ещё нет в списке. Напиши в ЛС /reg Имя и статы.', msg.message_id, msg.message_thread_id);
   }
 
   async function handleStart(msg) {
-    reply(msg.chat.id, [
+    return reply(msg.chat.id, [
       'Я кидаю кубик для Deeprealm.',
       '',
       'В личке: /reg Имя и статы — записать персонажа.',
       'В общем чате: закончи пост на /roll — и я выдам крит, блок и уклонение.',
       '',
       'Ещё: /rules — правила боя, /feats — фишки, /my — мой лист.'
-    ].join('\n'), msg.message_id);
+    ].join('\n'), msg.message_id, msg.message_thread_id);
   }
 
   function handleUpdate(update) {

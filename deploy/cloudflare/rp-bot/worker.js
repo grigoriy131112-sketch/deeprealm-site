@@ -16,17 +16,28 @@ import { kvStore } from './kv-store.js';
 
 const API = 'https://api.telegram.org';
 
-async function send(token, chatId, text, replyTo) {
-  await fetch(`${API}/bot${token}/sendMessage`, {
+async function send(token, chatId, text, replyTo, threadId) {
+  const res = await fetch(`${API}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
       text,
       ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+      ...(threadId ? { message_thread_id: threadId } : {}),
       disable_web_page_preview: true
     })
   });
+  // Telegram answers 200 with {"ok":true} or a 4xx with the reason (blocked bot,
+  // wrong chat, bad token). Surface it instead of dropping it, or a bot that
+  // never answers looks like a bot that was never called.
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body || body.ok !== true) {
+    const why = (body && body.description) || `http ${res.status}`;
+    console.error('sendMessage failed:', why);
+    return { ok: false, error: why };
+  }
+  return { ok: true };
 }
 
 export default {
@@ -58,9 +69,14 @@ export default {
     if (!token) return json({ ok: false, reason: 'no token' }, 500);
 
     const store = kvStore(env.RP_PLAYERS);
+    const sends = [];
     const bot = createBot({
       store,
-      send: (chatId, text, replyTo) => send(token, chatId, text, replyTo)
+      send: async (chatId, text, replyTo, threadId) => {
+        const r = await send(token, chatId, text, replyTo, threadId);
+        sends.push(r.ok ? 'ok' : r.error);
+        return r;
+      }
     });
 
     try {
@@ -69,8 +85,10 @@ export default {
       // Answer 200 anyway: Telegram retries a non-2xx, and a retry of a bad
       // update would only loop. The error is logged in the Worker's tail.
       console.error('update failed:', err && err.message);
+      return json({ ok: true, error: String(err && err.message) });
     }
-    return json({ ok: true });
+    // The replies, so a webhook test can tell "answered" from "silently dropped".
+    return json({ ok: true, replies: sends.length, results: sends });
   }
 };
 

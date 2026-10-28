@@ -73,7 +73,11 @@ test('the worker rolls and replies for a registered player', async () => {
   try {
     // Register in private, then roll in the group.
     await worker.fetch(post({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/reg Аттар\nСила 8, Реакция 6' } }), e);
-    await worker.fetch(post({ message: { message_id: 2, chat: { id: 100, type: 'supergroup' }, from: { id: 5 }, text: 'бью /roll' } }), e);
+    const res = await worker.fetch(post({ message: { message_id: 2, chat: { id: 100, type: 'supergroup' }, from: { id: 5 }, text: 'бью /roll' } }), e);
+    // The worker must await the send before answering, or Cloudflare cancels the
+    // in-flight sendMessage and the player never sees the roll.
+    const body = await res.json();
+    assert.equal(body.replies, 1, 'the roll reply must be awaited before the response');
   } finally {
     globalThis.fetch = orig;
   }
@@ -92,4 +96,22 @@ test('a malformed body is a 400, not a crash', async () => {
     body: 'not json'
   }), env());
   assert.equal(res.status, 400);
+});
+
+test('the roll reply carries the forum topic id', async () => {
+  const e = env();
+  const calls = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
+  };
+  try {
+    await worker.fetch(post({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/reg Аттар\nСила 8, Реакция 6' } }), e);
+    await worker.fetch(post({ message: { message_id: 2, message_thread_id: 77, is_topic_message: true, chat: { id: -100200, type: 'supergroup' }, from: { id: 5 }, text: '/roll' } }), e);
+  } finally {
+    globalThis.fetch = orig;
+  }
+  const rolled = calls[calls.length - 1];
+  assert.equal(rolled.body.message_thread_id, 77, 'reply must stay in the topic');
 });

@@ -32,11 +32,12 @@ export async function startBot({ token, storeFile = defaultStoreFile(), log = co
     return res.json();
   }
 
-  function send(chatId, text, replyTo) {
+  function send(chatId, text, replyTo, threadId) {
     return call('sendMessage', {
       chat_id: chatId,
       text,
       ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+      ...(threadId ? { message_thread_id: threadId } : {}),
       disable_web_page_preview: true
     });
   }
