@@ -6,9 +6,9 @@
 //   * a player registers in a private chat with /reg, sending a character's name,
 //     handle and the fourteen ratings. Up to two characters per account;
 //   * in the game group a player ends a post with a roll command - /roll1 or
-//     /roll2 to name one character, /rollall for both at once, or a bare /roll
-//     for the first - and the bot answers with the three dice - crit, block,
-//     dodge - each with half of the matching characteristic added;
+//     /roll2 to name one character, /rollall for every character at once - and
+//     the bot answers with the three dice - crit, block, dodge - each with half
+//     of the matching characteristic added. A bare /roll does not roll;
 //   * /del 1, /del 2 or /delall (also /del all) drops a character;
 //   * /menu (and /start) opens the menu - battle rules, battle-post rules, stat
 //     feats, dice and commands - whose buttons edit the message in place.
@@ -132,7 +132,7 @@ export function createBot({ store, send, editMessage, answerCallback }) {
       const names = parsed.missing.map((k) => STAT_BY_KEY[k].ru).join(', ');
       lines.push('', 'Не хватает: ' + names + '. Повторный /reg создаёт нового персонажа, так что ненужного сначала удали: /del ' + slot + '.');
     }
-    lines.push('', `В бою заканчивай пост на /roll ${slot}.`);
+    lines.push('', `В бою заканчивай пост на /roll${slot}.`);
     if (canAdd(updated)) {
       lines.push(`Можно завести второго персонажа — пришли /reg снова. Всего можно ${MAX_CHARACTERS}.`);
     }
@@ -146,12 +146,14 @@ export function createBot({ store, send, editMessage, answerCallback }) {
     if (!record || !charactersOf(record).length) {
       return reply(chatId, 'Тебя ещё нет в списке. Напиши мне в ЛС /reg Имя и статы — и я начну кидать.', msg.message_id, msg.message_thread_id);
     }
-    // One roll command per post. "/roll" rolls the first character, "/roll1" or
-    // "/roll2" a named one, and "/rollall" both at once; all blocks ride in a
-    // single message.
-    const command = rollCommand(msg.text) || { slot: null, all: false };
+    // One roll command per post: /roll1, /roll2 or /rollall. A bare /roll does
+    // not roll - the player must say which character, so we answer with a hint.
+    const command = rollCommand(msg.text);
     const chars = charactersOf(record);
-    const slots = command.all ? chars.map((c) => c.slot) : [command.slot == null ? 1 : command.slot];
+    if (!command) {
+      return reply(chatId, 'Укажи, за кого бросок: /roll1, /roll2 или /rollall.', msg.message_id, msg.message_thread_id);
+    }
+    const slots = command.all ? chars.map((c) => c.slot) : [command.slot];
     const blocks = [];
     let anyCrit = false;
     for (const slot of slots) {
@@ -258,8 +260,8 @@ export function createBot({ store, send, editMessage, answerCallback }) {
       'Я кидаю кубик для Deeprealm.',
       '',
       'В личке: /reg Имя @юзер и статы — записать персонажа (можно двух).',
-      'В общем чате: закончи пост на /roll — и я выдам крит, блок и уклонение.',
-      'Два персонажа? Пиши номер вплотную: /roll1 или /roll2. За обоих сразу — /rollall.',
+      'В общем чате: закончи пост на /roll1 или /roll2 — и я выдам крит, блок и уклонение.',
+      'За обоих сразу — /rollall. Голый /roll не кидает: укажи, за кого бросок.',
       '',
       'Меню: /menu — правила боя, пост в бою, фишки, кубик.',
       'Ещё: /my — мои листы, /del 1|2|delall — удалить персонажа.'

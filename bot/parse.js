@@ -50,22 +50,18 @@ export function parseSheet(text) {
   return { name, user, stats, unknown, missing: STAT_KEYS.filter((k) => !(k in stats)) };
 }
 
-// The roll command in a post, however it is written:
-//   "/roll"        -> { slot: null, all: false }  (bare: the first character)
-//   "/roll1"       -> { slot: 1, all: false }
-//   "/roll2"       -> { slot: 2, all: false }
-//   "/rollall"     -> { slot: null, all: true }   (both characters at once)
-// The number is glued to the command, like /del1 and /delall; a spaced
-// "/roll 1" is still accepted so an old habit keeps working. Returns null when
+// The roll command in a post: /roll1, /roll2 or /rollall. The number is glued to
+// the command, like /del1 and /delall. A bare /roll does not roll - the player
+// must say which character, or /rollall for every character. Returns null when
 // the post has no roll command.
+//   "/roll1"   -> { slot: 1, all: false }
+//   "/roll2"   -> { slot: 2, all: false }
+//   "/rollall" -> { slot: null, all: true }  (every character at once)
 export function rollCommand(text) {
-  const s = String(text || '');
-  const attached = s.match(/(?:^|\s)\/roll(?:(all)|(\d+))?(?:@\w+)?(?=\s|$)/i);
-  if (!attached) return null;
-  if (attached[1]) return { slot: null, all: true };
-  if (attached[2]) return { slot: Number(attached[2]), all: false };
-  const spaced = s.match(/(?:^|\s)\/roll(?:@\w+)?\s+(\d+)\b/i);
-  return { slot: spaced ? Number(spaced[1]) : null, all: false };
+  const m = String(text || '').match(/(?:^|\s)\/roll(?:(all)|(\d+))(?:@\w+)?(?=\s|$)/i);
+  if (!m) return null;
+  if (m[1]) return { slot: null, all: true };
+  return { slot: Number(m[2]), all: false };
 }
 
 // The arguments after a command word, without the "@botname" suffix.
@@ -85,8 +81,9 @@ export function extractConditional(text) {
   return m ? m[1].trim().replace(/[.\s]+$/, '') : null;
 }
 
-// True when the post asks the bot to roll: a bare /roll, /roll1, /roll2 or
-// /rollall, anywhere in the text.
+// True when the post carries any roll command, valid or not - a bare /roll and
+// a spaced /roll 2 included. Invalid ones still reach handleRoll, which answers
+// with a hint naming the three real commands instead of staying silent.
 export function wantsRoll(text) {
   return /(^|\s)\/roll(?:all|\d+)?(?:@\w+)?(\s|$)/i.test(String(text || ''));
 }

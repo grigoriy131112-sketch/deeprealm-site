@@ -775,7 +775,8 @@ permission is missing. Probe that way before starting any long operation.
   the role-play. It is not the owner-notification bot (`@deeprealbot`); they share
   no code path.
 - Flow: a player registers **in a private chat** with `/reg Имя [@юзер]` plus the
-  fourteen ratings, and in the **game group** ends a post with `/roll`. The bot
+  fourteen ratings, and in the **game group** ends a post with `/roll1`, `/roll2`
+  or `/rollall`. The bot
   answers in the group with three d20 rolls - crit, block, dodge - each with
   **half of the matching characteristic added, rounded down** (Strength 8 -> +4,
   Reaction 5 -> +2). `bot/stats.js` `bonus()` is the only place that halving
@@ -783,7 +784,7 @@ permission is missing. Probe that way before starting any long operation.
 - **Up to two characters per account** (owner's rule, `bot/characters.js`). A
   second `/reg` fills the next free slot; a third is refused, never overwritten.
   `/del 1`, `/del 2` or `/delall` (also `/del all`) removes one or both; a later character keeps
-  its own slot number, so a `/roll 2` the player learned does not silently move.
+  its own slot number, so a `/roll2` the player learned does not silently move.
   `normalizeRecord()` lifts a **pre-multi-character sheet** (`{name, stats}`) into
   slot 1 unchanged, so the old store keeps working with no migration step. The
   store record is now `{ characters: [{ slot, name, stats, user }] }`; the name
@@ -794,19 +795,19 @@ permission is missing. Probe that way before starting any long operation.
   `distributionIssues`, `DISTRIBUTION_RULE`). The same text lives in the site's
   `data/knowledge.json` `character_template.fields.*.rule`, so the site's template
   and the bot agree. A block that is not fully filled in is not judged.
-- **The player names which character a roll is for** by a number glued to the
-  command, like `/del1`: `/roll1` or `/roll2`, and a battle post ends on `/roll1`
-  or `/roll2`. Without a number a bare `/roll` uses **slot 1**. The bot never
-  guesses the character - the number is the only signal, and `/rollN` for a slot
-  that does not exist says which slots do. `bot/parse.js` `rollCommand()` reads it
-  (a spaced `/roll 1` is still accepted so an old habit keeps working).
+- **The three roll commands are `/roll1`, `/roll2` and `/rollall`** (owner's rule:
+  no bare `/roll`). The number is glued to the command, like `/del1`, and a battle
+  post ends on one of them. The bot never guesses the character - the command is the
+  only signal, and `/rollN` for a slot that does not exist says which slots do. A
+  bare `/roll` or a spaced `/roll 2` does **not** roll: `handleRoll` answers with a
+  hint naming the three commands. `bot/parse.js` `rollCommand()` reads them.
 - **`/rollall` rolls every character at once** - the "both in one post" case, as
   a single command rather than two commands in a row. It answers with one block
   per character in a single message. With one character it rolls just that one.
   `bot/parse.js` `rollCommand()` returns `{ all: true }` for it, and `handleRoll`
   maps the slots to roll. One roll command per post: the first one wins.
 - **Only the player rolls.** The bot rolls for a player's character, never for an
-  NPC, an enemy or the world; it only answers a `/roll` the player wrote
+  NPC, an enemy or the world; it only answers a roll command the player wrote
   (`COMBAT.playerRolls`). `/rules` and the menu both say so.
 - An attack **always lands**; the dice decide only crit, block and dodge. Crit is a
   natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a natural 1
@@ -823,8 +824,8 @@ permission is missing. Probe that way before starting any long operation.
   resource, not a characteristic: **skipping the attack** restores 5
   (`COMBAT.mana`, printed by `/rules` as "Пропуск атаки восстанавливает 5 маны").
 - **Battle-post rules** are their own menu section (`COMBAT.post`, printed by
-  `/post` and the `menu:post` button): one `/roll` per turn, the character number
-  after the command, the crit conditional. It is separate from the combat rules
+  `/post` and the `menu:post` button): one roll command per turn, the character
+  named by `/roll1` or `/roll2`, the crit conditional. It is separate from the combat rules
   because the owner asked for "правила написания поста в бою" as its own point.
 - **The menu** (`bot/menu.js`) is four sections - battle rules, battle-post rules,
   stat feats, and the dice/commands - reached by `/menu`, `/start`, `/rules`,
@@ -851,7 +852,7 @@ permission is missing. Probe that way before starting any long operation.
   `X-Telegram-Bot-Api-Secret-Token` header does not match.
 - **Group privacy**: the bot must have privacy mode **off** in @BotFather
   (`/setprivacy` -> Disable), otherwise it never sees a group post ending in
-  `/roll`. `can_read_all_group_messages: false` in `getMe` means it is still on.
+  a roll command. `can_read_all_group_messages: false` in `getMe` means it is still on.
   This is a manual @BotFather step and cannot be set from the API.
 - The site server (`server.js`) can also run the bot on the same process when
   `TELEGRAM_RP_BOT_TOKEN` is set (set `RP_BOT=off` to keep it off) - useful if the

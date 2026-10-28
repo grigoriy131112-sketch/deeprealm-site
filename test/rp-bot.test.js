@@ -85,15 +85,15 @@ test('parseSheet keeps an @user handle on the name line', () => {
   assert.equal(p.stats.strength, 8);
 });
 
-test('rollCommand reads the roll command, number glued or spaced', () => {
+test('rollCommand reads the glued roll command, and a bare /roll does not roll', () => {
   assert.deepEqual(rollCommand('/roll1'), { slot: 1, all: false });
   assert.deepEqual(rollCommand('бью /roll2'), { slot: 2, all: false });
   assert.deepEqual(rollCommand('/rollall'), { slot: null, all: true });
   assert.deepEqual(rollCommand('за обоих /rollall'), { slot: null, all: true });
-  assert.deepEqual(rollCommand('бью /roll'), { slot: null, all: false });
-  // A spaced number is still accepted, so an old habit keeps working.
-  assert.deepEqual(rollCommand('/roll 2'), { slot: 2, all: false });
-  assert.deepEqual(rollCommand('/roll@koobboobbot 1'), { slot: 1, all: false });
+  assert.deepEqual(rollCommand('/roll1@koobboobbot'), { slot: 1, all: false });
+  // The three commands only: a bare /roll and a spaced /roll 1 are not rolls.
+  assert.equal(rollCommand('бью /roll'), null);
+  assert.equal(rollCommand('/roll 2'), null);
   assert.equal(rollCommand('без броска'), null);
   assert.equal(commandArgs('/del 1'), '1');
   assert.equal(commandArgs('/del@koobboobbot all'), 'all');
@@ -142,13 +142,17 @@ test('extractConditional pulls the "if crit" tail', () => {
 });
 
 test('wantsRoll and commandOf', () => {
-  assert.equal(wantsRoll('мой пост /roll'), true);
   assert.equal(wantsRoll('мой пост /roll1'), true);
   assert.equal(wantsRoll('мой пост /rollall'), true);
+  // A bare or spaced /roll is not a valid roll, but still reaches handleRoll
+  // so the player gets a hint instead of silence.
+  assert.equal(wantsRoll('мой пост /roll'), true);
+  assert.equal(wantsRoll('мой пост /roll 2'), true);
   assert.equal(wantsRoll('мой пост'), false);
-  assert.equal(commandOf('/roll'), 'roll');
   assert.equal(commandOf('/roll1'), 'roll');
+  assert.equal(commandOf('/roll2'), 'roll');
   assert.equal(commandOf('/rollall'), 'rollall');
+  assert.equal(commandOf('/roll'), 'roll');
   assert.equal(commandOf('/reg@koobboobbot Аттар'), 'reg');
   assert.equal(commandOf('привет'), null);
 });
@@ -220,7 +224,7 @@ test('/roll in the group answers with three rolls', async () => {
   const { sent, send } = collector();
   const bot = createBot({ store, send });
   await bot.handleUpdate(reg(5, '/reg ' + SHEET));
-  await bot.handleUpdate(groupMsg(5, 100, 'Атакую гоблина мечом /roll'));
+  await bot.handleUpdate(groupMsg(5, 100, 'Атакую гоблина мечом /roll1'));
   const out = sent[sent.length - 1];
   assert.equal(out.chatId, 100);
   assert.match(out.text, /🎲 Аттар/);
@@ -233,7 +237,7 @@ test('/roll from an unregistered player asks them to register', async () => {
   const store = tempStore();
   const { sent, send } = collector();
   const bot = createBot({ store, send });
-  await bot.handleUpdate(groupMsg(9, 100, 'бью /roll'));
+  await bot.handleUpdate(groupMsg(9, 100, 'бью /roll1'));
   assert.match(sent[0].text, /в ЛС \/reg/);
 });
 
@@ -246,7 +250,7 @@ test('an "if crit" plan is echoed only when the crit roll lands', async () => {
   const orig = Math.random;
   try {
     Math.random = () => 0.95; // 20 on a d20
-    await bot.handleUpdate(groupMsg(5, 100, 'атакую; если крит — добиваю /roll'));
+    await bot.handleUpdate(groupMsg(5, 100, 'атакую; если крит — добиваю /roll1'));
   } finally {
     Math.random = orig;
   }
@@ -454,14 +458,27 @@ test('/rollall with one character rolls just that one', async () => {
   assert.doesNotMatch(text, /#2/);
 });
 
-test('/roll without a number uses the first character', async () => {
+test('a bare /roll does not roll and asks which character', async () => {
   const store = tempStore();
   const { sent, send } = collector();
   const bot = createBot({ store, send });
   await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
   await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
   await bot.handleUpdate(groupMsg(5, 100, 'атакую /roll'));
-  assert.match(sent[sent.length - 1].text, /🎲 Аттар #1/);
+  const text = sent[sent.length - 1].text;
+  assert.doesNotMatch(text, /🎲/);
+  assert.match(text, /\/roll1, \/roll2 или \/rollall/);
+});
+
+test('a spaced /roll 2 does not roll either', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 2'));
+  const text = sent[sent.length - 1].text;
+  assert.doesNotMatch(text, /🎲/);
+  assert.match(text, /\/roll1, \/roll2 или \/rollall/);
 });
 
 test('/roll2 for a slot the player does not have says which exist', async () => {
@@ -484,8 +501,8 @@ test('/del 1 removes one character and /delall removes the rest', async () => {
   assert.equal(characterAt(await store.get(5), 2).name, 'Бо');
   await bot.handleUpdate(reg(5, '/delall'));
   assert.equal(charactersOf(await store.get(5)).length, 0);
-  // With no characters left, /roll asks them to register again.
-  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll'));
+  // With no characters left, a roll asks them to register again.
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll1'));
   assert.match(sent[sent.length - 1].text, /в ЛС \/reg/);
 });
 

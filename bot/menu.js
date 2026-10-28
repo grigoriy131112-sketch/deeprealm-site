@@ -59,7 +59,7 @@ export function rulesText() {
   return lines.join('\n');
 }
 
-// The battle-post rules, including which character a /roll is for.
+// The battle-post rules, including which character a /rollN is for.
 export function postText() {
   const lines = [`📝 ${COMBAT.post.ru}`, ''];
   lines.push(COMBAT.playerRolls);
@@ -67,7 +67,7 @@ export function postText() {
   for (const line of COMBAT.post.lines) lines.push('• ' + line);
   lines.push('');
   lines.push('Примеры:');
-  lines.push('• «Атакую гоблина мечом /roll» — бросок за первого персонажа.');
+  lines.push('• «Атакую гоблина мечом /roll1» — бросок за первого персонажа.');
   lines.push('• «Атакую; если крит — добиваю /roll2» — бросок за второго.');
   lines.push('• «Атакую за обоих /rollall» — броски за обоих сразу, одним сообщением.');
   lines.push('• «Жду в укрытии /roll1» — пропуск атаки за первого, +5 маны.');
@@ -113,9 +113,8 @@ export function diceText() {
     'Кубик кидает только игрок — за своего персонажа. Бот не бросает за врагов или НПС.',
     '',
     'Команды:',
-    '• /roll — в игровом чате: закончи пост на /roll, и я брошу за тебя.',
-    '• /roll1 или /roll2 — бросок за первого или второго персонажа (номер вплотную).',
-    '• /rollall — броски за обоих сразу, одним сообщением.',
+    '• /roll1 или /roll2 — в игровом чате: закончи пост, и я брошу за первого или второго.',
+    '• /rollall — броски за всех персонажей сразу, одним сообщением.',
     '• /reg — в личке: записать персонажа (имя, @юзер и 14 характеристик). Можно двоих.',
     '  Правило характеристик: в каждом блоке — ' + DISTRIBUTION_RULE + '.',
     '• /del 1 | /del 2 | /delall — удалить персонажа (в личке).',
