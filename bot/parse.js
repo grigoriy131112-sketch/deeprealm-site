@@ -57,6 +57,17 @@ export function rollSlot(text) {
   return m ? Number(m[1]) : null;
 }
 
+// Every "/roll" in one post, in the order written: "бью /roll 1 и /roll 2" -> [1, 2].
+// A bare "/roll" contributes null (the first character), so "/roll и /roll 2" -> [null, 2].
+// One post may roll several characters at once; the caller maps null to slot 1.
+export function rollSlots(text) {
+  const re = /(?:^|\s)\/roll(?:@\w+)?(?:\s+(\d+))?\b/gi;
+  const out = [];
+  let m;
+  while ((m = re.exec(String(text || ''))) !== null) out.push(m[1] ? Number(m[1]) : null);
+  return out;
+}
+
 // The arguments after a command word, without the "@botname" suffix.
 // "/del 1" -> "1"; "/reg@koobboobbot Аттар" -> "Аттар".
 export function commandArgs(text) {

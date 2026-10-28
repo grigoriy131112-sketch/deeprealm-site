@@ -8,7 +8,7 @@ import path from 'node:path';
 import { bonus, resolveStat, STAT_KEYS, distributionIssues, STAT_BLOCKS, DISTRIBUTION_RULE } from '../bot/stats.js';
 import { featFor } from '../bot/rules/feats.js';
 import { rollSet, formatRoll, ROLL_ORDER } from '../bot/dice.js';
-import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlot, commandArgs } from '../bot/parse.js';
+import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlot, rollSlots, commandArgs } from '../bot/parse.js';
 import { createStore } from '../bot/store.js';
 import { createBot } from '../bot/bot.js';
 import { charactersOf, characterAt, addCharacter, removeCharacter, normalizeRecord, MAX_CHARACTERS } from '../bot/characters.js';
@@ -59,12 +59,13 @@ test('resolveStat accepts Russian, keys and aliases', () => {
   assert.equal(resolveStat('нечто'), null);
 });
 
-test('feats open at 8 and upgrade at 10', () => {
+test('a feat opens only at a rating of 10', () => {
   assert.equal(featFor('strength', 7), null);
-  assert.equal(featFor('strength', 8).base, 'Стальной захват');
-  assert.equal(featFor('strength', 8).tier, 8);
+  assert.equal(featFor('strength', 8), null);
+  assert.equal(featFor('strength', 9), null);
+  assert.equal(featFor('strength', 10).name, 'Стальной захват');
   assert.equal(featFor('strength', 10).tier, 10);
-  assert.equal(featFor('health', 9).base, 'Вопреки смерти');
+  assert.equal(featFor('health', 10).name, 'Вопреки смерти');
 });
 
 test('parseSheet reads a name and the fourteen ratings', () => {
@@ -92,6 +93,16 @@ test('rollSlot and commandArgs read the number after a command', () => {
   assert.equal(commandArgs('/del 1'), '1');
   assert.equal(commandArgs('/del@koobboobbot all'), 'all');
   assert.equal(commandArgs('/feats 2'), '2');
+});
+
+test('rollSlots collects every /roll in a post, in order', () => {
+  assert.deepEqual(rollSlots('бью /roll 1 и /roll 2'), [1, 2]);
+  assert.deepEqual(rollSlots('/roll 2'), [2]);
+  assert.deepEqual(rollSlots('/roll 1, /roll 2'), [1, 2]);
+  assert.deepEqual(rollSlots('/roll@koobboobbot 1 /roll@koobboobbot 2'), [1, 2]);
+  assert.deepEqual(rollSlots('атакую /roll'), [null]);
+  assert.deepEqual(rollSlots('/roll и /roll 2'), [null, 2]);
+  assert.deepEqual(rollSlots('без броска'), []);
 });
 
 test('parseSheet tolerates newlines and colons and reports bad input', () => {
@@ -191,7 +202,7 @@ test('/reg in private saves the sheet and answers with it', async () => {
   assert.equal(sent[0].chatId, 5);
   assert.match(sent[0].text, /Записал персонажа 1: Аттар/);
   assert.match(sent[0].text, /Сила 8/);
-  assert.match(sent[0].text, /«Стальной захват»/); // Strength 8 opens the feat
+  assert.doesNotMatch(sent[0].text, /«Стальной захват»/); // a rating of 8 no longer opens a feat
   const record = await store.get(5);
   assert.equal(characterAt(record, 1).stats.reaction, 6);
 });
@@ -305,7 +316,7 @@ test('/delall removes every character, same as /del all', async () => {
 
 test('/feats lists every characteristic and the player\'s own', async () => {
   const store = tempStore();
-  await store.set(5, { name: 'Аттар', stats: { strength: 8, reaction: 6 } });
+  await store.set(5, { name: 'Аттар', stats: { strength: 10, reaction: 6 } });
   const c = collector();
   const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
   await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/feats' } });
@@ -313,6 +324,17 @@ test('/feats lists every characteristic and the player\'s own', async () => {
   assert.match(text, /Стальной захват/);
   assert.match(text, /Мгновенный рывок/);
   assert.match(text, /Твои открытые/);
+  assert.match(text, /только на характеристику 10/);
+});
+
+test('/feats opens nothing at 8 or 9', async () => {
+  const store = tempStore();
+  await store.set(5, { name: 'Аттар', stats: { strength: 9, reaction: 8 } });
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
+  await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/feats' } });
+  const text = c.sent[0].text;
+  assert.match(text, /пока нет — нужна характеристика 10/);
 });
 
 test('a menu button edits the message in place and answers the callback', async () => {
@@ -408,6 +430,31 @@ test('/roll 2 rolls the second character, /roll 1 the first', async () => {
   await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 1'));
   const first = sent[sent.length - 1].text;
   assert.match(first, /🎲 Аттар #1/);
+});
+
+test('one post with /roll 1 and /roll 2 rolls both characters together', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
+  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 1 и /roll 2'));
+  const text = sent[sent.length - 1].text;
+  assert.match(text, /🎲 Аттар #1/);
+  assert.match(text, /🎲 Бо #2/);
+  // One answer, not two: both blocks ride in the same message.
+  assert.equal(sent.filter((m) => m.chatId === 100 && /🎲/.test(m.text)).length, 1);
+});
+
+test('/roll 2 и /roll 1 rolls in the order written', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
+  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 2 и /roll 1'));
+  const text = sent[sent.length - 1].text;
+  assert.ok(text.indexOf('🎲 Бо #2') < text.indexOf('🎲 Аттар #1'), text);
 });
 
 test('/roll without a number uses the first character', async () => {

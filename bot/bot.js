@@ -6,8 +6,9 @@
 //   * a player registers in a private chat with /reg, sending a character's name,
 //     handle and the fourteen ratings. Up to two characters per account;
 //   * in the game group a player ends a post with /roll - or /roll 1, /roll 2 to
-//     say which character - and the bot answers with the three dice - crit,
-//     block, dodge - each with half of the matching characteristic added;
+//     say which character, or both ("/roll 1 и /roll 2") to roll both at once -
+//     and the bot answers with the three dice - crit, block, dodge - each with
+//     half of the matching characteristic added;
 //   * /del 1, /del 2 or /delall (also /del all) drops a character;
 //   * /menu (and /start) opens the menu - battle rules, battle-post rules, stat
 //     feats, dice and commands - whose buttons edit the message in place.
@@ -15,7 +16,7 @@
 import { STATS, STAT_BY_KEY, STAT_BLOCKS, DISTRIBUTION_RULE, distributionIssues, ROLLS, bonus } from './stats.js';
 import { featFor } from './rules/feats.js';
 import { rollSet, formatRoll } from './dice.js';
-import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlot, commandArgs } from './parse.js';
+import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlots, commandArgs } from './parse.js';
 import { charactersOf, characterAt, canAdd, nextSlot, addCharacter, removeCharacter, MAX_CHARACTERS } from './characters.js';
 import { isMenuSection, sectionText, menuKeyboard } from './menu.js';
 
@@ -64,7 +65,7 @@ function characterText(character) {
     lines.push('');
     lines.push('Фишки:');
     for (const { stat, feat } of feats) {
-      lines.push(`• ${stat.ru} — «${feat.base}»`);
+      lines.push(`• ${stat.ru} — «${feat.name}»`);
     }
   }
   return lines.join('\n');
@@ -145,22 +146,29 @@ export function createBot({ store, send, editMessage, answerCallback }) {
     if (!record || !charactersOf(record).length) {
       return reply(chatId, 'Тебя ещё нет в списке. Напиши мне в ЛС /reg Имя и статы — и я начну кидать.', msg.message_id, msg.message_thread_id);
     }
-    // The number after /roll picks the character; without one, the first slot.
-    const requested = rollSlot(msg.text);
-    const slot = requested == null ? 1 : requested;
-    const character = characterAt(record, slot);
-    if (!character) {
-      const chars = charactersOf(record);
-      const have = chars.map((c) => c.slot).join(' или ');
-      return reply(chatId, `У тебя нет персонажа ${slot}. Доступны слоты: ${have}. Укажи номер: /roll ${chars[0].slot}.`, msg.message_id, msg.message_thread_id);
+    // Every "/roll" in the post rolls one character, in the order written; a bare
+    // "/roll" means the first slot. A single post may roll both characters at once
+    // ("/roll 1 и /roll 2"), so the bot answers with a block per roll.
+    const requested = rollSlots(msg.text);
+    const slots = requested.length ? requested.map((s) => (s == null ? 1 : s)) : [1];
+    const blocks = [];
+    let anyCrit = false;
+    for (const slot of slots) {
+      const character = characterAt(record, slot);
+      if (!character) {
+        const chars = charactersOf(record);
+        const have = chars.map((c) => c.slot).join(' или ');
+        return reply(chatId, `У тебя нет персонажа ${slot}. Доступны слоты: ${have}. Укажи номер: /roll ${chars[0].slot}.`, msg.message_id, msg.message_thread_id);
+      }
+      const results = rollSet(character);
+      if (results.find((r) => r.key === 'crit').crit) anyCrit = true;
+      blocks.push(formatRoll(character, results));
     }
-    const results = rollSet(character);
-    const lines = [formatRoll(character, results)];
+    const lines = [blocks.join('\n\n')];
     const conditional = extractConditional(msg.text || '');
-    const crit = results.find((r) => r.key === 'crit');
     if (conditional) {
       lines.push('');
-      lines.push(crit && crit.crit
+      lines.push(anyCrit
         ? `💥 Крит удался — применяю: ${conditional}`
         : 'Крит не удался — условие не срабатывает.');
     }
@@ -251,7 +259,7 @@ export function createBot({ store, send, editMessage, answerCallback }) {
       '',
       'В личке: /reg Имя @юзер и статы — записать персонажа (можно двух).',
       'В общем чате: закончи пост на /roll — и я выдам крит, блок и уклонение.',
-      'Два персонажа? Укажи номер: /roll 1 или /roll 2.',
+      'Два персонажа? Укажи номер: /roll 1 или /roll 2. Оба сразу — /roll 1 и /roll 2.',
       '',
       'Меню: /menu — правила боя, пост в бою, фишки, кубик.',
       'Ещё: /my — мои листы, /del 1|2|delall — удалить персонажа.'

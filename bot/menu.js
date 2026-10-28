@@ -2,7 +2,7 @@
 //
 //   1. Боевые правила            - the turn economy, resolution, mana
 //   2. Правила написания поста в бою - who rolls, /roll 1|2, the post shape
-//   3. Фишки статистик           - what each characteristic unlocks at 8-10
+//   3. Фишки статистик           - what each characteristic unlocks at 10
 //   4. Кубик и команды           - how the d20 works and the commands that call it
 //
 // The section text is built from the same COMBAT and FEATS data the engine uses,
@@ -69,28 +69,29 @@ export function postText() {
   lines.push('Примеры:');
   lines.push('• «Атакую гоблина мечом /roll» — бросок за первого персонажа.');
   lines.push('• «Атакую; если крит — добиваю /roll 2» — бросок за второго.');
+  lines.push('• «Атакую /roll 1 и /roll 2» — броски за обоих сразу, одним сообщением.');
   lines.push('• «Жду в укрытии /roll 1» — пропуск атаки за первого, +5 маны.');
   return lines.join('\n');
 }
 
 export function featsText(record) {
   const name = record && record.name ? `${record.slot ? record.slot + '. ' : ''}${record.name}` : '';
-  const lines = ['✨ Фишки статистик', '', 'Характеристика 8 открывает фишку, 10 усиливает её.'];
+  const lines = ['✨ Фишки статистик', '', 'Фишка открывается только на характеристику 10.'];
   if (name) lines.push('', `Персонаж: ${name}`);
   lines.push('');
   if (record && record.stats) {
-    const mine = STATS.filter((s) => FEATS[s.key] && Number(record.stats[s.key]) >= 8);
+    const mine = STATS.filter((s) => FEATS[s.key] && Number(record.stats[s.key]) >= 10);
     lines.push('Твои открытые:');
     lines.push(mine.length
-      ? mine.map((s) => `• ${s.ru} — «${FEATS[s.key].base}»`).join('\n')
-      : '• пока нет — нужна характеристика 8 и выше');
+      ? mine.map((s) => `• ${s.ru} — «${FEATS[s.key].name}»`).join('\n')
+      : '• пока нет — нужна характеристика 10');
     lines.push('');
   }
   lines.push('Все фишки:');
   for (const s of STATS) {
     const f = FEATS[s.key];
     if (!f) continue;
-    lines.push('', `• ${s.ru} — «${f.base}»`, f.baseText);
+    lines.push('', `• ${s.ru} — «${f.name}»`, f.text);
   }
   return lines.join('\n');
 }
@@ -114,6 +115,7 @@ export function diceText() {
     'Команды:',
     '• /roll — в игровом чате: закончи пост на /roll, и я брошу за тебя.',
     '• /roll 1 или /roll 2 — бросок за первого или второго персонажа.',
+    '• /roll 1 и /roll 2 — броски за обоих сразу, одним сообщением.',
     '• /reg — в личке: записать персонажа (имя, @юзер и 14 характеристик). Можно двоих.',
     '  Правило характеристик: в каждом блоке — ' + DISTRIBUTION_RULE + '.',
     '• /del 1 | /del 2 | /delall — удалить персонажа (в личке).',

@@ -2,7 +2,7 @@
 //
 // Six of them carry numbers that reach the dice: Strength, Speed, Agility,
 // Stamina, Health and Reaction. The other eight are role-play only - they have a
-// rating (so the 8-10 feats can open) but never add a bonus to a roll. The order
+// rating (so a 10 can open a feat) but never add a bonus to a roll. The order
 // here is the order the sheet is read and printed in.
 
 export const STATS = [

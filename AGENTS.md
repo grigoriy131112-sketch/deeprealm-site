@@ -799,6 +799,10 @@ permission is missing. Probe that way before starting any long operation.
   a number the bot uses **slot 1**. The bot never guesses the character - the
   number is the only signal, and `/roll N` for a slot that does not exist says
   which slots do. `bot/parse.js` `rollSlot()`/`commandArgs()` read it.
+- **One post may roll both characters at once.** Every `/roll` in the message
+  rolls one character, in the order written: `/roll 1 и /roll 2` answers with both
+  blocks in a single message (`bot/parse.js` `rollSlots()`, used by `handleRoll`).
+  A bare `/roll` still means slot 1, so `/roll` alone is unchanged.
 - **Only the player rolls.** The bot rolls for a player's character, never for an
   NPC, an enemy or the world; it only answers a `/roll` the player wrote
   (`COMBAT.playerRolls`). `/rules` and the menu both say so.
@@ -806,9 +810,11 @@ permission is missing. Probe that way before starting any long operation.
   natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a natural 1
   on the crit roll is the fumble. A post may add `если крит — <действие>`, which the
   bot echoes only when the crit roll lands (`bot/parse.js` `extractConditional`).
-- The rules and the 8-10 feats live **inside the bot** as data: `bot/rules/combat.js`
+- The rules and the stat feats live **inside the bot** as data: `bot/rules/combat.js`
   and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
-  spoken rules and the rolled rules cannot drift. Turn economy is a **choice**:
+  spoken rules and the rolled rules cannot drift. A feat opens **only at a rating
+  of 10** (owner's rule) - 8 and 9 unlock nothing (`featFor` returns null below 10,
+  and the data carries a single `name`/`text` per characteristic). Turn economy is a **choice**:
   either an attack plus 2 partial actions, or no attack and 3 partial actions -
   never a full action and three partial ones (`COMBAT.turn.attack` /
   `COMBAT.turn.noAttack`). Movement is up to 2 cells per partial action. Mana is a
