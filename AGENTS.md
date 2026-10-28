@@ -760,11 +760,28 @@ permission is missing. Probe that way before starting any long operation.
 - A second, independent Telegram bot (**@koobboobbot**) that only rolls dice for
   the role-play. It is not the owner-notification bot (`@deeprealbot`); they share
   no code path.
-- Flow: a player registers **in a private chat** with `/reg Имя` plus the fourteen
-  ratings, and in the **game group** ends a post with `/roll`. The bot answers in
-  the group with three d20 rolls - crit, block, dodge - each with **half of the
-  matching characteristic added, rounded down** (Strength 8 -> +4, Reaction 5 ->
-  +2). `bot/stats.js` `bonus()` is the only place that halving happens.
+- Flow: a player registers **in a private chat** with `/reg Имя [@юзер]` plus the
+  fourteen ratings, and in the **game group** ends a post with `/roll`. The bot
+  answers in the group with three d20 rolls - crit, block, dodge - each with
+  **half of the matching characteristic added, rounded down** (Strength 8 -> +4,
+  Reaction 5 -> +2). `bot/stats.js` `bonus()` is the only place that halving
+  happens.
+- **Up to two characters per account** (owner's rule, `bot/characters.js`). A
+  second `/reg` fills the next free slot; a third is refused, never overwritten.
+  `/del 1`, `/del 2` or `/del all` removes one or both; a later character keeps
+  its own slot number, so a `/roll 2` the player learned does not silently move.
+  `normalizeRecord()` lifts a **pre-multi-character sheet** (`{name, stats}`) into
+  slot 1 unchanged, so the old store keeps working with no migration step. The
+  store record is now `{ characters: [{ slot, name, stats, user }] }`; the name
+  line may carry `@handle`, kept with the character.
+- **The player names which character a roll is for** by the number after the
+  command: `/roll 1` or `/roll 2`, and a battle post ends on `/roll 1|2`. Without
+  a number the bot uses **slot 1**. The bot never guesses the character - the
+  number is the only signal, and `/roll N` for a slot that does not exist says
+  which slots do. `bot/parse.js` `rollSlot()`/`commandArgs()` read it.
+- **Only the player rolls.** The bot rolls for a player's character, never for an
+  NPC, an enemy or the world; it only answers a `/roll` the player wrote
+  (`COMBAT.playerRolls`). `/rules` and the menu both say so.
 - An attack **always lands**; the dice decide only crit, block and dodge. Crit is a
   natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a natural 1
   on the crit roll is the fumble. A post may add `если крит — <действие>`, which the
@@ -774,14 +791,19 @@ permission is missing. Probe that way before starting any long operation.
   spoken rules and the rolled rules cannot drift. Turn economy: 1 full + 2 partial
   actions, movement up to 2 cells per partial slot. Mana is a resource, not a
   characteristic: skipping a turn restores 5 (`COMBAT.mana`, printed by `/rules`).
-- **The menu** (`bot/menu.js`) is three sections - battle rules, stat feats, and
-  the dice/commands - reached by `/menu`, `/start`, `/rules` or `/feats`. It is an
-  inline keyboard; each button carries `menu:<section>` and **edits the same
-  message in place** (`editMessageText`), so the chat is not flooded. Telegram only
-  delivers button presses if `callback_query` is in the webhook's `allowed_updates`
-  (the deploy script sets it); a callback also needs `answerCallbackQuery` or the
-  button spins forever. `worker.js` reports `edits`/`editResults` the same way it
-  reports `replies`/`results`, so a webhook test can tell an edit landed.
+- **Battle-post rules** are their own menu section (`COMBAT.post`, printed by
+  `/post` and the `menu:post` button): one `/roll` per turn, the character number
+  after the command, the crit conditional. It is separate from the combat rules
+  because the owner asked for "правила написания поста в бою" as its own point.
+- **The menu** (`bot/menu.js`) is four sections - battle rules, battle-post rules,
+  stat feats, and the dice/commands - reached by `/menu`, `/start`, `/rules`,
+  `/post` or `/feats`. It is an inline keyboard; each button carries
+  `menu:<section>` and **edits the same message in place** (`editMessageText`), so
+  the chat is not flooded. Telegram only delivers button presses if
+  `callback_query` is in the webhook's `allowed_updates` (the deploy script sets
+  it); a callback also needs `answerCallbackQuery` or the button spins forever.
+  `worker.js` reports `edits`/`editResults` the same way it reports
+  `replies`/`results`, so a webhook test can tell an edit landed.
 - Run it with `npm run bot`. The token goes in `TELEGRAM_RP_BOT_TOKEN` (repo `.env`,
   gitignored) - never in code. Sheets are stored at `bot/data/players.json`
   (gitignored), keyed by Telegram id.

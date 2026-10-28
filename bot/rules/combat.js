@@ -51,6 +51,23 @@ export const COMBAT = {
   // The bot remembers it and fires it only when the crit roll lands.
   conditional: 'В посте можно написать: «атакую; если крит — использую добивание». Бот применит это только если крит удался.',
 
+  // Who rolls: the bot rolls only for a player, never for an NPC or the world.
+  // The player calls it with /roll, and a battle post ends on /roll.
+  playerRolls: 'Кубик кидает только игрок — за себя, командуя своим персонажем. Бот не бросает за врагов, НПС или мир, он лишь отвечает на твой /roll.',
+
+  // How to write a battle post: one /roll per turn, with the character number.
+  post: {
+    ru: 'Правила написания поста в бою',
+    lines: [
+      'Пиши от лица одного персонажа за ход — того, чей номер укажешь.',
+      'Закончи пост на /roll, чтобы бросить кубик. Один бросок — один ход.',
+      'Если у тебя два персонажа, добавь номер после команды: /roll 1 или /roll 2.',
+      'Без номера бот бросит за твоего первого персонажа (слот 1).',
+      'Свой номер бот не угадывает — номер нужен, чтобы он понял, чей это ход.',
+      'Условие на крит пишется в посте: «атакую; если крит — добиваю». Бот применит его только при крите.'
+    ]
+  },
+
   // Mana is a resource, not a characteristic: it is spent to act and refilled by
   // giving up a turn.
   mana: {

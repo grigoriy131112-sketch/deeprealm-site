@@ -61,8 +61,8 @@ const meta = {
   ]
 };
 const form = new FormData();
-form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-form.append('worker.js', new Blob([fs.readFileSync(path.join(ROOT, 'deploy/cloudflare/rp-bot/dist/worker.js'))], { type: 'application/javascript+module' }));
+form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }), 'metadata.json');
+form.append('worker.js', new Blob([fs.readFileSync(path.join(ROOT, 'deploy/cloudflare/rp-bot/dist/worker.js'))], { type: 'application/javascript+module' }), 'worker.js');
 const upload = await fetch(`${CF}/workers/scripts/${SCRIPT}`, { method: 'PUT', headers: { Authorization: `Bearer ${cfToken}` }, body: form });
 const up = await upload.json();
 if (!up.success) throw new Error('upload: ' + JSON.stringify(up.errors));

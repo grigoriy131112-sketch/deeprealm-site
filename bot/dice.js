@@ -53,11 +53,12 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
 // The message the bot posts to the group.
 export function formatRoll(sheet, results) {
   const name = sheet && sheet.name ? sheet.name : 'Безымянный';
+  const slot = sheet && sheet.slot ? ` #${sheet.slot}` : '';
   const lines = results.map((r) => {
     let tail = '';
     if (r.crit) tail = `  💥 КРИТ ×${COMBAT.dice.crit.multiplier}`;
     else if (r.fumble) tail = '  ⚠️ провал (+5 по тебе)';
     return `${r.ru}:  d20 = ${r.raw} → ${r.raw} + ${r.plus} = ${r.total}${tail}`;
   });
-  return ['🎲 ' + name, ...lines].join('\n');
+  return ['🎲 ' + name + slot, ...lines].join('\n');
 }

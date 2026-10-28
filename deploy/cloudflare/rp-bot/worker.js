@@ -78,7 +78,7 @@ export default {
 
     if (request.method === 'GET') {
       // A quick liveness probe that does not touch Telegram.
-      return json({ ok: true, rev: 2, service: 'deeprealm-rp-bot' });
+      return json({ ok: true, rev: 3, service: 'deeprealm-rp-bot' });
     }
 
     if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });

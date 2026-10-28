@@ -1,8 +1,9 @@
-// The bot's menu: three sections reachable from /menu (and /start).
+// The bot's menu: the sections reachable from /menu (and /start).
 //
-//   1. Боевые правила   - the turn economy, resolution, mana
-//   2. Фишки статистик  - what each characteristic unlocks at 8-10
-//   3. Кубик и команды  - how the d20 works and the commands that call it
+//   1. Боевые правила            - the turn economy, resolution, mana
+//   2. Правила написания поста в бою - who rolls, /roll 1|2, the post shape
+//   3. Фишки статистик           - what each characteristic unlocks at 8-10
+//   4. Кубик и команды           - how the d20 works and the commands that call it
 //
 // The section text is built from the same COMBAT and FEATS data the engine uses,
 // so the menu cannot describe rules the dice do not follow. Telegram inline
@@ -15,6 +16,7 @@ import { STATS } from './stats.js';
 
 export const MENU = [
   { key: 'rules', ru: '⚔️ Боевые правила' },
+  { key: 'post', ru: '📝 Пост в бою' },
   { key: 'feats', ru: '✨ Фишки статистик' },
   { key: 'dice', ru: '🎲 Кубик и команды' }
 ];
@@ -36,6 +38,8 @@ export function homeText() {
 
 export function rulesText() {
   const lines = ['⚔️ Боевые правила', ''];
+  lines.push(COMBAT.playerRolls);
+  lines.push('');
   lines.push(`За ход: ${COMBAT.turn.full} полное действие и ${COMBAT.turn.partial} неполных.`);
   lines.push('Полное: ' + COMBAT.turn.fullActions.map((a) => a.ru).join(', ') + '.');
   lines.push('Неполное: ' + COMBAT.turn.partialActions.map((a) => a.ru).join(', ') + '.');
@@ -49,11 +53,29 @@ export function rulesText() {
   lines.push(COMBAT.grid.cover);
   lines.push('', COMBAT.conditional);
   lines.push('', `💧 ${COMBAT.mana.ru}: ${COMBAT.mana.note}`);
+  lines.push('', `📝 Как писать пост в бою — раздел «${COMBAT.post.ru}».`);
+  return lines.join('\n');
+}
+
+// The battle-post rules, including which character a /roll is for.
+export function postText() {
+  const lines = [`📝 ${COMBAT.post.ru}`, ''];
+  lines.push(COMBAT.playerRolls);
+  lines.push('');
+  for (const line of COMBAT.post.lines) lines.push('• ' + line);
+  lines.push('');
+  lines.push('Примеры:');
+  lines.push('• «Атакую гоблина мечом /roll» — бросок за первого персонажа.');
+  lines.push('• «Атакую; если крит — добиваю /roll 2» — бросок за второго.');
+  lines.push('• «Жду в укрытии /roll 1» — пропуск хода за первого.');
   return lines.join('\n');
 }
 
 export function featsText(record) {
-  const lines = ['✨ Фишки статистик', '', 'Характеристика 8 открывает фишку, 10 усиливает её.', ''];
+  const name = record && record.name ? `${record.slot ? record.slot + '. ' : ''}${record.name}` : '';
+  const lines = ['✨ Фишки статистик', '', 'Характеристика 8 открывает фишку, 10 усиливает её.'];
+  if (name) lines.push('', `Персонаж: ${name}`);
+  lines.push('');
   if (record && record.stats) {
     const mine = STATS.filter((s) => FEATS[s.key] && Number(record.stats[s.key]) >= 8);
     lines.push('Твои открытые:');
@@ -85,11 +107,15 @@ export function diceText() {
     '',
     'Провал: выпала 1 — по тебе +5 до конца раунда.',
     '',
+    'Кубик кидает только игрок — за своего персонажа. Бот не бросает за врагов или НПС.',
+    '',
     'Команды:',
     '• /roll — в игровом чате: закончи пост на /roll, и я брошу за тебя.',
-    '• /reg — в личке: записать персонажа (имя и 14 характеристик).',
-    '• /my — мой лист, /feats — мои фишки.',
-    '• /menu — это меню, /rules — правила боя.',
+    '• /roll 1 или /roll 2 — бросок за первого или второго персонажа.',
+    '• /reg — в личке: записать персонажа (имя, @юзер и 14 характеристик). Можно двоих.',
+    '• /del 1 | /del 2 | /del all — удалить персонажа (в личке).',
+    '• /my — мои листы, /feats — мои фишки.',
+    '• /menu — это меню, /rules — правила боя, /post — правила поста в бою.',
     '',
     'В посте можно дописать: «атакую; если крит — добиваю» — бот применит это только при крите.'
   ].join('\n');
@@ -98,6 +124,7 @@ export function diceText() {
 // The text for a section, or the home screen for anything else.
 export function sectionText(key, record) {
   if (key === 'rules') return rulesText();
+  if (key === 'post') return postText();
   if (key === 'feats') return featsText(record);
   if (key === 'dice') return diceText();
   return homeText();

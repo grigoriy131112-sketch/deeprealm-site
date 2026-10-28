@@ -144,3 +144,22 @@ test('a menu button edits the menu message and answers the callback', async () =
   assert.match(edit.body.text, /Мана/);
   assert.ok(edit.body.reply_markup.inline_keyboard, 'the edited menu keeps its buttons');
 });
+
+test('two characters are stored and /roll 2 rolls the second', async () => {
+  const e = env();
+  const calls = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
+  };
+  try {
+    await worker.fetch(post({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/reg Аттар @attar\nСила 8, Реакция 6' } }), e);
+    await worker.fetch(post({ message: { message_id: 2, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/reg Бо @bob\nСила 4, Реакция 2' } }), e);
+    await worker.fetch(post({ message: { message_id: 3, chat: { id: 100, type: 'supergroup' }, from: { id: 5 }, text: 'бью /roll 2' } }), e);
+  } finally {
+    globalThis.fetch = orig;
+  }
+  const rolled = calls[calls.length - 1];
+  assert.match(rolled.body.text, /🎲 Бо #2/, 'must roll the second character, not the first');
+});

@@ -8,9 +8,10 @@ import path from 'node:path';
 import { bonus, resolveStat, STAT_KEYS } from '../bot/stats.js';
 import { featFor } from '../bot/rules/feats.js';
 import { rollSet, formatRoll, ROLL_ORDER } from '../bot/dice.js';
-import { parseSheet, extractConditional, wantsRoll, commandOf } from '../bot/parse.js';
+import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlot, commandArgs } from '../bot/parse.js';
 import { createStore } from '../bot/store.js';
 import { createBot } from '../bot/bot.js';
+import { charactersOf, characterAt, addCharacter, removeCharacter, normalizeRecord, MAX_CHARACTERS } from '../bot/characters.js';
 
 function tempStore() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rp-bot-'));
@@ -69,10 +70,28 @@ test('feats open at 8 and upgrade at 10', () => {
 test('parseSheet reads a name and the fourteen ratings', () => {
   const p = parseSheet('/reg ' + SHEET);
   assert.equal(p.name, 'Аттар');
+  assert.equal(p.user, '');
   assert.equal(p.stats.strength, 8);
   assert.equal(p.stats.reaction, 6);
   assert.equal(p.missing.length, 0);
   assert.deepEqual(p.unknown, []);
+});
+
+test('parseSheet keeps an @user handle on the name line', () => {
+  const p = parseSheet('/reg Аттар @attar\nСила 8, Реакция 6');
+  assert.equal(p.name, 'Аттар');
+  assert.equal(p.user, 'attar');
+  assert.equal(p.stats.strength, 8);
+});
+
+test('rollSlot and commandArgs read the number after a command', () => {
+  assert.equal(rollSlot('бью /roll 2'), 2);
+  assert.equal(rollSlot('/roll 1'), 1);
+  assert.equal(rollSlot('бью /roll'), null);
+  assert.equal(rollSlot('бью /roll 2 и ещё /roll 1'), 2);
+  assert.equal(commandArgs('/del 1'), '1');
+  assert.equal(commandArgs('/del@koobboobbot all'), 'all');
+  assert.equal(commandArgs('/feats 2'), '2');
 });
 
 test('parseSheet tolerates newlines and colons and reports bad input', () => {
@@ -145,10 +164,11 @@ test('/reg in private saves the sheet and answers with it', async () => {
   await bot.handleUpdate(reg(5, '/reg ' + SHEET));
   assert.equal(sent.length, 1);
   assert.equal(sent[0].chatId, 5);
-  assert.match(sent[0].text, /Записал, Аттар/);
+  assert.match(sent[0].text, /Записал персонажа 1: Аттар/);
   assert.match(sent[0].text, /Сила 8/);
   assert.match(sent[0].text, /«Стальной захват»/); // Strength 8 opens the feat
-  assert.equal(store.get(5).stats.reaction, 6);
+  const record = await store.get(5);
+  assert.equal(characterAt(record, 1).stats.reaction, 6);
 });
 
 test('/reg in a group is refused and sent to private chat', async () => {
@@ -218,7 +238,7 @@ test('the engine never reads a stat that is not a real characteristic', () => {
   for (const r of results) assert.ok(STAT_KEYS.includes(r.statKey), r.statKey);
 });
 
-test('/menu posts the home screen with a three-button keyboard', async () => {
+test('/menu posts the home screen with the section keyboard', async () => {
   const store = tempStore();
   const c = collector();
   const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
@@ -227,7 +247,7 @@ test('/menu posts the home screen with a three-button keyboard', async () => {
   const kb = c.sent[0].keyboard;
   assert.ok(kb && kb.inline_keyboard, 'menu must carry an inline keyboard');
   const datas = kb.inline_keyboard.flat().map((b) => b.callback_data);
-  assert.deepEqual(datas, ['menu:rules', 'menu:feats', 'menu:dice']);
+  assert.deepEqual(datas, ['menu:rules', 'menu:post', 'menu:feats', 'menu:dice']);
 });
 
 test('/rules mentions mana and that skipping a turn restores 5', async () => {
@@ -287,4 +307,152 @@ test('the back button returns to the home screen', async () => {
   assert.match(c.edited[0].text, /Выбери раздел/);
   const datas = c.edited[0].keyboard.inline_keyboard.flat().map((b) => b.callback_data);
   assert.ok(!datas.includes('menu:home'), 'home has no back row');
+});
+
+// --- two characters per account -------------------------------------------
+
+test('normalizeRecord lifts a pre-multi-character sheet into slot 1', () => {
+  const rec = normalizeRecord({ id: '5', name: 'Аттар', stats: { strength: 8 }, tgUser: 'attar' });
+  assert.equal(rec.characters.length, 1);
+  assert.equal(rec.characters[0].slot, 1);
+  assert.equal(rec.characters[0].name, 'Аттар');
+  assert.equal(rec.characters[0].stats.strength, 8);
+  assert.equal(rec.characters[0].user, 'attar');
+});
+
+test('addCharacter fills slot 1 then slot 2 and refuses a third', () => {
+  let rec = addCharacter(null, { name: 'Аттар' });
+  assert.equal(charactersOf(rec).length, 1);
+  assert.equal(characterAt(rec, 1).name, 'Аттар');
+  rec = addCharacter(rec, { name: 'Бо' });
+  assert.equal(characterAt(rec, 2).name, 'Бо');
+  assert.equal(charactersOf(rec).length, MAX_CHARACTERS);
+  const same = addCharacter(rec, { name: 'Третий' });
+  assert.equal(charactersOf(same).length, MAX_CHARACTERS, 'no third character');
+});
+
+test('removeCharacter drops one slot or all of them', () => {
+  let rec = addCharacter(addCharacter(null, { name: 'Аттар' }), { name: 'Бо' });
+  rec = removeCharacter(rec, 1);
+  assert.equal(charactersOf(rec).length, 1);
+  assert.equal(characterAt(rec, 2).name, 'Бо', 'the other slot keeps its number');
+  rec = removeCharacter(rec, 'all');
+  assert.equal(charactersOf(rec).length, 0);
+});
+
+test('a second /reg stores a second character and caps at two', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg ' + SHEET));
+  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 7'));
+  assert.match(sent[1].text, /Записал персонажа 2: Бо/);
+  const rec = await store.get(5);
+  assert.equal(charactersOf(rec).length, 2);
+  // A third is refused, not silently overwritten.
+  await bot.handleUpdate(reg(5, '/reg Третий\nСила 5'));
+  assert.match(sent[2].text, /уже 2 персонажа/);
+  assert.equal(charactersOf(await store.get(5)).length, 2);
+});
+
+test('/roll 2 rolls the second character, /roll 1 the first', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
+  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 2'));
+  const second = sent[sent.length - 1].text;
+  assert.match(second, /🎲 Бо #2/);
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 1'));
+  const first = sent[sent.length - 1].text;
+  assert.match(first, /🎲 Аттар #1/);
+});
+
+test('/roll without a number uses the first character', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
+  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
+  await bot.handleUpdate(groupMsg(5, 100, 'атакую /roll'));
+  assert.match(sent[sent.length - 1].text, /🎲 Аттар #1/);
+});
+
+test('/roll for a slot the player does not have says which exist', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 2'));
+  assert.match(sent[sent.length - 1].text, /нет персонажа 2/);
+});
+
+test('/del 1 removes one character and /del all removes the rest', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8'));
+  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4'));
+  await bot.handleUpdate(reg(5, '/del 1'));
+  assert.match(sent[sent.length - 1].text, /Удалил/);
+  assert.equal(characterAt(await store.get(5), 2).name, 'Бо');
+  await bot.handleUpdate(reg(5, '/del all'));
+  assert.equal(charactersOf(await store.get(5)).length, 0);
+  // With no characters left, /roll asks them to register again.
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll'));
+  assert.match(sent[sent.length - 1].text, /в ЛС \/reg/);
+});
+
+test('/del with no number asks which one', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8'));
+  await bot.handleUpdate(reg(5, '/del'));
+  assert.match(sent[sent.length - 1].text, /Кого удалить/);
+  assert.equal(charactersOf(await store.get(5)).length, 1);
+});
+
+test('/del in a group is refused', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8'));
+  await bot.handleUpdate(groupMsg(5, 100, '/del 1'));
+  assert.match(sent[sent.length - 1].text, /только в личке/);
+  assert.equal(charactersOf(await store.get(5)).length, 1);
+});
+
+test('/my lists every character with its handle', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар @attar\nСила 8'));
+  await bot.handleUpdate(reg(5, '/reg Бо @bob\nСила 4'));
+  await bot.handleUpdate({ message: { message_id: 9, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/my' } });
+  const text = sent[sent.length - 1].text;
+  assert.match(text, /Твои персонажи/);
+  assert.match(text, /1\. Аттар \(@attar\)/);
+  assert.match(text, /2\. Бо \(@bob\)/);
+});
+
+test('/post prints the battle-post rules and who rolls', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/post' } });
+  const text = sent[0].text;
+  assert.match(text, /Правила написания поста в бою/);
+  assert.match(text, /Кубик кидает только игрок/);
+  assert.match(text, /\/roll 1 или \/roll 2/);
+});
+
+test('/rules says only the player rolls', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/rules' } });
+  assert.match(sent[0].text, /Кубик кидает только игрок/);
+  assert.match(sent[0].text, /пост в бою/);
 });

@@ -7,13 +7,21 @@
 
 import { STAT_KEYS, resolveStat, isRating } from './stats.js';
 
-// "/reg Аттар\nСила 8, Скорость 6, ..." -> { name, stats, unknown }
-// `stats` holds only the ratings that parsed; `unknown` lists names we did not
-// recognise, so the reply can tell the player exactly what to fix.
+// "/reg Аттар\nСила 8, Скорость 6, ..." -> { name, stats, unknown, user }
+// The first line is the name; a trailing "@nick" on that line is the player's
+// Telegram handle, kept with the character. `stats` holds only the ratings that
+// parsed; `unknown` lists names we did not recognise, so the reply can tell the
+// player exactly what to fix.
 export function parseSheet(text) {
   const body = String(text || '').replace(/^\/reg\b/i, ' ').trim();
   const lines = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const name = (lines.shift() || '').trim();
+  let name = (lines.shift() || '').trim();
+  let user = '';
+  const tag = name.match(/\s*@([A-Za-z0-9_]{3,})\s*$/);
+  if (tag) {
+    user = tag[1];
+    name = name.slice(0, tag.index).trim();
+  }
   const stats = {};
   const unknown = [];
 
@@ -39,7 +47,21 @@ export function parseSheet(text) {
     stats[key] = value;
   }
 
-  return { name, stats, unknown, missing: STAT_KEYS.filter((k) => !(k in stats)) };
+  return { name, user, stats, unknown, missing: STAT_KEYS.filter((k) => !(k in stats)) };
+}
+
+// "/roll 2" -> 2. A bare "/roll" (or a post that only ends in /roll) -> null,
+// which means "the player's first character".
+export function rollSlot(text) {
+  const m = String(text || '').match(/(?:^|\s)\/roll(?:@\w+)?\s+(\d+)\b/i);
+  return m ? Number(m[1]) : null;
+}
+
+// The arguments after a command word, without the "@botname" suffix.
+// "/del 1" -> "1"; "/reg@koobboobbot Аттар" -> "Аттар".
+export function commandArgs(text) {
+  const m = String(text || '').match(/^\/[a-zа-яё_]+(?:@\w+)?\s*([\s\S]*)$/i);
+  return m ? m[1].trim() : '';
 }
 
 // A post may carry a plan for a lucky strike: "атакую; если крит — добиваю".
