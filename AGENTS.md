@@ -890,5 +890,6 @@ permission is missing. Probe that way before starting any long operation.
 A short fill-in-the-blank form for describing a new bot: name, purpose, audience,
 commands, what it does and does not do, access and status. It is a document, not
 code - the owner asked for a simple blank, not a scaffold. `channel-post.md` holds
-the announcement draft for the owner's channel **@vebfabric** ("ВебФабрика"); there
-is no channel token in the repository and posts are published by hand.
+the announcement draft for the owner's channel **@vebfabric** ("ВебФабрика") and
+`channel-post.png` (1200x675) is the matching picture; there is no channel token in
+the repository and posts are published by hand.
