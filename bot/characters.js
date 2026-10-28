@@ -1,8 +1,8 @@
 // A player's characters.
 //
 // One Telegram account may keep up to two characters (the owner's rule), and
-// the player names which one a roll is for by the number after the command -
-// "/roll 1" or "/roll 2". A sheet that predates this feature was a single
+// the player names which one a roll is for by the number glued to the command -
+// "/roll1" or "/roll2". A sheet that predates this feature was a single
 // character, so `normalizeRecord` lifts it into slot 1 unchanged; nothing in the
 // stored data is thrown away.
 //
@@ -87,7 +87,7 @@ export function addCharacter(raw, { name, stats = {}, user = '' } = {}) {
 }
 
 // Drop one slot, or both when `slot` is 'all'/'*'. Later characters keep their
-// own slot number so a "/roll 2" the player learned does not silently move.
+// own slot number so a "/roll2" the player learned does not silently move.
 export function removeCharacter(raw, slot) {
   const base = normalizeRecord(raw);
   const all = slot === 'all' || slot === '*' || slot === true;

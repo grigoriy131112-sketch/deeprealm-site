@@ -5,10 +5,10 @@
 // Flow:
 //   * a player registers in a private chat with /reg, sending a character's name,
 //     handle and the fourteen ratings. Up to two characters per account;
-//   * in the game group a player ends a post with /roll - or /roll 1, /roll 2 to
-//     say which character, or both ("/roll 1 и /roll 2") to roll both at once -
-//     and the bot answers with the three dice - crit, block, dodge - each with
-//     half of the matching characteristic added;
+//   * in the game group a player ends a post with a roll command - /roll1 or
+//     /roll2 to name one character, /rollall for both at once, or a bare /roll
+//     for the first - and the bot answers with the three dice - crit, block,
+//     dodge - each with half of the matching characteristic added;
 //   * /del 1, /del 2 or /delall (also /del all) drops a character;
 //   * /menu (and /start) opens the menu - battle rules, battle-post rules, stat
 //     feats, dice and commands - whose buttons edit the message in place.
@@ -16,7 +16,7 @@
 import { STATS, STAT_BY_KEY, STAT_BLOCKS, DISTRIBUTION_RULE, distributionIssues, ROLLS, bonus } from './stats.js';
 import { featFor } from './rules/feats.js';
 import { rollSet, formatRoll } from './dice.js';
-import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlots, commandArgs } from './parse.js';
+import { parseSheet, extractConditional, wantsRoll, commandOf, rollCommand, commandArgs } from './parse.js';
 import { charactersOf, characterAt, canAdd, nextSlot, addCharacter, removeCharacter, MAX_CHARACTERS } from './characters.js';
 import { isMenuSection, sectionText, menuKeyboard } from './menu.js';
 
@@ -146,19 +146,19 @@ export function createBot({ store, send, editMessage, answerCallback }) {
     if (!record || !charactersOf(record).length) {
       return reply(chatId, 'Тебя ещё нет в списке. Напиши мне в ЛС /reg Имя и статы — и я начну кидать.', msg.message_id, msg.message_thread_id);
     }
-    // Every "/roll" in the post rolls one character, in the order written; a bare
-    // "/roll" means the first slot. A single post may roll both characters at once
-    // ("/roll 1 и /roll 2"), so the bot answers with a block per roll.
-    const requested = rollSlots(msg.text);
-    const slots = requested.length ? requested.map((s) => (s == null ? 1 : s)) : [1];
+    // One roll command per post. "/roll" rolls the first character, "/roll1" or
+    // "/roll2" a named one, and "/rollall" both at once; all blocks ride in a
+    // single message.
+    const command = rollCommand(msg.text) || { slot: null, all: false };
+    const chars = charactersOf(record);
+    const slots = command.all ? chars.map((c) => c.slot) : [command.slot == null ? 1 : command.slot];
     const blocks = [];
     let anyCrit = false;
     for (const slot of slots) {
       const character = characterAt(record, slot);
       if (!character) {
-        const chars = charactersOf(record);
         const have = chars.map((c) => c.slot).join(' или ');
-        return reply(chatId, `У тебя нет персонажа ${slot}. Доступны слоты: ${have}. Укажи номер: /roll ${chars[0].slot}.`, msg.message_id, msg.message_thread_id);
+        return reply(chatId, `У тебя нет персонажа ${slot}. Доступны слоты: ${have}. Укажи номер: /roll${chars[0].slot}.`, msg.message_id, msg.message_thread_id);
       }
       const results = rollSet(character);
       if (results.find((r) => r.key === 'crit').crit) anyCrit = true;
@@ -259,7 +259,7 @@ export function createBot({ store, send, editMessage, answerCallback }) {
       '',
       'В личке: /reg Имя @юзер и статы — записать персонажа (можно двух).',
       'В общем чате: закончи пост на /roll — и я выдам крит, блок и уклонение.',
-      'Два персонажа? Укажи номер: /roll 1 или /roll 2. Оба сразу — /roll 1 и /roll 2.',
+      'Два персонажа? Пиши номер вплотную: /roll1 или /roll2. За обоих сразу — /rollall.',
       '',
       'Меню: /menu — правила боя, пост в бою, фишки, кубик.',
       'Ещё: /my — мои листы, /del 1|2|delall — удалить персонажа.'
@@ -275,7 +275,7 @@ export function createBot({ store, send, editMessage, answerCallback }) {
       if (cmd === 'start' || cmd === 'help') return handleStart(msg);
       if (cmd === 'menu') return handleMenu(msg);
       if (cmd === 'reg' || cmd === 'register') return handleReg(msg);
-      if (cmd === 'roll') return handleRoll(msg);
+      if (cmd === 'roll' || cmd === 'rollall') return handleRoll(msg);
       if (cmd === 'del' || cmd === 'delete' || cmd === 'delall') return handleDel(msg);
       if (cmd === 'rules') return handleRules(msg);
       if (cmd === 'post') return handlePost(msg);

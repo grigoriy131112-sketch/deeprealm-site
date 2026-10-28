@@ -8,7 +8,7 @@ import path from 'node:path';
 import { bonus, resolveStat, STAT_KEYS, distributionIssues, STAT_BLOCKS, DISTRIBUTION_RULE } from '../bot/stats.js';
 import { featFor } from '../bot/rules/feats.js';
 import { rollSet, formatRoll, ROLL_ORDER } from '../bot/dice.js';
-import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlot, rollSlots, commandArgs } from '../bot/parse.js';
+import { parseSheet, extractConditional, wantsRoll, commandOf, rollCommand, commandArgs } from '../bot/parse.js';
 import { createStore } from '../bot/store.js';
 import { createBot } from '../bot/bot.js';
 import { charactersOf, characterAt, addCharacter, removeCharacter, normalizeRecord, MAX_CHARACTERS } from '../bot/characters.js';
@@ -85,24 +85,19 @@ test('parseSheet keeps an @user handle on the name line', () => {
   assert.equal(p.stats.strength, 8);
 });
 
-test('rollSlot and commandArgs read the number after a command', () => {
-  assert.equal(rollSlot('бью /roll 2'), 2);
-  assert.equal(rollSlot('/roll 1'), 1);
-  assert.equal(rollSlot('бью /roll'), null);
-  assert.equal(rollSlot('бью /roll 2 и ещё /roll 1'), 2);
+test('rollCommand reads the roll command, number glued or spaced', () => {
+  assert.deepEqual(rollCommand('/roll1'), { slot: 1, all: false });
+  assert.deepEqual(rollCommand('бью /roll2'), { slot: 2, all: false });
+  assert.deepEqual(rollCommand('/rollall'), { slot: null, all: true });
+  assert.deepEqual(rollCommand('за обоих /rollall'), { slot: null, all: true });
+  assert.deepEqual(rollCommand('бью /roll'), { slot: null, all: false });
+  // A spaced number is still accepted, so an old habit keeps working.
+  assert.deepEqual(rollCommand('/roll 2'), { slot: 2, all: false });
+  assert.deepEqual(rollCommand('/roll@koobboobbot 1'), { slot: 1, all: false });
+  assert.equal(rollCommand('без броска'), null);
   assert.equal(commandArgs('/del 1'), '1');
   assert.equal(commandArgs('/del@koobboobbot all'), 'all');
   assert.equal(commandArgs('/feats 2'), '2');
-});
-
-test('rollSlots collects every /roll in a post, in order', () => {
-  assert.deepEqual(rollSlots('бью /roll 1 и /roll 2'), [1, 2]);
-  assert.deepEqual(rollSlots('/roll 2'), [2]);
-  assert.deepEqual(rollSlots('/roll 1, /roll 2'), [1, 2]);
-  assert.deepEqual(rollSlots('/roll@koobboobbot 1 /roll@koobboobbot 2'), [1, 2]);
-  assert.deepEqual(rollSlots('атакую /roll'), [null]);
-  assert.deepEqual(rollSlots('/roll и /roll 2'), [null, 2]);
-  assert.deepEqual(rollSlots('без броска'), []);
 });
 
 test('parseSheet tolerates newlines and colons and reports bad input', () => {
@@ -148,8 +143,12 @@ test('extractConditional pulls the "if crit" tail', () => {
 
 test('wantsRoll and commandOf', () => {
   assert.equal(wantsRoll('мой пост /roll'), true);
+  assert.equal(wantsRoll('мой пост /roll1'), true);
+  assert.equal(wantsRoll('мой пост /rollall'), true);
   assert.equal(wantsRoll('мой пост'), false);
   assert.equal(commandOf('/roll'), 'roll');
+  assert.equal(commandOf('/roll1'), 'roll');
+  assert.equal(commandOf('/rollall'), 'rollall');
   assert.equal(commandOf('/reg@koobboobbot Аттар'), 'reg');
   assert.equal(commandOf('привет'), null);
 });
@@ -418,27 +417,25 @@ test('a second /reg stores a second character and caps at two', async () => {
   assert.equal(charactersOf(await store.get(5)).length, 2);
 });
 
-test('/roll 2 rolls the second character, /roll 1 the first', async () => {
+test('/roll1 and /roll2 roll the named character', async () => {
   const store = tempStore();
   const { sent, send } = collector();
   const bot = createBot({ store, send });
   await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
   await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
-  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 2'));
-  const second = sent[sent.length - 1].text;
-  assert.match(second, /🎲 Бо #2/);
-  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 1'));
-  const first = sent[sent.length - 1].text;
-  assert.match(first, /🎲 Аттар #1/);
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll2'));
+  assert.match(sent[sent.length - 1].text, /🎲 Бо #2/);
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll1'));
+  assert.match(sent[sent.length - 1].text, /🎲 Аттар #1/);
 });
 
-test('one post with /roll 1 and /roll 2 rolls both characters together', async () => {
+test('/rollall rolls both characters in one message', async () => {
   const store = tempStore();
   const { sent, send } = collector();
   const bot = createBot({ store, send });
   await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
   await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
-  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 1 и /roll 2'));
+  await bot.handleUpdate(groupMsg(5, 100, 'атакую за обоих /rollall'));
   const text = sent[sent.length - 1].text;
   assert.match(text, /🎲 Аттар #1/);
   assert.match(text, /🎲 Бо #2/);
@@ -446,15 +443,15 @@ test('one post with /roll 1 and /roll 2 rolls both characters together', async (
   assert.equal(sent.filter((m) => m.chatId === 100 && /🎲/.test(m.text)).length, 1);
 });
 
-test('/roll 2 и /roll 1 rolls in the order written', async () => {
+test('/rollall with one character rolls just that one', async () => {
   const store = tempStore();
   const { sent, send } = collector();
   const bot = createBot({ store, send });
   await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
-  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4, Реакция 2'));
-  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 2 и /roll 1'));
+  await bot.handleUpdate(groupMsg(5, 100, '/rollall'));
   const text = sent[sent.length - 1].text;
-  assert.ok(text.indexOf('🎲 Бо #2') < text.indexOf('🎲 Аттар #1'), text);
+  assert.match(text, /🎲 Аттар #1/);
+  assert.doesNotMatch(text, /#2/);
 });
 
 test('/roll without a number uses the first character', async () => {
@@ -467,12 +464,12 @@ test('/roll without a number uses the first character', async () => {
   assert.match(sent[sent.length - 1].text, /🎲 Аттар #1/);
 });
 
-test('/roll for a slot the player does not have says which exist', async () => {
+test('/roll2 for a slot the player does not have says which exist', async () => {
   const store = tempStore();
   const { sent, send } = collector();
   const bot = createBot({ store, send });
   await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8, Реакция 6'));
-  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll 2'));
+  await bot.handleUpdate(groupMsg(5, 100, 'бью /roll2'));
   assert.match(sent[sent.length - 1].text, /нет персонажа 2/);
 });
 
@@ -533,7 +530,8 @@ test('/post prints the battle-post rules and who rolls', async () => {
   const text = sent[0].text;
   assert.match(text, /Правила написания поста в бою/);
   assert.match(text, /Кубик кидает только игрок/);
-  assert.match(text, /\/roll 1 или \/roll 2/);
+  assert.match(text, /\/roll1 или \/roll2/);
+  assert.match(text, /\/rollall/);
 });
 
 test('/rules says only the player rolls', async () => {

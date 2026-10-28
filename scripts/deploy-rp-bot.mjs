@@ -84,7 +84,7 @@ console.log('Вебхук поставлен на', url);
 // 5. Publish the command list, so the "/" menu in Telegram matches the bot.
 const commands = [
   { command: 'menu', description: 'Меню: правила, пост в бою, фишки, кубик' },
-  { command: 'roll', description: 'Бросок кубика: /roll 1, /roll 2 или оба сразу' },
+  { command: 'roll', description: 'Бросок: /roll1, /roll2 или /rollall' },
   { command: 'reg', description: 'Записать персонажа (до двух)' },
   { command: 'my', description: 'Мои персонажи и их фишки' },
   { command: 'feats', description: 'Фишки статистик' },

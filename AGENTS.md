@@ -794,15 +794,17 @@ permission is missing. Probe that way before starting any long operation.
   `distributionIssues`, `DISTRIBUTION_RULE`). The same text lives in the site's
   `data/knowledge.json` `character_template.fields.*.rule`, so the site's template
   and the bot agree. A block that is not fully filled in is not judged.
-- **The player names which character a roll is for** by the number after the
-  command: `/roll 1` or `/roll 2`, and a battle post ends on `/roll 1|2`. Without
-  a number the bot uses **slot 1**. The bot never guesses the character - the
-  number is the only signal, and `/roll N` for a slot that does not exist says
-  which slots do. `bot/parse.js` `rollSlot()`/`commandArgs()` read it.
-- **One post may roll both characters at once.** Every `/roll` in the message
-  rolls one character, in the order written: `/roll 1 и /roll 2` answers with both
-  blocks in a single message (`bot/parse.js` `rollSlots()`, used by `handleRoll`).
-  A bare `/roll` still means slot 1, so `/roll` alone is unchanged.
+- **The player names which character a roll is for** by a number glued to the
+  command, like `/del1`: `/roll1` or `/roll2`, and a battle post ends on `/roll1`
+  or `/roll2`. Without a number a bare `/roll` uses **slot 1**. The bot never
+  guesses the character - the number is the only signal, and `/rollN` for a slot
+  that does not exist says which slots do. `bot/parse.js` `rollCommand()` reads it
+  (a spaced `/roll 1` is still accepted so an old habit keeps working).
+- **`/rollall` rolls every character at once** - the "both in one post" case, as
+  a single command rather than two commands in a row. It answers with one block
+  per character in a single message. With one character it rolls just that one.
+  `bot/parse.js` `rollCommand()` returns `{ all: true }` for it, and `handleRoll`
+  maps the slots to roll. One roll command per post: the first one wins.
 - **Only the player rolls.** The bot rolls for a player's character, never for an
   NPC, an enemy or the world; it only answers a `/roll` the player wrote
   (`COMBAT.playerRolls`). `/rules` and the menu both say so.

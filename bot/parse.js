@@ -50,22 +50,22 @@ export function parseSheet(text) {
   return { name, user, stats, unknown, missing: STAT_KEYS.filter((k) => !(k in stats)) };
 }
 
-// "/roll 2" -> 2. A bare "/roll" (or a post that only ends in /roll) -> null,
-// which means "the player's first character".
-export function rollSlot(text) {
-  const m = String(text || '').match(/(?:^|\s)\/roll(?:@\w+)?\s+(\d+)\b/i);
-  return m ? Number(m[1]) : null;
-}
-
-// Every "/roll" in one post, in the order written: "бью /roll 1 и /roll 2" -> [1, 2].
-// A bare "/roll" contributes null (the first character), so "/roll и /roll 2" -> [null, 2].
-// One post may roll several characters at once; the caller maps null to slot 1.
-export function rollSlots(text) {
-  const re = /(?:^|\s)\/roll(?:@\w+)?(?:\s+(\d+))?\b/gi;
-  const out = [];
-  let m;
-  while ((m = re.exec(String(text || ''))) !== null) out.push(m[1] ? Number(m[1]) : null);
-  return out;
+// The roll command in a post, however it is written:
+//   "/roll"        -> { slot: null, all: false }  (bare: the first character)
+//   "/roll1"       -> { slot: 1, all: false }
+//   "/roll2"       -> { slot: 2, all: false }
+//   "/rollall"     -> { slot: null, all: true }   (both characters at once)
+// The number is glued to the command, like /del1 and /delall; a spaced
+// "/roll 1" is still accepted so an old habit keeps working. Returns null when
+// the post has no roll command.
+export function rollCommand(text) {
+  const s = String(text || '');
+  const attached = s.match(/(?:^|\s)\/roll(?:(all)|(\d+))?(?:@\w+)?(?=\s|$)/i);
+  if (!attached) return null;
+  if (attached[1]) return { slot: null, all: true };
+  if (attached[2]) return { slot: Number(attached[2]), all: false };
+  const spaced = s.match(/(?:^|\s)\/roll(?:@\w+)?\s+(\d+)\b/i);
+  return { slot: spaced ? Number(spaced[1]) : null, all: false };
 }
 
 // The arguments after a command word, without the "@botname" suffix.
@@ -85,9 +85,10 @@ export function extractConditional(text) {
   return m ? m[1].trim().replace(/[.\s]+$/, '') : null;
 }
 
-// True when the post asks the bot to roll.
+// True when the post asks the bot to roll: a bare /roll, /roll1, /roll2 or
+// /rollall, anywhere in the text.
 export function wantsRoll(text) {
-  return /(^|\s)\/roll\b/i.test(String(text || ''));
+  return /(^|\s)\/roll(?:all|\d+)?(?:@\w+)?(\s|$)/i.test(String(text || ''));
 }
 
 // The command word at the start of a message, lower-cased, or null.

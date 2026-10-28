@@ -1,7 +1,7 @@
 // The bot's menu: the sections reachable from /menu (and /start).
 //
 //   1. Боевые правила            - the turn economy, resolution, mana
-//   2. Правила написания поста в бою - who rolls, /roll 1|2, the post shape
+//   2. Правила написания поста в бою - who rolls, /roll1|2, /rollall, the post shape
 //   3. Фишки статистик           - what each characteristic unlocks at 10
 //   4. Кубик и команды           - how the d20 works and the commands that call it
 //
@@ -68,9 +68,9 @@ export function postText() {
   lines.push('');
   lines.push('Примеры:');
   lines.push('• «Атакую гоблина мечом /roll» — бросок за первого персонажа.');
-  lines.push('• «Атакую; если крит — добиваю /roll 2» — бросок за второго.');
-  lines.push('• «Атакую /roll 1 и /roll 2» — броски за обоих сразу, одним сообщением.');
-  lines.push('• «Жду в укрытии /roll 1» — пропуск атаки за первого, +5 маны.');
+  lines.push('• «Атакую; если крит — добиваю /roll2» — бросок за второго.');
+  lines.push('• «Атакую за обоих /rollall» — броски за обоих сразу, одним сообщением.');
+  lines.push('• «Жду в укрытии /roll1» — пропуск атаки за первого, +5 маны.');
   return lines.join('\n');
 }
 
@@ -114,8 +114,8 @@ export function diceText() {
     '',
     'Команды:',
     '• /roll — в игровом чате: закончи пост на /roll, и я брошу за тебя.',
-    '• /roll 1 или /roll 2 — бросок за первого или второго персонажа.',
-    '• /roll 1 и /roll 2 — броски за обоих сразу, одним сообщением.',
+    '• /roll1 или /roll2 — бросок за первого или второго персонажа (номер вплотную).',
+    '• /rollall — броски за обоих сразу, одним сообщением.',
     '• /reg — в личке: записать персонажа (имя, @юзер и 14 характеристик). Можно двоих.',
     '  Правило характеристик: в каждом блоке — ' + DISTRIBUTION_RULE + '.',
     '• /del 1 | /del 2 | /delall — удалить персонажа (в личке).',
