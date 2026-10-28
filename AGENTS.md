@@ -694,6 +694,20 @@ permission is missing. Probe that way before starting any long operation.
   free-endpoint layers are not wired, because the public endpoint is up on one run
   and down on the next, which made `source` flip between `live` and `local`.
 
+### A silent model endpoint must not freeze the chat (fixed 2026-10-04)
+
+- The report "the Registrar kept thinking and then said nothing" after "проверь"
+  was a model endpoint that accepted the request and never answered. The server's
+  paid `callModel` had **no timeout**, so `/api/interview` hung forever on the
+  "думает" placeholder.
+- `chat-answers.js` `withTimeout()` now caps every model call (`MODEL_TIMEOUT_MS`,
+  25s, overridable per call as `modelTimeoutMs`). A timeout is treated like any
+  other model failure: the built-in engine answers instead. The same cap wraps the
+  free and live calls. `test/ai-owner.test.js` pins it with a caller that never
+  resolves.
+- The notification path was already capped (`deliverWithin`, `notifyTimeoutMs`);
+  this fix is the same rule for the model path, which the earlier fix missed.
+
 ## GitHub write access: use the right app (2026-09-27)
 
 - Writes failed for many rounds with `403 Resource not accessible by integration`

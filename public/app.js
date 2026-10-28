@@ -1141,14 +1141,23 @@ function localChat() {
 // connection, both mean "no server here" and the browser answers instead.
 async function askServer(type, body) {
   let res;
+  // A server that accepts the request and then never answers must not leave the
+  // player on "thinking" forever. The server caps its own model call, so this is a
+  // slightly longer backstop; when it fires the request is abandoned and the
+  // bundled engine answers instead, exactly as for an unreachable server.
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 30000) : null;
   try {
     res = await fetch(CHAT_API[type], {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller ? controller.signal : undefined
     });
   } catch {
     return { unreachable: true };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   const data = await res.json().catch(() => null);
   if (data && data.error === 'not_configured') return { unconfigured: true };
