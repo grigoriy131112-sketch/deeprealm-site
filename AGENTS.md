@@ -884,3 +884,17 @@ permission is missing. Probe that way before starting any long operation.
   the bot looks dead. `worker.js` reports each send's outcome in its JSON reply
   (`replies`/`results`) precisely so a webhook test can tell "answered" from
   "silently dropped"; check that field before concluding a webhook works.
+
+## Bot template (`bot-template/`, added 2026-10-04)
+
+An empty, self-contained Telegram bot scaffold for starting a new bot without
+copying the RP bot's rules. `index.js` is the long-poll entry point (token from
+`TELEGRAM_BOT_TOKEN` only, never committed); `bot.js` holds the behaviour -
+`createBot({ send })` returns `handleUpdate`, and commands are added there. It has
+no dependency on the site or on `bot/`. `test/bot-template.test.js` keeps it
+runnable and token-free. Copy the folder to start a bot; do not grow the RP rules
+inside it.
+
+The owner's channel is **@vebfabric** ("ВебФабрика"). There is no channel token in
+the repository and no automatic channel posting: posts are drafted for the owner to
+publish by hand (see `channel-post.md`).
