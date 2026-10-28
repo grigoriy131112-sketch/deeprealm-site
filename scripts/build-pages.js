@@ -21,6 +21,10 @@ const files = [
   ['public/favicon.svg', 'favicon.svg'],
   ['public/404.html', '404.html'],
   ['public/worker-copy.html', 'worker-copy.html'],
+  // A standalone page with the bots announcement picture, so the owner can grab
+  // the image from the live site.
+  ['public/bots.html', 'bots.html'],
+  ['public/bots.png', 'bots.png'],
   // Served next to the copy page so it is fetched from the same site, which
   // avoids a stale CDN copy standing in the way of a fresh token.
   ['deploy/cloudflare/worker.js', 'worker.js'],
