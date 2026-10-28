@@ -71,14 +71,20 @@ export function commandArgs(text) {
   return m ? m[1].trim() : '';
 }
 
-// A post may carry a plan for a lucky strike: "атакую; если крит — добиваю".
-// We keep the tail after the trigger so the bot can echo it back when the crit
-// roll actually lands.
+// A post may carry a plan for a lucky strike: "атакую; если выпал крит. Урон,
+// использую ваша способность". We keep the tail after the trigger so the bot can
+// echo it back when the crit roll actually lands. A trailing roll command is not
+// part of the plan, so it is trimmed off.
 export function extractConditional(text) {
   const m = String(text || '').match(
-    /если\s+крит[а-яё]*(?:\s+(?:удастся|удался|прошёл|прошел|сработает|выпадет))?\s*[—\-–,:]?\s*(.+)$/is
+    /если\s+(?:выпал[а]?\s+)?крит[а-яё]*(?:\s+(?:удастся|удался|прошёл|прошел|сработает|выпадет))?\s*[—\-–,:.]*\s*(.+)$/is
   );
-  return m ? m[1].trim().replace(/[.\s]+$/, '') : null;
+  if (!m) return null;
+  const tail = m[1]
+    .replace(/\s*(?:^|\s)\/roll(?:all|\d+)(?:@\w+)?\s*$/i, '')
+    .trim()
+    .replace(/[.\s]+$/, '');
+  return tail || null;
 }
 
 // True when the post carries any roll command, valid or not - a bare /roll and

@@ -138,6 +138,17 @@ test('/reg warns when a block breaks the distribution rule', async () => {
 test('extractConditional pulls the "if crit" tail', () => {
   assert.equal(extractConditional('атакую мечом; если крит — добиваю'), 'добиваю');
   assert.equal(extractConditional('бью; если крит удастся, использую добивание'), 'использую добивание');
+  // "если выпал крит. Урон, использую <способность>" is the wording the menu shows.
+  assert.equal(
+    extractConditional('атакую; если выпал крит. Урон, использую ваша способность'),
+    'Урон, использую ваша способность'
+  );
+  // The trailing roll command is not part of the plan.
+  assert.equal(extractConditional('атакую; если крит — добиваю /roll1'), 'добиваю');
+  assert.equal(
+    extractConditional('атакую; если выпал крит. Урон, использую ваша способность /roll2'),
+    'Урон, использую ваша способность'
+  );
   assert.equal(extractConditional('просто атакую'), null);
 });
 
@@ -265,12 +276,14 @@ test('an "if crit" plan is echoed only when the crit roll lands', async () => {
   const orig = Math.random;
   try {
     Math.random = () => 0.95; // 20 on a d20
-    await bot.handleUpdate(groupMsg(5, 100, 'атакую; если крит — добиваю /roll1'));
+    await bot.handleUpdate(groupMsg(5, 100, 'атакую; если выпал крит. Урон, использую ваша способность /roll1'));
   } finally {
     Math.random = orig;
   }
   const withCrit = sent[sent.length - 1].text;
-  assert.match(withCrit, /Крит удался — применяю: добиваю/);
+  assert.match(withCrit, /Крит удался — применяю: Урон, использую ваша способность/);
+  // The roll command is not echoed back as part of the plan.
+  assert.doesNotMatch(withCrit, /ваша способность \/roll1/);
 });
 
 test('/rules prints the turn economy and the dice thresholds', async () => {

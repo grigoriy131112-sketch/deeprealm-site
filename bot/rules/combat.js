@@ -51,9 +51,10 @@ export const COMBAT = {
     cover: 'Половинное укрытие — +3 к уклонению; полное — нельзя выбрать целью.'
   },
 
-  // The conditional a player may attach to a post: "attack; if crit, I use X".
-  // The bot remembers it and fires it only when the crit roll lands.
-  conditional: 'В посте можно написать: «атакую; если крит — использую добивание». Бот применит это только если крит удался.',
+  // The conditional a player may attach to a post: "attack; if the crit lands,
+  // I use my ability". The player writes "ваша способность" instead of naming the
+  // ability, so the bot does not have to know it.
+  conditional: 'В посте можно написать: «атакую; если выпал крит. Урон, использую ваша способность». Бот применит это только если крит удался.',
 
   // Who rolls: the bot rolls only for a player, never for an NPC or the world.
   // The player calls it with /roll1, /roll2 or /rollall, and a battle post ends
@@ -71,7 +72,7 @@ export const COMBAT = {
       'Одна команда бросает сразу всё: крит, уклонение и блок. Отдельно их кидать не нужно.',
       'За обоих сразу — /rollall: бот бросит за каждого, одним сообщением.',
       'Голый /roll не кидает: номер нужен, чтобы бот понял, чей это ход.',
-      'Условие на крит пишется в посте: «атакую; если крит — добиваю». Бот применит его только при крите.'
+      'Условие на крит пишется в посте: «атакую; если выпал крит. Урон, использую ваша способность». Бот применит его только при крите.'
     ]
   },
 

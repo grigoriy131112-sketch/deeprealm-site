@@ -813,8 +813,11 @@ permission is missing. Probe that way before starting any long operation.
   natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a crit roll
   of **1-10** is the fumble. The fumble range is wide on purpose: the roll adds half
   a characteristic, so the lowest possible total is 2 and a natural-1 rule could
-  never fire (`COMBAT.dice.crit.fumble = 10`). A post may add `если крит — <действие>`,
-  which the bot echoes only when the crit roll lands (`bot/parse.js` `extractConditional`).
+  never fire (`COMBAT.dice.crit.fumble = 10`). A post may add
+  `если выпал крит. Урон, использую ваша способность` - the player writes the generic
+  `ваша способность` instead of naming the ability, and the bot echoes the plan only
+  when the crit roll lands (`bot/parse.js` `extractConditional`, which also trims a
+  trailing roll command off the echoed plan).
 - **The player rolls their own defence.** Dodge and block are not rolled by a
   separate defender: the same `/roll1`, `/roll2` or `/rollall` that declares the
   attack also throws crit, dodge and block. `COMBAT.resolution` and `COMBAT.playerRolls`
