@@ -836,6 +836,9 @@ permission is missing. Probe that way before starting any long operation.
   `/post` and the `menu:post` button): one roll command per turn, the character
   named by `/roll1` or `/roll2`, the crit conditional. It is separate from the combat rules
   because the owner asked for "правила написания поста в бою" as its own point.
+  A roll is for an **action** (attack or defence); a post that only says where the
+  character is or what they do without acting - sitting in cover, waiting - needs
+  no roll (owner's rule).
 - **The menu** (`bot/menu.js`) is four sections - battle rules, battle-post rules,
   stat feats, and the dice/commands - reached by `/menu`, `/start`, `/rules`,
   `/post` or `/feats`. It is an inline keyboard; each button carries

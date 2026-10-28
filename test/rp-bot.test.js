@@ -581,8 +581,12 @@ test('/post prints the battle-post rules and who rolls', async () => {
   const text = sent[0].text;
   assert.match(text, /Правила написания поста в бою/);
   assert.match(text, /Кубик кидает только игрок/);
-  assert.match(text, /\/roll1 или \/roll2/);
+  assert.match(text, /\/roll1/);
+  assert.match(text, /\/roll2/);
   assert.match(text, /\/rollall/);
+  // A roll is for an action; a quiet post needs none.
+  assert.match(text, /бросок не нужен/);
+  assert.doesNotMatch(text, /укрытии \/roll/);
 });
 
 test('/rules says only the player rolls', async () => {
