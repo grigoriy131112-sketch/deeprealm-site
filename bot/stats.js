@@ -26,6 +26,30 @@ export const STAT_KEYS = STATS.map((s) => s.key);
 
 export const STAT_BY_KEY = Object.fromEntries(STATS.map((s) => [s.key, s]));
 
+// The two blocks a sheet is filled in, in the order the sheet prints them.
+export const STAT_BLOCKS = {
+  physical: STATS.filter((s) => s.group === 'physical').map((s) => s.key),
+  social: STATS.filter((s) => s.group === 'social').map((s) => s.key)
+};
+
+// The owner's distribution rule, the same text the site's character template
+// carries (`data/knowledge.json`, `character_template.fields.*.rule`). The bot
+// bundles its own copy because it never reads the site's knowledge file.
+export const DISTRIBUTION_RULE = 'может быть только один показатель на 10, один на 9, один на 8, один на 7';
+
+// The ratings above 6 that appear more than once in a block, or [] when the block
+// follows the rule. A block that is not fully filled in is not judged - the player
+// may still be adding the rest - so only a complete block can break the rule.
+export function distributionIssues(stats, keys) {
+  if (keys.some((k) => stats[k] == null)) return [];
+  const out = [];
+  for (const rating of [10, 9, 8, 7]) {
+    const hits = keys.filter((k) => Number(stats[k]) === rating);
+    if (hits.length > 1) out.push({ rating, names: hits.map((k) => STAT_BY_KEY[k].ru) });
+  }
+  return out;
+}
+
 // The three rolls a /roll answers. Each one names the characteristic that feeds
 // its bonus, so the dice module never hard-codes a stat name.
 export const ROLLS = {

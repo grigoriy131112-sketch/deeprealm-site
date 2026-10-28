@@ -2185,7 +2185,7 @@ function fullCharacterTemplate(lang) {
     const block = fields[name];
     const stats = (block && block.stats) || fallback;
     return [
-      `${name} (${(block && block.rule) || 'может быть только один показатель на 10, два на 8, один на 7'}):`,
+      `${name} (${(block && block.rule) || 'может быть только один показатель на 10, один на 9, один на 8, один на 7'}):`,
       '',
       ...stats.map((s) => `${s}: 0–10`),
       '',

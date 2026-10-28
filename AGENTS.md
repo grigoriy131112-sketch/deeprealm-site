@@ -774,6 +774,12 @@ permission is missing. Probe that way before starting any long operation.
   slot 1 unchanged, so the old store keeps working with no migration step. The
   store record is now `{ characters: [{ slot, name, stats, user }] }`; the name
   line may carry `@handle`, kept with the character.
+- **Stat distribution rule** (owner's rule): in each block - physical and
+  intellectual - at most one 10, one 9, one 8 and one 7. `/reg` stores the sheet
+  either way but warns which numbers to lower (`bot/stats.js`
+  `distributionIssues`, `DISTRIBUTION_RULE`). The same text lives in the site's
+  `data/knowledge.json` `character_template.fields.*.rule`, so the site's template
+  and the bot agree. A block that is not fully filled in is not judged.
 - **The player names which character a roll is for** by the number after the
   command: `/roll 1` or `/roll 2`, and a battle post ends on `/roll 1|2`. Without
   a number the bot uses **slot 1**. The bot never guesses the character - the

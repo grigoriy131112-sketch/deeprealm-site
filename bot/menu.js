@@ -12,7 +12,7 @@
 
 import { COMBAT, BONUS_RULE } from './rules/combat.js';
 import { FEATS } from './rules/feats.js';
-import { STATS } from './stats.js';
+import { STATS, DISTRIBUTION_RULE } from './stats.js';
 
 export const MENU = [
   { key: 'rules', ru: '⚔️ Боевые правила' },
@@ -115,6 +115,7 @@ export function diceText() {
     '• /roll — в игровом чате: закончи пост на /roll, и я брошу за тебя.',
     '• /roll 1 или /roll 2 — бросок за первого или второго персонажа.',
     '• /reg — в личке: записать персонажа (имя, @юзер и 14 характеристик). Можно двоих.',
+    '  Правило характеристик: в каждом блоке — ' + DISTRIBUTION_RULE + '.',
     '• /del 1 | /del 2 | /delall — удалить персонажа (в личке).',
     '• /my — мои листы, /feats — мои фишки.',
     '• /menu — это меню, /rules — правила боя, /post — правила поста в бою.',

@@ -12,7 +12,7 @@
 //   * /menu (and /start) opens the menu - battle rules, battle-post rules, stat
 //     feats, dice and commands - whose buttons edit the message in place.
 
-import { STATS, STAT_BY_KEY, ROLLS, bonus } from './stats.js';
+import { STATS, STAT_BY_KEY, STAT_BLOCKS, DISTRIBUTION_RULE, distributionIssues, ROLLS, bonus } from './stats.js';
 import { featFor } from './rules/feats.js';
 import { rollSet, formatRoll } from './dice.js';
 import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlot, commandArgs } from './parse.js';
@@ -25,7 +25,9 @@ const MAX_MSG = 3800;
 const REG_HELP = [
   'Напиши так (можно добавить @твой_юзер):',
   '/reg Аттар @attar',
-  'Сила 8, Скорость 6, Ловкость 5, Выносливость 6, Здоровье 8, Реакция 6, Хитрость 5, Интеллект 7, Сообразительность 6, Изворотливость 4, Агрессивность 3, Доброта 6, Харизма 5, Эмпатия 4'
+  'Сила 8, Скорость 6, Ловкость 5, Выносливость 6, Здоровье 5, Реакция 6, Хитрость 5, Интеллект 7, Сообразительность 6, Изворотливость 4, Агрессивность 3, Доброта 6, Харизма 5, Эмпатия 4',
+  '',
+  'Правило характеристик: в каждом блоке (физические и интеллектуальные) — ' + DISTRIBUTION_RULE + '.'
 ].join('\n');
 
 function featsFor(stats) {
@@ -33,6 +35,19 @@ function featsFor(stats) {
   for (const s of STATS) {
     const feat = featFor(s.key, stats[s.key]);
     if (feat) out.push({ stat: s, feat });
+  }
+  return out;
+}
+
+// The owner's rule for a stat block: at most one 10, one 9, one 8 and one 7. A
+// block that breaks it is reported in words, so /reg can tell the player exactly
+// which numbers to lower before the sheet is stored.
+function distributionProblems(stats) {
+  const out = [];
+  for (const [block, keys] of Object.entries(STAT_BLOCKS)) {
+    for (const issue of distributionIssues(stats, keys)) {
+      out.push({ block, rating: issue.rating, names: issue.names });
+    }
   }
   return out;
 }
@@ -100,6 +115,15 @@ export function createBot({ store, send, editMessage, answerCallback }) {
     await store.set(userId, updated);
     const character = characterAt(updated, slot);
     const lines = [`✅ Записал персонажа ${slot}: ${character.name}.`, '', characterText(character)];
+    const problems = distributionProblems(parsed.stats);
+    if (problems.length) {
+      const BLOCK_RU = { physical: 'физические', social: 'интеллектуальные' };
+      lines.push('', '⚠️ Нарушено правило характеристик: ' + DISTRIBUTION_RULE + '.');
+      for (const p of problems) {
+        lines.push(`• ${BLOCK_RU[p.block]}: ${p.names.join(', ')} — по ${p.rating} может быть только одна.`);
+      }
+      lines.push('Исправь и запиши заново: /del ' + slot + ', потом /reg.');
+    }
     if (parsed.unknown.length) {
       lines.push('', 'Не понял: ' + parsed.unknown.join(', ') + '.');
     }

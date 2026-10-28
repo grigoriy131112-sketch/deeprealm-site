@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { bonus, resolveStat, STAT_KEYS } from '../bot/stats.js';
+import { bonus, resolveStat, STAT_KEYS, distributionIssues, STAT_BLOCKS, DISTRIBUTION_RULE } from '../bot/stats.js';
 import { featFor } from '../bot/rules/feats.js';
 import { rollSet, formatRoll, ROLL_ORDER } from '../bot/dice.js';
 import { parseSheet, extractConditional, wantsRoll, commandOf, rollSlot, commandArgs } from '../bot/parse.js';
@@ -41,7 +41,7 @@ function groupMsg(id, chatId, text, messageId = 20) {
   return { update_id: 2, message: { message_id: messageId, chat: { id: chatId, type: 'supergroup' }, from: { id, username: 'u' + id }, text } };
 }
 
-const SHEET = 'Аттар\nСила 8, Скорость 6, Ловкость 5, Выносливость 6, Здоровье 8, Реакция 6, Хитрость 5, Интеллект 7, Сообразительность 6, Изворотливость 4, Агрессивность 3, Доброта 6, Харизма 5, Эмпатия 4';
+const SHEET = 'Аттар\nСила 8, Скорость 6, Ловкость 5, Выносливость 6, Здоровье 5, Реакция 6, Хитрость 5, Интеллект 7, Сообразительность 6, Изворотливость 4, Агрессивность 3, Доброта 6, Харизма 5, Эмпатия 4';
 
 test('bonus is half the rating, rounded down', () => {
   assert.equal(bonus(8), 4);
@@ -102,6 +102,31 @@ test('parseSheet tolerates newlines and colons and reports bad input', () => {
   assert.ok(p.unknown.some((u) => u.includes('Фигня')));
   assert.ok(p.unknown.some((u) => u.includes('Реакция 12')));
   assert.ok(p.missing.includes('health'));
+});
+
+test('distributionIssues flags two ratings above 6 in one block', () => {
+  assert.match(DISTRIBUTION_RULE, /один показатель на 10, один на 9, один на 8, один на 7/);
+  // One 10, one 9, one 8, one 7 per block is fine.
+  const ok = { strength: 10, speed: 9, agility: 8, stamina: 7, health: 5, reaction: 4 };
+  assert.deepEqual(distributionIssues(ok, STAT_BLOCKS.physical), []);
+  // A second 8 breaks it.
+  const bad = { strength: 10, speed: 9, agility: 8, stamina: 8, health: 5, reaction: 4 };
+  const issues = distributionIssues(bad, STAT_BLOCKS.physical);
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].rating, 8);
+  assert.deepEqual(issues[0].names, ['Ловкость', 'Выносливость']);
+  // An incomplete block is not judged.
+  assert.deepEqual(distributionIssues({ strength: 10, speed: 10 }, STAT_BLOCKS.physical), []);
+});
+
+test('/reg warns when a block breaks the distribution rule', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Два\nСила 10, Скорость 9, Ловкость 8, Выносливость 8, Здоровье 5, Реакция 4'));
+  const text = sent[sent.length - 1].text;
+  assert.match(text, /Нарушено правило характеристик/);
+  assert.match(text, /Ловкость, Выносливость — по 8 может быть только одна/);
 });
 
 test('extractConditional pulls the "if crit" tail', () => {
