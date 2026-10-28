@@ -40,7 +40,9 @@ export function rulesText() {
   const lines = ['⚔️ Боевые правила', ''];
   lines.push(COMBAT.playerRolls);
   lines.push('');
-  lines.push(`За ход: ${COMBAT.turn.full} полное действие и ${COMBAT.turn.partial} неполных.`);
+  lines.push('За ход — на выбор:');
+  lines.push(`• атака и ${COMBAT.turn.attack.partial} неполных действия;`);
+  lines.push(`• без атаки — ${COMBAT.turn.noAttack.partial} неполных действия.`);
   lines.push('Полное: ' + COMBAT.turn.fullActions.map((a) => a.ru).join(', ') + '.');
   lines.push('Неполное: ' + COMBAT.turn.partialActions.map((a) => a.ru).join(', ') + '.');
   lines.push('', 'Разрешение атаки:');

@@ -5,11 +5,12 @@
 // so what the bot says and what the bot does cannot drift apart.
 
 export const COMBAT = {
-  // One full action and three partial ones per turn. An attack is the only full
-  // action; everything else on the list is partial and may be taken three times.
+  // A turn takes one of two shapes: attack and then use two partial actions, or
+  // give up the attack and use three partial ones instead. A turn never has both
+  // a full action and three partial actions.
   turn: {
-    full: 1,
-    partial: 3,
+    attack: { full: 1, partial: 2 },
+    noAttack: { full: 0, partial: 3 },
     fullActions: [
       { key: 'attack', ru: 'Атака', note: 'одна атака за ход' }
     ],
@@ -42,7 +43,7 @@ export const COMBAT = {
 
   grid: {
     cell: '1 клетка ≈ 1,5 м',
-    move: 'За неполное действие — до 2 клеток без груза, 1 клетка с грузом; все неполные слоты можно отдать движению.',
+    move: 'За неполное действие — до 2 клеток без груза, 1 клетка с грузом; неполные действия можно отдать движению.',
     diagonal: 'Диагональ считается как одна клетка.',
     cover: 'Половинное укрытие — +3 к уклонению; полное — нельзя выбрать целью.'
   },
@@ -60,6 +61,7 @@ export const COMBAT = {
     ru: 'Правила написания поста в бою',
     lines: [
       'Пиши от лица одного персонажа за ход — того, чей номер укажешь.',
+      'За ход — либо атака и 2 неполных действия, либо 3 неполных действия без атаки.',
       'Закончи пост на /roll, чтобы бросить кубик. Один бросок — один ход.',
       'Если у тебя два персонажа, добавь номер после команды: /roll 1 или /roll 2.',
       'Без номера бот бросит за твоего первого персонажа (слот 1).',

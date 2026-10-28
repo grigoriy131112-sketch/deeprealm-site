@@ -225,7 +225,8 @@ test('/rules prints the turn economy and the dice thresholds', async () => {
   const bot = createBot({ store, send });
   await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/rules' } });
   const text = sent[0].text;
-  assert.match(text, /1 полное действие и 3 неполных/);
+  assert.match(text, /атака и 2 неполных действия/);
+  assert.match(text, /без атаки — 3 неполных действия/);
   assert.match(text, /19–20, урон ×2/);
   assert.match(text, /половина характеристики, округление вниз/);
 });
@@ -256,7 +257,8 @@ test('/rules mentions mana and that skipping a turn restores 5', async () => {
   const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
   await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/rules' } });
   const text = c.sent[0].text;
-  assert.match(text, /1 полное действие и 3 неполных/);
+  assert.match(text, /атака и 2 неполных действия/);
+  assert.match(text, /без атаки — 3 неполных действия/);
   assert.match(text, /19–20, урон ×2/);
   assert.match(text, /Мана/);
   assert.match(text, /Пропуск атаки восстанавливает 5 маны/);

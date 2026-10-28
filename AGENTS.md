@@ -788,9 +788,11 @@ permission is missing. Probe that way before starting any long operation.
   bot echoes only when the crit roll lands (`bot/parse.js` `extractConditional`).
 - The rules and the 8-10 feats live **inside the bot** as data: `bot/rules/combat.js`
   and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
-  spoken rules and the rolled rules cannot drift. Turn economy: 1 full + 3 partial
-  actions, movement up to 2 cells per partial slot. Mana is a resource, not a
-  characteristic: **skipping an attack** (a post with no attack) restores 5
+  spoken rules and the rolled rules cannot drift. Turn economy is a **choice**:
+  either an attack plus 2 partial actions, or no attack and 3 partial actions -
+  never a full action and three partial ones (`COMBAT.turn.attack` /
+  `COMBAT.turn.noAttack`). Movement is up to 2 cells per partial action. Mana is a
+  resource, not a characteristic: **skipping the attack** restores 5
   (`COMBAT.mana`, printed by `/rules` as "Пропуск атаки восстанавливает 5 маны").
 - **Battle-post rules** are their own menu section (`COMBAT.post`, printed by
   `/post` and the `menu:post` button): one `/roll` per turn, the character number
