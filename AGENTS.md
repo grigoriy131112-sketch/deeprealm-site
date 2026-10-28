@@ -809,15 +809,17 @@ permission is missing. Probe that way before starting any long operation.
 - **Only the player rolls.** The bot rolls for a player's character, never for an
   NPC, an enemy or the world; it only answers a roll command the player wrote
   (`COMBAT.playerRolls`). `/rules` and the menu both say so.
-- An attack **always lands**; the dice decide only crit, block and dodge. Crit is a
-  natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a crit roll
-  of **1-10** is the fumble. The fumble range is wide on purpose: the roll adds half
-  a characteristic, so the lowest possible total is 2 and a natural-1 rule could
-  never fire (`COMBAT.dice.crit.fumble = 10`). A post may add
-  `если выпал крит. Урон, использую ваша способность` - the player writes the generic
-  `ваша способность` instead of naming the ability, and the bot echoes the plan only
+- An attack **always lands**; the dice decide only crit, block and dodge. The
+  thresholds are read on the **total** (raw die plus half a characteristic), which is
+  the number the bot prints: a crit total of **1-10** is the fumble, **11-18** is an
+  ordinary hit (just damage), **19-20** is the crit (damage x2). Reading the raw die
+  instead let a raw 8 on a +3 sheet total 11 yet still show a fumble - the owner's bug.
+  Block is **18+ full / 12-17 partial** (`COMBAT.dice`, `bot/dice.js` `rollSet`). A post
+  may add `если выпал крит. Урон, использую ваше заклинание` - the player writes the
+  generic `ваше заклинание` instead of naming the spell, and the bot echoes the plan only
   when the crit roll lands (`bot/parse.js` `extractConditional`, which also trims a
-  trailing roll command off the echoed plan).
+  trailing roll command off the echoed plan). The battle-post section shows one such
+  example, duplicated for `/roll1` and `/roll2`.
 - **The player rolls their own defence.** Dodge and block are not rolled by a
   separate defender: the same `/roll1`, `/roll2` or `/rollall` that declares the
   attack also throws crit, dodge and block. `COMBAT.resolution` and `COMBAT.playerRolls`

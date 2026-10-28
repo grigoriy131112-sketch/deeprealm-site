@@ -5,9 +5,11 @@
 //   block -> Strength   (блок)
 //   dodge -> Reaction   (уклонение)
 //
-// The roll is a d20. Crit lands on 19-20 (doubling the damage) and 1-10 is the
-// fumble the combat rules describe (a roll can never total below 2, so the range
-// has to be wider than a natural 1). `rollOnce` is exported so tests can inject a
+// The roll is a d20. Crit lands on a total of 19-20 (doubling the damage),
+// a total of 11-18 is an ordinary hit, and 1-10 is the fumble the combat rules
+// describe. The thresholds read the *total* (raw die plus half a characteristic),
+// which is the number the bot prints - a raw 8 on Strength 6 totals 11, so it is
+// an ordinary hit, not a fumble. `rollOnce` is exported so tests can inject a
 // fixed die.
 
 import { ROLLS, STAT_BY_KEY, bonus } from './stats.js';
@@ -34,8 +36,8 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
     const plus = bonus(statValue);
     const raw = dice && dice[i] != null ? Number(dice[i]) : rollOnce(DIE, rng);
     const total = raw + plus;
-    const crit = key === 'crit' && raw >= COMBAT.dice.crit.crit;
-    const fumble = key === 'crit' && raw <= COMBAT.dice.crit.fumble;
+    const crit = key === 'crit' && total >= COMBAT.dice.crit.crit;
+    const fumble = key === 'crit' && total <= COMBAT.dice.crit.fumble;
     return {
       key,
       ru: def.ru,
@@ -59,6 +61,7 @@ export function formatRoll(sheet, results) {
     let tail = '';
     if (r.crit) tail = `  💥 КРИТ ×${COMBAT.dice.crit.multiplier}`;
     else if (r.fumble) tail = '  ⚠️ провал (+5 по тебе)';
+    else if (r.key === 'crit') tail = '  ✅ обычная атака';
     return `${r.ru}:  d20 = ${r.raw} → ${r.raw} + ${r.plus} = ${r.total}${tail}`;
   });
   return ['🎲 ' + name + slot, ...lines].join('\n');

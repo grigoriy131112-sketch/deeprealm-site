@@ -138,16 +138,16 @@ test('/reg warns when a block breaks the distribution rule', async () => {
 test('extractConditional pulls the "if crit" tail', () => {
   assert.equal(extractConditional('атакую мечом; если крит — добиваю'), 'добиваю');
   assert.equal(extractConditional('бью; если крит удастся, использую добивание'), 'использую добивание');
-  // "если выпал крит. Урон, использую <способность>" is the wording the menu shows.
+  // "если выпал крит. Урон, использую <заклинание>" is the wording the menu shows.
   assert.equal(
-    extractConditional('атакую; если выпал крит. Урон, использую ваша способность'),
-    'Урон, использую ваша способность'
+    extractConditional('атакую; если выпал крит. Урон, использую ваше заклинание'),
+    'Урон, использую ваше заклинание'
   );
   // The trailing roll command is not part of the plan.
   assert.equal(extractConditional('атакую; если крит — добиваю /roll1'), 'добиваю');
   assert.equal(
-    extractConditional('атакую; если выпал крит. Урон, использую ваша способность /roll2'),
-    'Урон, использую ваша способность'
+    extractConditional('атакую; если выпал крит. Урон, использую ваше заклинание /roll2'),
+    'Урон, использую ваше заклинание'
   );
   assert.equal(extractConditional('просто атакую'), null);
 });
@@ -180,33 +180,53 @@ test('rollSet rolls three dice and adds half of the matching stat', () => {
   assert.equal(dodge.crit, false); // only the crit roll can crit
 });
 
-test('a natural 19 or 20 marks the crit', () => {
+test('a crit total of 19 or 20 marks the crit', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
-  assert.equal(rollSet(sheet, [19, 1, 1])[0].crit, true);
-  assert.equal(rollSet(sheet, [20, 1, 1])[0].crit, true);
-  assert.equal(rollSet(sheet, [18, 1, 1])[0].crit, false);
+  // Strength 8 -> +4, so the threshold is read on the total.
+  assert.equal(rollSet(sheet, [15, 1, 1])[0].crit, true); // 19
+  assert.equal(rollSet(sheet, [16, 1, 1])[0].crit, true); // 20
+  assert.equal(rollSet(sheet, [14, 1, 1])[0].crit, false); // 18
+  // Only the crit roll can crit.
+  assert.equal(rollSet(sheet, [20, 1, 1])[1].crit, false);
 });
 
-test('a crit roll of 1-10 is the fumble, 11 is not', () => {
+test('a crit total of 1-10 is the fumble, 11 is not', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
-  assert.equal(rollSet(sheet, [1, 1, 1])[0].fumble, true);
-  assert.equal(rollSet(sheet, [10, 1, 1])[0].fumble, true);
-  assert.equal(rollSet(sheet, [11, 1, 1])[0].fumble, false);
+  // Strength 8 -> +4. The threshold is on the total, the number the bot prints:
+  // a raw 8 on a +3 sheet totals 11 and is an ordinary hit, not a fumble.
+  assert.equal(rollSet(sheet, [1, 1, 1])[0].fumble, true); // 5
+  assert.equal(rollSet(sheet, [6, 1, 1])[0].fumble, true); // 10
+  assert.equal(rollSet(sheet, [7, 1, 1])[0].fumble, false); // 11
   // Only the crit roll can fumble.
-  assert.equal(rollSet(sheet, [11, 1, 1])[1].fumble, false);
+  assert.equal(rollSet(sheet, [1, 1, 1])[1].fumble, false);
 });
 
-test('formatRoll marks the fumble on a low crit roll', () => {
+test('the owner\'s 11-total roll is an ordinary attack, not a fumble', () => {
+  // Strength 6 -> +3. Raw 8 totals 11.
+  const sheet = { name: 'Грин', stats: { strength: 6, reaction: 4 } };
+  const [crit] = rollSet(sheet, [8, 7, 8]);
+  assert.equal(crit.total, 11);
+  assert.equal(crit.fumble, false);
+  assert.equal(crit.crit, false);
+});
+
+test('formatRoll marks the fumble on a low crit total', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
-  const text = formatRoll(sheet, rollSet(sheet, [10, 9, 20]));
-  assert.match(text, /Крит-урон:  d20 = 10 → 10 \+ 4 = 14  ⚠️ провал/);
+  const text = formatRoll(sheet, rollSet(sheet, [5, 9, 20]));
+  assert.match(text, /Крит-урон:  d20 = 5 → 5 \+ 4 = 9  ⚠️ провал/);
+});
+
+test('formatRoll labels an ordinary hit between fumble and crit', () => {
+  const sheet = { name: 'Грин', stats: { strength: 6, reaction: 4 } };
+  const text = formatRoll(sheet, rollSet(sheet, [8, 7, 8]));
+  assert.match(text, /Крит-урон:  d20 = 8 → 8 \+ 3 = 11  ✅ обычная атака/);
 });
 
 test('formatRoll shows the raw die, the bonus and the total', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
   const text = formatRoll(sheet, rollSet(sheet, [17, 9, 20]));
   assert.match(text, /🎲 Аттар/);
-  assert.match(text, /Крит-урон:  d20 = 17 → 17 \+ 4 = 21/);
+  assert.match(text, /Крит-урон:  d20 = 17 → 17 \+ 4 = 21  💥 КРИТ/);
   assert.match(text, /Блок:  d20 = 9 → 9 \+ 4 = 13/);
   assert.match(text, /Уклонение:  d20 = 20 → 20 \+ 3 = 23/);
 });
@@ -276,14 +296,14 @@ test('an "if crit" plan is echoed only when the crit roll lands', async () => {
   const orig = Math.random;
   try {
     Math.random = () => 0.95; // 20 on a d20
-    await bot.handleUpdate(groupMsg(5, 100, 'атакую; если выпал крит. Урон, использую ваша способность /roll1'));
+    await bot.handleUpdate(groupMsg(5, 100, 'атакую; если выпал крит. Урон, использую ваше заклинание /roll1'));
   } finally {
     Math.random = orig;
   }
   const withCrit = sent[sent.length - 1].text;
-  assert.match(withCrit, /Крит удался — применяю: Урон, использую ваша способность/);
+  assert.match(withCrit, /Крит удался — применяю: Урон, использую ваше заклинание/);
   // The roll command is not echoed back as part of the plan.
-  assert.doesNotMatch(withCrit, /ваша способность \/roll1/);
+  assert.doesNotMatch(withCrit, /ваше заклинание \/roll1/);
 });
 
 test('/rules prints the turn economy and the dice thresholds', async () => {
@@ -294,8 +314,9 @@ test('/rules prints the turn economy and the dice thresholds', async () => {
   const text = sent[0].text;
   assert.match(text, /атака и 2 неполных действия/);
   assert.match(text, /без атаки — 3 неполных действия/);
-  assert.match(text, /19–20, урон ×2/);
-  assert.match(text, /Провал: 1–10/);
+  assert.match(text, /19–20 — крит, урон ×2/);
+  assert.match(text, /1–10 — провал/);
+  assert.match(text, /11–18 — обычная атака/);
   assert.match(text, /половина характеристики, округление вниз/);
   // The player rolls their own defence, in the same command - not a separate
   // defender.
@@ -332,7 +353,7 @@ test('/rules mentions mana and that skipping a turn restores 5', async () => {
   const text = c.sent[0].text;
   assert.match(text, /атака и 2 неполных действия/);
   assert.match(text, /без атаки — 3 неполных действия/);
-  assert.match(text, /19–20, урон ×2/);
+  assert.match(text, /19–20 — крит, урон ×2/);
   assert.match(text, /Мана/);
   assert.match(text, /Пропуск атаки восстанавливает 5 маны/);
 });
