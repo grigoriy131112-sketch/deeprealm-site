@@ -8,7 +8,7 @@
 //   * in the game group a player ends a post with /roll - or /roll 1, /roll 2 to
 //     say which character - and the bot answers with the three dice - crit,
 //     block, dodge - each with half of the matching characteristic added;
-//   * /del 1, /del 2 or /del all drops a character;
+//   * /del 1, /del 2 or /delall (also /del all) drops a character;
 //   * /menu (and /start) opens the menu - battle rules, battle-post rules, stat
 //     feats, dice and commands - whose buttons edit the message in place.
 
@@ -88,7 +88,7 @@ export function createBot({ store, send, editMessage, answerCallback }) {
         '',
         characterList(record),
         '',
-        'Удали одного: /del 1 или /del 2 (или /del all) — и запиши заново.'
+        'Удали одного: /del 1 или /del 2 (или /delall) — и запиши заново.'
       ].join('\n'), msg.message_id, msg.message_thread_id);
     }
     const slot = nextSlot(record);
@@ -147,21 +147,22 @@ export function createBot({ store, send, editMessage, answerCallback }) {
     const chatId = msg.chat.id;
     const userId = msg.from && msg.from.id;
     if (msg.chat.type !== 'private') {
-      return reply(chatId, 'Удалять персонажей — только в личке со мной. Напиши мне в ЛС: /del 1, /del 2 или /del all.', msg.message_id, msg.message_thread_id);
+      return reply(chatId, 'Удалять персонажей — только в личке со мной. Напиши мне в ЛС: /del 1, /del 2 или /delall.', msg.message_id, msg.message_thread_id);
     }
     const record = await store.get(userId);
     const chars = charactersOf(record);
     if (!chars.length) {
       return reply(chatId, 'У тебя нет персонажей, удалять нечего.', msg.message_id, msg.message_thread_id);
     }
-    const arg = commandArgs(msg.text).toLowerCase();
+    // "/delall" (one word) is the same as "/del all": drop every character.
+    const arg = commandOf(msg.text) === 'delall' ? 'all' : commandArgs(msg.text).toLowerCase();
     if (!arg) {
-      return reply(chatId, ['Кого удалить? Напиши /del 1, /del 2 или /del all.', '', characterList(record)].join('\n'), msg.message_id, msg.message_thread_id);
+      return reply(chatId, ['Кого удалить? Напиши /del 1, /del 2 или /delall.', '', characterList(record)].join('\n'), msg.message_id, msg.message_thread_id);
     }
     let updated;
-    if (arg === 'all' || arg === '*') updated = removeCharacter(record, 'all');
+    if (arg === 'all' || arg === '*' || arg === 'все' || arg === 'всё') updated = removeCharacter(record, 'all');
     else if (/^\d+$/.test(arg)) updated = removeCharacter(record, Number(arg));
-    else return reply(chatId, 'Не понял номер. Напиши /del 1, /del 2 или /del all.', msg.message_id, msg.message_thread_id);
+    else return reply(chatId, 'Не понял номер. Напиши /del 1, /del 2 или /delall.', msg.message_id, msg.message_thread_id);
     await store.set(userId, updated);
     const left = charactersOf(updated);
     const lines = [left.length ? '✅ Удалил. Осталось:' : '✅ Удалил всех персонажей.'];
@@ -229,7 +230,7 @@ export function createBot({ store, send, editMessage, answerCallback }) {
       'Два персонажа? Укажи номер: /roll 1 или /roll 2.',
       '',
       'Меню: /menu — правила боя, пост в бою, фишки, кубик.',
-      'Ещё: /my — мои листы, /del 1|2|all — удалить персонажа.'
+      'Ещё: /my — мои листы, /del 1|2|delall — удалить персонажа.'
     ].join('\n'), msg.message_id, msg.message_thread_id, menuKeyboard());
   }
 
@@ -243,7 +244,7 @@ export function createBot({ store, send, editMessage, answerCallback }) {
       if (cmd === 'menu') return handleMenu(msg);
       if (cmd === 'reg' || cmd === 'register') return handleReg(msg);
       if (cmd === 'roll') return handleRoll(msg);
-      if (cmd === 'del' || cmd === 'delete') return handleDel(msg);
+      if (cmd === 'del' || cmd === 'delete' || cmd === 'delall') return handleDel(msg);
       if (cmd === 'rules') return handleRules(msg);
       if (cmd === 'post') return handlePost(msg);
       if (cmd === 'feats') return handleFeats(msg);

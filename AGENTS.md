@@ -768,7 +768,7 @@ permission is missing. Probe that way before starting any long operation.
   happens.
 - **Up to two characters per account** (owner's rule, `bot/characters.js`). A
   second `/reg` fills the next free slot; a third is refused, never overwritten.
-  `/del 1`, `/del 2` or `/del all` removes one or both; a later character keeps
+  `/del 1`, `/del 2` or `/delall` (also `/del all`) removes one or both; a later character keeps
   its own slot number, so a `/roll 2` the player learned does not silently move.
   `normalizeRecord()` lifts a **pre-multi-character sheet** (`{name, stats}`) into
   slot 1 unchanged, so the old store keeps working with no migration step. The
@@ -788,9 +788,10 @@ permission is missing. Probe that way before starting any long operation.
   bot echoes only when the crit roll lands (`bot/parse.js` `extractConditional`).
 - The rules and the 8-10 feats live **inside the bot** as data: `bot/rules/combat.js`
   and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
-  spoken rules and the rolled rules cannot drift. Turn economy: 1 full + 2 partial
+  spoken rules and the rolled rules cannot drift. Turn economy: 1 full + 3 partial
   actions, movement up to 2 cells per partial slot. Mana is a resource, not a
-  characteristic: skipping a turn restores 5 (`COMBAT.mana`, printed by `/rules`).
+  characteristic: **skipping an attack** (a post with no attack) restores 5
+  (`COMBAT.mana`, printed by `/rules` as "Пропуск атаки восстанавливает 5 маны").
 - **Battle-post rules** are their own menu section (`COMBAT.post`, printed by
   `/post` and the `menu:post` button): one `/roll` per turn, the character number
   after the command, the crit conditional. It is separate from the combat rules

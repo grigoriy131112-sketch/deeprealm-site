@@ -5,11 +5,11 @@
 // so what the bot says and what the bot does cannot drift apart.
 
 export const COMBAT = {
-  // One full action and two partial ones per turn. An attack is the only full
-  // action; everything else on the list is partial and may be taken twice.
+  // One full action and three partial ones per turn. An attack is the only full
+  // action; everything else on the list is partial and may be taken three times.
   turn: {
     full: 1,
-    partial: 2,
+    partial: 3,
     fullActions: [
       { key: 'attack', ru: 'Атака', note: 'одна атака за ход' }
     ],
@@ -42,7 +42,7 @@ export const COMBAT = {
 
   grid: {
     cell: '1 клетка ≈ 1,5 м',
-    move: 'За неполное действие — до 2 клеток без груза, 1 клетка с грузом; оба неполных слота можно отдать движению.',
+    move: 'За неполное действие — до 2 клеток без груза, 1 клетка с грузом; все неполные слоты можно отдать движению.',
     diagonal: 'Диагональ считается как одна клетка.',
     cover: 'Половинное укрытие — +3 к уклонению; полное — нельзя выбрать целью.'
   },
@@ -69,11 +69,11 @@ export const COMBAT = {
   },
 
   // Mana is a resource, not a characteristic: it is spent to act and refilled by
-  // giving up a turn.
+  // skipping an attack.
   mana: {
     ru: 'Мана',
     skip: 5,
-    note: 'ресурс, тратится на действия. Пропуск хода восстанавливает 5 маны.'
+    note: 'ресурс, тратится на действия. Пропуск атаки восстанавливает 5 маны.'
   }
 };
 

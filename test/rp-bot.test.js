@@ -225,7 +225,7 @@ test('/rules prints the turn economy and the dice thresholds', async () => {
   const bot = createBot({ store, send });
   await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/rules' } });
   const text = sent[0].text;
-  assert.match(text, /1 полное действие и 2 неполных/);
+  assert.match(text, /1 полное действие и 3 неполных/);
   assert.match(text, /19–20, урон ×2/);
   assert.match(text, /половина характеристики, округление вниз/);
 });
@@ -256,10 +256,24 @@ test('/rules mentions mana and that skipping a turn restores 5', async () => {
   const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
   await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/rules' } });
   const text = c.sent[0].text;
-  assert.match(text, /1 полное действие и 2 неполных/);
+  assert.match(text, /1 полное действие и 3 неполных/);
   assert.match(text, /19–20, урон ×2/);
   assert.match(text, /Мана/);
-  assert.match(text, /5 маны/);
+  assert.match(text, /Пропуск атаки восстанавливает 5 маны/);
+});
+
+test('/delall removes every character, same as /del all', async () => {
+  const store = tempStore();
+  const { sent, send } = collector();
+  const bot = createBot({ store, send });
+  await bot.handleUpdate(reg(5, '/reg Аттар\nСила 8'));
+  await bot.handleUpdate(reg(5, '/reg Бо\nСила 4'));
+  await bot.handleUpdate(reg(5, '/delall'));
+  assert.equal(charactersOf(await store.get(5)).length, 0);
+  assert.match(sent[sent.length - 1].text, /Удалил всех/);
+  // A third registration starts over from slot 1.
+  await bot.handleUpdate(reg(5, '/reg Ворон\nСила 6'));
+  assert.equal(characterAt(await store.get(5), 1).name, 'Ворон');
 });
 
 test('/feats lists every characteristic and the player\'s own', async () => {
@@ -388,7 +402,7 @@ test('/roll for a slot the player does not have says which exist', async () => {
   assert.match(sent[sent.length - 1].text, /нет персонажа 2/);
 });
 
-test('/del 1 removes one character and /del all removes the rest', async () => {
+test('/del 1 removes one character and /delall removes the rest', async () => {
   const store = tempStore();
   const { sent, send } = collector();
   const bot = createBot({ store, send });
@@ -397,7 +411,7 @@ test('/del 1 removes one character and /del all removes the rest', async () => {
   await bot.handleUpdate(reg(5, '/del 1'));
   assert.match(sent[sent.length - 1].text, /Удалил/);
   assert.equal(characterAt(await store.get(5), 2).name, 'Бо');
-  await bot.handleUpdate(reg(5, '/del all'));
+  await bot.handleUpdate(reg(5, '/delall'));
   assert.equal(charactersOf(await store.get(5)).length, 0);
   // With no characters left, /roll asks them to register again.
   await bot.handleUpdate(groupMsg(5, 100, 'бью /roll'));

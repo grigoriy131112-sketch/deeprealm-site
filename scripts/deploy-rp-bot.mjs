@@ -80,3 +80,23 @@ const hook = await (await fetch(`https://api.telegram.org/bot${botToken}/setWebh
 })).json();
 if (!hook.ok) throw new Error('setWebhook: ' + JSON.stringify(hook));
 console.log('Вебхук поставлен на', url);
+
+// 5. Publish the command list, so the "/" menu in Telegram matches the bot.
+const commands = [
+  { command: 'menu', description: 'Меню: правила, пост в бою, фишки, кубик' },
+  { command: 'roll', description: 'Бросок кубика: /roll 1 или /roll 2' },
+  { command: 'reg', description: 'Записать персонажа (до двух)' },
+  { command: 'my', description: 'Мои персонажи и их фишки' },
+  { command: 'feats', description: 'Фишки статистик' },
+  { command: 'rules', description: 'Правила боя' },
+  { command: 'post', description: 'Правила написания поста в бою' },
+  { command: 'del', description: 'Удалить персонажа: /del 1 | /del 2 | /delall' },
+  { command: 'start', description: 'Что умеет бот' }
+];
+const cmd = await (await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ commands })
+})).json();
+if (!cmd.ok) throw new Error('setMyCommands: ' + JSON.stringify(cmd));
+console.log('Список команд обновлён.');
