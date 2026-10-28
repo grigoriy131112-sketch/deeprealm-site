@@ -5,9 +5,10 @@
 //   block -> Strength   (блок)
 //   dodge -> Reaction   (уклонение)
 //
-// The roll is a d20. Crit lands on 19-20 (doubling the damage) and a natural 1
-// is the fumble the combat rules describe. `rollOnce` is exported so tests can
-// inject a fixed die.
+// The roll is a d20. Crit lands on 19-20 (doubling the damage) and 1-10 is the
+// fumble the combat rules describe (a roll can never total below 2, so the range
+// has to be wider than a natural 1). `rollOnce` is exported so tests can inject a
+// fixed die.
 
 import { ROLLS, STAT_BY_KEY, bonus } from './stats.js';
 import { COMBAT } from './rules/combat.js';
@@ -34,7 +35,7 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
     const raw = dice && dice[i] != null ? Number(dice[i]) : rollOnce(DIE, rng);
     const total = raw + plus;
     const crit = key === 'crit' && raw >= COMBAT.dice.crit.crit;
-    const fumble = key === 'crit' && raw === COMBAT.dice.crit.fumble;
+    const fumble = key === 'crit' && raw <= COMBAT.dice.crit.fumble;
     return {
       key,
       ru: def.ru,

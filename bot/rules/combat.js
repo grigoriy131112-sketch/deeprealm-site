@@ -22,18 +22,21 @@ export const COMBAT = {
     ]
   },
 
-  // An attack always lands; the dice only answer these three questions.
+  // An attack always lands; the dice only answer these three questions. All
+  // three dice come from the player's own command - the same /roll1, /roll2 or
+  // /rollall - so it is the player who rolls dodge and block, not some separate
+  // defender.
   resolution: [
     'Атака объявляется в досягаемости и попадает автоматически — броска на попадание нет.',
-    'Защитник бросает уклонение. Успех — промах, урон 0.',
+    'Уклонение бросает сам игрок — тем же /roll. Успех — промах, урон 0.',
     'Атакующий бросает крит. 19–20 — урон ×2.',
-    'Защитник бросает блок. 18+ — урон 0 (нужен щит), 12–17 — урон пополам.',
+    'Блок бросает сам игрок — тем же /roll. 18+ — урон 0 (нужен щит), 12–17 — урон пополам.',
     'Если крит удался — тот, кто его нанёс, делает одну контр-атаку (один раз, без цепочки).'
   ],
 
   dice: {
     die: 20,
-    crit: { crit: 19, fumble: 1, multiplier: 2, ru: 'Крит: 19–20, урон ×2. Провал: 1 — по тебе +5 до конца раунда.' },
+    crit: { crit: 19, fumble: 10, multiplier: 2, ru: 'Крит: 19–20, урон ×2. Провал: 1–10 — по тебе +5 до конца раунда.' },
     block: {
       full: 18,
       partial: 12,
@@ -54,8 +57,9 @@ export const COMBAT = {
 
   // Who rolls: the bot rolls only for a player, never for an NPC or the world.
   // The player calls it with /roll1, /roll2 or /rollall, and a battle post ends
-  // on one of those.
-  playerRolls: 'Кубик кидает только игрок — за себя, командуя своим персонажем. Бот не бросает за врагов, НПС или мир, он лишь отвечает на твой /roll1, /roll2 или /rollall.',
+  // on one of those. All three dice - crit, dodge and block - come from that one
+  // command, so the player rolls their own defence too.
+  playerRolls: 'Кубик кидает только игрок — за себя, командуя своим персонажем. Одной командой /roll1, /roll2 или /rollall он бросает сразу всё: крит, уклонение и блок. Бот не бросает за врагов, НПС или мир — он лишь отвечает на твою команду.',
 
   // How to write a battle post: one roll command per turn, naming the character.
   post: {
@@ -64,6 +68,7 @@ export const COMBAT = {
       'Пиши от лица одного персонажа за ход — того, чей номер укажешь.',
       'За ход — либо атака и 2 неполных действия, либо 3 неполных действия без атаки.',
       'Закончи пост на /roll1 или /roll2, чтобы бросить кубик. Один бросок — один ход.',
+      'Одна команда бросает сразу всё: крит, уклонение и блок. Отдельно их кидать не нужно.',
       'За обоих сразу — /rollall: бот бросит за каждого, одним сообщением.',
       'Голый /roll не кидает: номер нужен, чтобы бот понял, чей это ход.',
       'Условие на крит пишется в посте: «атакую; если крит — добиваю». Бот применит его только при крите.'

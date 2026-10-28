@@ -810,9 +810,15 @@ permission is missing. Probe that way before starting any long operation.
   NPC, an enemy or the world; it only answers a roll command the player wrote
   (`COMBAT.playerRolls`). `/rules` and the menu both say so.
 - An attack **always lands**; the dice decide only crit, block and dodge. Crit is a
-  natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a natural 1
-  on the crit roll is the fumble. A post may add `если крит — <действие>`, which the
-  bot echoes only when the crit roll lands (`bot/parse.js` `extractConditional`).
+  natural **19-20** (damage x2); block is **18+ full / 12-17 partial**; a crit roll
+  of **1-10** is the fumble. The fumble range is wide on purpose: the roll adds half
+  a characteristic, so the lowest possible total is 2 and a natural-1 rule could
+  never fire (`COMBAT.dice.crit.fumble = 10`). A post may add `если крит — <действие>`,
+  which the bot echoes only when the crit roll lands (`bot/parse.js` `extractConditional`).
+- **The player rolls their own defence.** Dodge and block are not rolled by a
+  separate defender: the same `/roll1`, `/roll2` or `/rollall` that declares the
+  attack also throws crit, dodge and block. `COMBAT.resolution` and `COMBAT.playerRolls`
+  say so, and the dice menu repeats it, so nobody waits for the defender to roll.
 - The rules and the stat feats live **inside the bot** as data: `bot/rules/combat.js`
   and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
   spoken rules and the rolled rules cannot drift. A feat opens **only at a rating

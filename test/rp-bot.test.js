@@ -176,6 +176,21 @@ test('a natural 19 or 20 marks the crit', () => {
   assert.equal(rollSet(sheet, [18, 1, 1])[0].crit, false);
 });
 
+test('a crit roll of 1-10 is the fumble, 11 is not', () => {
+  const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
+  assert.equal(rollSet(sheet, [1, 1, 1])[0].fumble, true);
+  assert.equal(rollSet(sheet, [10, 1, 1])[0].fumble, true);
+  assert.equal(rollSet(sheet, [11, 1, 1])[0].fumble, false);
+  // Only the crit roll can fumble.
+  assert.equal(rollSet(sheet, [11, 1, 1])[1].fumble, false);
+});
+
+test('formatRoll marks the fumble on a low crit roll', () => {
+  const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
+  const text = formatRoll(sheet, rollSet(sheet, [10, 9, 20]));
+  assert.match(text, /Крит-урон:  d20 = 10 → 10 \+ 4 = 14  ⚠️ провал/);
+});
+
 test('formatRoll shows the raw die, the bonus and the total', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
   const text = formatRoll(sheet, rollSet(sheet, [17, 9, 20]));
@@ -267,7 +282,13 @@ test('/rules prints the turn economy and the dice thresholds', async () => {
   assert.match(text, /атака и 2 неполных действия/);
   assert.match(text, /без атаки — 3 неполных действия/);
   assert.match(text, /19–20, урон ×2/);
+  assert.match(text, /Провал: 1–10/);
   assert.match(text, /половина характеристики, округление вниз/);
+  // The player rolls their own defence, in the same command - not a separate
+  // defender.
+  assert.match(text, /Уклонение бросает сам игрок/);
+  assert.match(text, /Блок бросает сам игрок/);
+  assert.doesNotMatch(text, /Защитник бросает/);
 });
 
 test('the engine never reads a stat that is not a real characteristic', () => {
