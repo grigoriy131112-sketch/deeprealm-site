@@ -16,7 +16,7 @@ import { kvStore } from './kv-store.js';
 
 const API = 'https://api.telegram.org';
 
-async function send(token, chatId, text, replyTo, threadId) {
+async function send(token, chatId, text, replyTo, threadId, keyboard) {
   const res = await fetch(`${API}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -25,6 +25,7 @@ async function send(token, chatId, text, replyTo, threadId) {
       text,
       ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
       ...(threadId ? { message_thread_id: threadId } : {}),
+      ...(keyboard ? { reply_markup: keyboard } : {}),
       disable_web_page_preview: true
     })
   });
@@ -40,13 +41,44 @@ async function send(token, chatId, text, replyTo, threadId) {
   return { ok: true };
 }
 
+// Rewriting the menu message in place: one menu, not a stack of copies.
+async function editMessage(token, chatId, messageId, text, keyboard) {
+  const res = await fetch(`${API}/bot${token}/editMessageText`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      ...(keyboard ? { reply_markup: keyboard } : {}),
+      disable_web_page_preview: true
+    })
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body || body.ok !== true) {
+    const why = (body && body.description) || `http ${res.status}`;
+    console.error('editMessageText failed:', why);
+    return { ok: false, error: why };
+  }
+  return { ok: true };
+}
+
+// Stops the button's spinner; Telegram expects it after every button press.
+async function answerCallback(token, callbackQueryId) {
+  await fetch(`${API}/bot${token}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_query_id: callbackQueryId })
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (request.method === 'GET') {
       // A quick liveness probe that does not touch Telegram.
-      return json({ ok: true, rev: 1, service: 'deeprealm-rp-bot' });
+      return json({ ok: true, rev: 2, service: 'deeprealm-rp-bot' });
     }
 
     if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
@@ -70,13 +102,20 @@ export default {
 
     const store = kvStore(env.RP_PLAYERS);
     const sends = [];
+    const edits = [];
     const bot = createBot({
       store,
-      send: async (chatId, text, replyTo, threadId) => {
-        const r = await send(token, chatId, text, replyTo, threadId);
+      send: async (chatId, text, replyTo, threadId, keyboard) => {
+        const r = await send(token, chatId, text, replyTo, threadId, keyboard);
         sends.push(r.ok ? 'ok' : r.error);
         return r;
-      }
+      },
+      editMessage: async (chatId, messageId, text, keyboard) => {
+        const r = await editMessage(token, chatId, messageId, text, keyboard);
+        edits.push(r.ok ? 'ok' : r.error);
+        return r;
+      },
+      answerCallback: (callbackQueryId) => answerCallback(token, callbackQueryId)
     });
 
     try {
@@ -87,8 +126,9 @@ export default {
       console.error('update failed:', err && err.message);
       return json({ ok: true, error: String(err && err.message) });
     }
-    // The replies, so a webhook test can tell "answered" from "silently dropped".
-    return json({ ok: true, replies: sends.length, results: sends });
+    // The replies and in-place edits, so a webhook test can tell "answered" from
+    // "silently dropped".
+    return json({ ok: true, replies: sends.length, results: sends, edits: edits.length, editResults: edits });
   }
 };
 

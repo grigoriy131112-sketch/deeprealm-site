@@ -49,7 +49,15 @@ export const COMBAT = {
 
   // The conditional a player may attach to a post: "attack; if crit, I use X".
   // The bot remembers it and fires it only when the crit roll lands.
-  conditional: 'В посте можно написать: «атакую; если крит — использую добивание». Бот применит это только если крит удался.'
+  conditional: 'В посте можно написать: «атакую; если крит — использую добивание». Бот применит это только если крит удался.',
+
+  // Mana is a resource, not a characteristic: it is spent to act and refilled by
+  // giving up a turn.
+  mana: {
+    ru: 'Мана',
+    skip: 5,
+    note: 'ресурс, тратится на действия. Пропуск хода восстанавливает 5 маны.'
+  }
 };
 
 // Half of the rating, rounded down, is the only bonus that reaches a roll.

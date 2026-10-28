@@ -772,7 +772,16 @@ permission is missing. Probe that way before starting any long operation.
 - The rules and the 8-10 feats live **inside the bot** as data: `bot/rules/combat.js`
   and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
   spoken rules and the rolled rules cannot drift. Turn economy: 1 full + 2 partial
-  actions, movement up to 2 cells per partial slot.
+  actions, movement up to 2 cells per partial slot. Mana is a resource, not a
+  characteristic: skipping a turn restores 5 (`COMBAT.mana`, printed by `/rules`).
+- **The menu** (`bot/menu.js`) is three sections - battle rules, stat feats, and
+  the dice/commands - reached by `/menu`, `/start`, `/rules` or `/feats`. It is an
+  inline keyboard; each button carries `menu:<section>` and **edits the same
+  message in place** (`editMessageText`), so the chat is not flooded. Telegram only
+  delivers button presses if `callback_query` is in the webhook's `allowed_updates`
+  (the deploy script sets it); a callback also needs `answerCallbackQuery` or the
+  button spins forever. `worker.js` reports `edits`/`editResults` the same way it
+  reports `replies`/`results`, so a webhook test can tell an edit landed.
 - Run it with `npm run bot`. The token goes in `TELEGRAM_RP_BOT_TOKEN` (repo `.env`,
   gitignored) - never in code. Sheets are stored at `bot/data/players.json`
   (gitignored), keyed by Telegram id.

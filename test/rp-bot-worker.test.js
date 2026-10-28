@@ -115,3 +115,32 @@ test('the roll reply carries the forum topic id', async () => {
   const rolled = calls[calls.length - 1];
   assert.equal(rolled.body.message_thread_id, 77, 'reply must stay in the topic');
 });
+
+test('a menu button edits the menu message and answers the callback', async () => {
+  const e = env();
+  const calls = [];
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, body: init.body ? JSON.parse(init.body) : {} });
+    return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
+  };
+  try {
+    await worker.fetch(post({
+      update_id: 3,
+      callback_query: {
+        id: 'cb-9',
+        from: { id: 5 },
+        data: 'menu:rules',
+        message: { message_id: 42, chat: { id: 5, type: 'private' } }
+      }
+    }), e);
+  } finally {
+    globalThis.fetch = orig;
+  }
+  assert.ok(calls.some((c) => /answerCallbackQuery/.test(c.url)), 'must stop the spinner');
+  const edit = calls.find((c) => /editMessageText/.test(c.url));
+  assert.ok(edit, 'must edit the menu message in place');
+  assert.equal(edit.body.message_id, 42);
+  assert.match(edit.body.text, /Мана/);
+  assert.ok(edit.body.reply_markup.inline_keyboard, 'the edited menu keeps its buttons');
+});

@@ -19,7 +19,16 @@ function tempStore() {
 
 function collector() {
   const sent = [];
-  return { sent, send: (chatId, text, replyTo) => sent.push({ chatId, text, replyTo }) };
+  const edited = [];
+  const answered = [];
+  return {
+    sent,
+    edited,
+    answered,
+    send: (chatId, text, replyTo, threadId, keyboard) => sent.push({ chatId, text, replyTo, threadId, keyboard }),
+    editMessage: (chatId, messageId, text, keyboard) => edited.push({ chatId, messageId, text, keyboard }),
+    answerCallback: (id) => answered.push(id)
+  };
 }
 
 // A private-chat /reg message from `id`.
@@ -207,4 +216,75 @@ test('the engine never reads a stat that is not a real characteristic', () => {
   for (const s of STAT_KEYS) sheet.stats[s] = 1;
   const results = rollSet(sheet, [10, 10, 10]);
   for (const r of results) assert.ok(STAT_KEYS.includes(r.statKey), r.statKey);
+});
+
+test('/menu posts the home screen with a three-button keyboard', async () => {
+  const store = tempStore();
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
+  await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/menu' } });
+  assert.equal(c.sent.length, 1);
+  const kb = c.sent[0].keyboard;
+  assert.ok(kb && kb.inline_keyboard, 'menu must carry an inline keyboard');
+  const datas = kb.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.deepEqual(datas, ['menu:rules', 'menu:feats', 'menu:dice']);
+});
+
+test('/rules mentions mana and that skipping a turn restores 5', async () => {
+  const store = tempStore();
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
+  await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/rules' } });
+  const text = c.sent[0].text;
+  assert.match(text, /1 полное действие и 2 неполных/);
+  assert.match(text, /19–20, урон ×2/);
+  assert.match(text, /Мана/);
+  assert.match(text, /5 маны/);
+});
+
+test('/feats lists every characteristic and the player\'s own', async () => {
+  const store = tempStore();
+  await store.set(5, { name: 'Аттар', stats: { strength: 8, reaction: 6 } });
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
+  await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/feats' } });
+  const text = c.sent[0].text;
+  assert.match(text, /Стальной захват/);
+  assert.match(text, /Мгновенный рывок/);
+  assert.match(text, /Твои открытые/);
+});
+
+test('a menu button edits the message in place and answers the callback', async () => {
+  const store = tempStore();
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
+  await bot.handleUpdate({
+    callback_query: {
+      id: 'cb-1',
+      from: { id: 5 },
+      data: 'menu:dice',
+      message: { message_id: 42, chat: { id: 5, type: 'private' } }
+    }
+  });
+  assert.deepEqual(c.answered, ['cb-1'], 'the button spinner must be stopped');
+  assert.equal(c.edited.length, 1);
+  assert.equal(c.edited[0].messageId, 42);
+  assert.match(c.edited[0].text, /Кубик/);
+  assert.match(c.edited[0].text, /\/roll/);
+  // The keyboard shows the open section and offers a way back.
+  const datas = c.edited[0].keyboard.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(datas.includes('menu:home'));
+});
+
+test('the back button returns to the home screen', async () => {
+  const store = tempStore();
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
+  await bot.handleUpdate({
+    callback_query: { id: 'cb-2', from: { id: 5 }, data: 'menu:home', message: { message_id: 7, chat: { id: 5, type: 'private' } } }
+  });
+  assert.equal(c.edited.length, 1);
+  assert.match(c.edited[0].text, /Выбери раздел/);
+  const datas = c.edited[0].keyboard.inline_keyboard.flat().map((b) => b.callback_data);
+  assert.ok(!datas.includes('menu:home'), 'home has no back row');
 });

@@ -32,17 +32,32 @@ export async function startBot({ token, storeFile = defaultStoreFile(), log = co
     return res.json();
   }
 
-  function send(chatId, text, replyTo, threadId) {
+  function send(chatId, text, replyTo, threadId, keyboard) {
     return call('sendMessage', {
       chat_id: chatId,
       text,
       ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
       ...(threadId ? { message_thread_id: threadId } : {}),
+      ...(keyboard ? { reply_markup: keyboard } : {}),
       disable_web_page_preview: true
     });
   }
 
-  const bot = createBot({ store, send });
+  function editMessage(chatId, messageId, text, keyboard) {
+    return call('editMessageText', {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      ...(keyboard ? { reply_markup: keyboard } : {}),
+      disable_web_page_preview: true
+    });
+  }
+
+  function answerCallback(callbackQueryId) {
+    return call('answerCallbackQuery', { callback_query_id: callbackQueryId });
+  }
+
+  const bot = createBot({ store, send, editMessage, answerCallback });
 
   const me = await call('getMe', {});
   if (!me.ok) throw new Error('Telegram отклонил токен: ' + (me.description || ''));
@@ -54,7 +69,7 @@ export async function startBot({ token, storeFile = defaultStoreFile(), log = co
   (async function loop() {
     for (;;) {
       try {
-        const res = await call('getUpdates', { offset, timeout: 30, allowed_updates: ['message', 'edited_message'] });
+        const res = await call('getUpdates', { offset, timeout: 30, allowed_updates: ['message', 'edited_message', 'callback_query'] });
         if (!res.ok) {
           log.error('getUpdates:', res.description);
           await new Promise((r) => setTimeout(r, 3000));

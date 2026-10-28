@@ -76,7 +76,7 @@ const url = `https://${SCRIPT}.grigoriy131112.workers.dev/`;
 const hook = await (await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ url, secret_token: webhookSecret, allowed_updates: ['message', 'edited_message'], drop_pending_updates: true })
+  body: JSON.stringify({ url, secret_token: webhookSecret, allowed_updates: ['message', 'edited_message', 'callback_query'], drop_pending_updates: true })
 })).json();
 if (!hook.ok) throw new Error('setWebhook: ' + JSON.stringify(hook));
 console.log('Вебхук поставлен на', url);

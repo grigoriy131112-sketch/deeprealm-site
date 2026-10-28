@@ -7,13 +7,15 @@
 //     fourteen ratings once;
 //   * in the game group a player ends a post with /roll, and the bot answers with
 //     the three dice - crit, block, dodge - each with half of the matching
-//     characteristic added.
+//     characteristic added;
+//   * /menu (and /start) opens a three-section inline menu - battle rules, stat
+//     feats, dice and commands - whose buttons edit the message in place.
 
 import { STATS, STAT_BY_KEY, ROLLS, bonus } from './stats.js';
-import { FEATS, featFor } from './rules/feats.js';
-import { COMBAT, BONUS_RULE } from './rules/combat.js';
+import { featFor } from './rules/feats.js';
 import { rollSet, formatRoll } from './dice.js';
 import { parseSheet, extractConditional, wantsRoll, commandOf } from './parse.js';
+import { isMenuSection, sectionText, menuKeyboard } from './menu.js';
 
 const NAME = 'Куб';
 const MAX_MSG = 3800;
@@ -42,12 +44,13 @@ function sheetText(record) {
   return lines.join('\n');
 }
 
-export function createBot({ store, send }) {
+export function createBot({ store, send, editMessage, answerCallback }) {
   // Must be awaited: a Worker that returns before sendMessage settles has its
   // in-flight request cancelled, so the player never sees the reply. threadId is
-  // the forum topic the post came from, so the reply lands in that topic.
-  async function reply(chatId, text, replyTo, threadId) {
-    for (const part of split(text)) await send(chatId, part, replyTo, threadId);
+  // the forum topic the post came from, so the reply lands in that topic. The
+  // keyboard, when present, is the menu.
+  async function reply(chatId, text, replyTo, threadId, keyboard) {
+    for (const part of split(text)) await send(chatId, part, replyTo, threadId, keyboard);
   }
 
   async function handleReg(msg) {
@@ -92,43 +95,36 @@ export function createBot({ store, send }) {
     return reply(chatId, lines.join('\n'), msg.message_id, msg.message_thread_id);
   }
 
+  // The menu lives in one message: /menu (and /start) posts it, and each button
+  // edits that same message, so the chat is not flooded with copies.
+  async function handleMenu(msg) {
+    return reply(msg.chat.id, sectionText('home'), msg.message_id, msg.message_thread_id, menuKeyboard());
+  }
+
+  async function handleMenuCallback(query) {
+    const data = String(query.data || '');
+    const key = data.startsWith('menu:') ? data.slice(5) : 'home';
+    const active = isMenuSection(key) ? key : null;
+    const chatId = query.message && query.message.chat && query.message.chat.id;
+    const messageId = query.message && query.message.message_id;
+    const userId = query.from && query.from.id;
+    const record = await store.get(userId);
+
+    if (answerCallback) await answerCallback(query.id);
+
+    if (editMessage && chatId && messageId) {
+      await editMessage(chatId, messageId, sectionText(key, record), menuKeyboard(active));
+    }
+    return undefined;
+  }
+
   async function handleRules(msg) {
-    const lines = ['⚔️ Боевые правила', ''];
-    lines.push(`За ход: ${COMBAT.turn.full} полное действие и ${COMBAT.turn.partial} неполных.`);
-    lines.push('Полное: ' + COMBAT.turn.fullActions.map((a) => a.ru).join(', ') + '.');
-    lines.push('Неполное: ' + COMBAT.turn.partialActions.map((a) => a.ru).join(', ') + '.');
-    lines.push('', 'Разрешение атаки:');
-    COMBAT.resolution.forEach((r, i) => lines.push(`${i + 1}. ${r}`));
-    lines.push('', COMBAT.dice.crit.ru);
-    lines.push(COMBAT.dice.block.ru);
-    lines.push('', BONUS_RULE);
-    lines.push('', COMBAT.grid.move);
-    lines.push(COMBAT.grid.diagonal);
-    lines.push(COMBAT.grid.cover);
-    lines.push('', COMBAT.conditional);
-    return reply(msg.chat.id, lines.join('\n'), msg.message_id, msg.message_thread_id);
+    return reply(msg.chat.id, sectionText('rules'), msg.message_id, msg.message_thread_id, menuKeyboard('rules'));
   }
 
   async function handleFeats(msg) {
-    const userId = msg.from && msg.from.id;
-    const record = await store.get(userId);
-    const lines = ['✨ Фишки (8–10)'];
-    if (record) {
-      const mine = featsFor(record.stats);
-      if (mine.length) {
-        lines.push('', 'Твои открытые:');
-        for (const { stat, feat } of mine) lines.push(`• ${stat.ru} — «${feat.base}» (${feat.tier})`);
-      } else {
-        lines.push('', 'У тебя пока нет фишек: нужна характеристика 8 и выше.');
-      }
-      lines.push('');
-    }
-    lines.push('Все фишки:');
-    for (const s of STATS) {
-      const f = FEATS[s.key];
-      if (f) lines.push(`• ${s.ru} — «${f.base}»`);
-    }
-    return reply(msg.chat.id, lines.join('\n'), msg.message_id, msg.message_thread_id);
+    const record = await store.get(msg.from && msg.from.id);
+    return reply(msg.chat.id, sectionText('feats', record), msg.message_id, msg.message_thread_id, menuKeyboard('feats'));
   }
 
   async function handleMy(msg) {
@@ -143,16 +139,19 @@ export function createBot({ store, send }) {
       'В личке: /reg Имя и статы — записать персонажа.',
       'В общем чате: закончи пост на /roll — и я выдам крит, блок и уклонение.',
       '',
-      'Ещё: /rules — правила боя, /feats — фишки, /my — мой лист.'
-    ].join('\n'), msg.message_id, msg.message_thread_id);
+      'Меню: /menu — правила боя, фишки, кубик.',
+      'Ещё: /my — мой лист.'
+    ].join('\n'), msg.message_id, msg.message_thread_id, menuKeyboard());
   }
 
   function handleUpdate(update) {
+    if (update && update.callback_query) return handleMenuCallback(update.callback_query);
     const msg = update && (update.message || update.edited_message);
     if (!msg || !msg.text) return undefined;
     const cmd = commandOf(msg.text);
     if (cmd) {
       if (cmd === 'start' || cmd === 'help') return handleStart(msg);
+      if (cmd === 'menu') return handleMenu(msg);
       if (cmd === 'reg' || cmd === 'register') return handleReg(msg);
       if (cmd === 'roll') return handleRoll(msg);
       if (cmd === 'rules') return handleRules(msg);
