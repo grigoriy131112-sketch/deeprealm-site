@@ -77,8 +77,10 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'GET') {
-      // A quick liveness probe that does not touch Telegram.
-      return json({ ok: true, rev: 6, service: 'deeprealm-rp-bot' });
+      // A quick liveness probe that does not touch Telegram. The rev is a deploy
+      // marker: bump it on every behaviour change so the owner can confirm a
+      // redeploy actually reached the live worker.
+      return json({ ok: true, rev: 7, service: 'deeprealm-rp-bot' });
     }
 
     if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
