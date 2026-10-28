@@ -1,6 +1,0 @@
-{
-  "name": "bot-template",
-  "private": true,
-  "type": "module",
-  "main": "index.js"
-}
