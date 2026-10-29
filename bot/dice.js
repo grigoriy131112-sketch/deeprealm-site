@@ -42,7 +42,6 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
     const miss = key === 'crit' && total >= cc.miss && total < cc.half;
     const half = key === 'crit' && total >= cc.half && total < cc.hit;
     const hit = key === 'crit' && total >= cc.hit && total < cc.crit;
-    const success = total >= cc.success;
     const dodgeSuccess = key === 'dodge' && total >= COMBAT.dice.dodge.success;
     const blockSuccess = key === 'block' && total >= COMBAT.dice.block.success;
     return {
@@ -59,7 +58,6 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
       miss,
       half,
       hit,
-      success,
       dodgeSuccess,
       blockSuccess
     };
