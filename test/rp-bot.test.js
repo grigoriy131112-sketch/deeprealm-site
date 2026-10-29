@@ -191,29 +191,55 @@ test('a crit total of 19 or 20 marks the crit', () => {
   assert.equal(rollSet(sheet, [20, 1, 1])[1].crit, false);
 });
 
-test('a crit total of 0-15 is the fumble, 16 is not', () => {
-  const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
-  // Strength 8 -> +4. The threshold is on the total, the number the bot prints.
-  assert.equal(rollSet(sheet, [0, 1, 1])[0].fumble, true); // 4 - a 0 can come up
-  assert.equal(rollSet(sheet, [11, 1, 1])[0].fumble, true); // 15
-  assert.equal(rollSet(sheet, [12, 1, 1])[0].fumble, false); // 16
-  // Only the crit roll can fumble.
-  assert.equal(rollSet(sheet, [1, 1, 1])[1].fumble, false);
+test('crit bands: 0-5 fumble, 6-9 miss, 10-12 half, 13-18 hit, 19-20 crit', () => {
+  const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } }; // +4
+  const band = (raw) => {
+    const c = rollSet(sheet, [raw, 1, 1])[0];
+    if (c.crit) return 'crit';
+    if (c.fumble) return 'fumble';
+    if (c.miss) return 'miss';
+    if (c.half) return 'half';
+    if (c.hit) return 'hit';
+    return '?';
+  };
+  // total = raw + 4
+  assert.equal(band(0), 'fumble'); // 4
+  assert.equal(band(1), 'fumble'); // 5
+  assert.equal(band(2), 'miss');   // 6
+  assert.equal(band(5), 'miss');   // 9
+  assert.equal(band(6), 'half');   // 10
+  assert.equal(band(8), 'half');   // 12
+  assert.equal(band(9), 'hit');    // 13
+  assert.equal(band(14), 'hit');   // 18
+  assert.equal(band(15), 'crit');  // 19
+  assert.equal(band(16), 'crit');  // 20
+  // Only the crit roll carries these bands.
+  const dodge = rollSet(sheet, [1, 1, 1])[2];
+  assert.equal(dodge.fumble, false);
+  assert.equal(dodge.miss, false);
+  assert.equal(dodge.half, false);
+  assert.equal(dodge.hit, false);
 });
 
-test('the owner\'s 11-total roll now falls in the 0-15 fumble band', () => {
-  // Strength 6 -> +3. Raw 8 totals 11, which is a fumble under the new band.
+test('an 11-total crit roll is half damage, not a fumble', () => {
+  // Strength 6 -> +3. Raw 8 totals 11, which is the 10-12 half-damage band.
   const sheet = { name: 'Грин', stats: { strength: 6, reaction: 4 } };
   const [crit] = rollSet(sheet, [8, 7, 8]);
   assert.equal(crit.total, 11);
-  assert.equal(crit.fumble, true);
-  assert.equal(crit.crit, false);
+  assert.equal(crit.half, true);
+  assert.equal(crit.fumble, false);
+  assert.equal(crit.miss, false);
+  assert.equal(crit.hit, false);
 });
 
-test('formatRoll marks the fumble on a low crit total', () => {
-  const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
-  const text = formatRoll(sheet, rollSet(sheet, [5, 9, 20]));
-  assert.match(text, /Крит-урон:  d21 = 5 → 5 \+ 4 = 9  ⚠️ провал/);
+test('formatRoll names each crit band in the roll message', () => {
+  const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } }; // +4
+  const line = (raw) => formatRoll(sheet, rollSet(sheet, [raw, 9, 20])).split('\n')[1];
+  assert.match(line(0), /d21 = 0 → 0 \+ 4 = 4  ⚠️ промах \(\+5 по тебе\)/);
+  assert.match(line(3), /d21 = 3 → 3 \+ 4 = 7  ⚠️ промах$/);
+  assert.match(line(7), /d21 = 7 → 7 \+ 4 = 11  ➗ половина урона/);
+  assert.match(line(10), /d21 = 10 → 10 \+ 4 = 14  ✅ обычная атака/);
+  assert.match(line(15), /d21 = 15 → 15 \+ 4 = 19  💥 КРИТ/);
 });
 
 test('formatRoll labels an ordinary hit between fumble and crit', () => {
@@ -250,8 +276,13 @@ test('every block band states its result', () => {
   assert.match(formatRoll(sheet, rollSet(sheet, [17, 17, 20])), /Блок:  d21 = 17 → 17 \+ 4 = 21  🛡️ блок полный — урон 0/);
 });
 
-test('the /menu dice help names the failure band for block and dodge', () => {
+test('the /menu dice help names every crit band and the block/dodge failure band', () => {
   const text = diceText();
+  assert.match(text, /Крит-урон — от Силы\. 0–5 — промах, по тебе \+5/);
+  assert.match(text, /6–9 — промах/);
+  assert.match(text, /10–12 — половина урона/);
+  assert.match(text, /13–18 — обычная атака/);
+  assert.match(text, /19–20 — крит \(урон ×2\)/);
   assert.match(text, /Блок — от Силы\. 18–20 полный/);
   assert.match(text, /0–15 — блок не удался/);
   assert.match(text, /Уклонение — от Реакции\. 16–20 — успех/);
@@ -342,8 +373,9 @@ test('/rules prints the turn economy and the dice thresholds', async () => {
   assert.match(text, /атака и 2 неполных действия/);
   assert.match(text, /без атаки — 3 неполных действия/);
   assert.match(text, /19–20 — крит, урон ×2/);
-  assert.match(text, /0–15 — провал/);
-  assert.match(text, /16–18 — обычная атака/);
+  assert.match(text, /0–5 — промах, по тебе \+5/);
+  assert.match(text, /10–12 — половина урона/);
+  assert.match(text, /13–18 — обычная атака/);
   assert.match(text, /половина характеристики, округление вниз/);
   // The player rolls their own defence, in the same command - not a separate
   // defender.

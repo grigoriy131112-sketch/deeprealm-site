@@ -5,11 +5,12 @@
 //   block -> Strength   (блок)
 //   dodge -> Reaction   (уклонение)
 //
-// The die is 0-20 (21 faces), so a 0 can come up. The owner's bands read the
-// *total* (raw die plus half a characteristic), the number the bot prints: 0-15 is
-// a fumble and 16-20 is a success. On the crit roll the success band splits once
-// more - 16-18 an ordinary hit, 19-20 a crit (doubling the damage). `rollOnce` is
-// exported so tests can inject a fixed die.
+// The die is 0-20 (21 faces), so a 0 can come up. The bands read the *total*
+// (raw die plus half a characteristic), the number the bot prints. Dodge and
+// block keep the general band (0-15 провал, 16-20 успех); the crit-damage roll
+// has its own five bands: 0-5 промах (+5 по тебе), 6-9 промах, 10-12 половина
+// урона, 13-18 обычная атака, 19-20 крит (урон ×2). `rollOnce` is exported so
+// tests can inject a fixed die.
 
 import { ROLLS, STAT_BY_KEY, bonus } from './stats.js';
 import { COMBAT } from './rules/combat.js';
@@ -35,9 +36,13 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
     const plus = bonus(statValue);
     const raw = dice && dice[i] != null ? Number(dice[i]) : rollOnce(DIE, rng);
     const total = raw + plus;
-    const crit = key === 'crit' && total >= COMBAT.dice.crit.crit;
-    const fumble = key === 'crit' && total <= COMBAT.dice.crit.fumble;
-    const success = total >= COMBAT.dice.crit.success;
+    const cc = COMBAT.dice.crit;
+    const crit = key === 'crit' && total >= cc.crit;
+    const fumble = key === 'crit' && total <= cc.fumble;
+    const miss = key === 'crit' && total >= cc.miss && total < cc.half;
+    const half = key === 'crit' && total >= cc.half && total < cc.hit;
+    const hit = key === 'crit' && total >= cc.hit && total < cc.crit;
+    const success = total >= cc.success;
     const dodgeSuccess = key === 'dodge' && total >= COMBAT.dice.dodge.success;
     const blockSuccess = key === 'block' && total >= COMBAT.dice.block.success;
     return {
@@ -51,6 +56,9 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
       total,
       crit,
       fumble,
+      miss,
+      half,
+      hit,
       success,
       dodgeSuccess,
       blockSuccess
@@ -69,7 +77,9 @@ export function formatRoll(sheet, results) {
     let tail = '';
     if (r.key === 'crit') {
       if (r.crit) tail = `  💥 КРИТ ×${COMBAT.dice.crit.multiplier}`;
-      else if (r.fumble) tail = '  ⚠️ провал (+5 по тебе)';
+      else if (r.fumble) tail = '  ⚠️ промах (+5 по тебе)';
+      else if (r.miss) tail = '  ⚠️ промах';
+      else if (r.half) tail = '  ➗ половина урона';
       else tail = '  ✅ обычная атака';
     } else if (r.key === 'dodge') {
       tail = r.dodgeSuccess

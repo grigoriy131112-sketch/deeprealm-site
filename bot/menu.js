@@ -96,7 +96,8 @@ export function featsText(record) {
 
 export function diceText() {
   const d = COMBAT.dice;
-  const fumbleRange = d.crit.fumble >= d.crit.crit ? String(d.crit.fumble) : `0–${d.crit.fumble}`;
+  const c = d.crit;
+  const fumbleRange = c.fumble >= c.crit ? String(c.fumble) : `0–${c.fumble}`;
   return [
     '🎲 Кубик и команды',
     '',
@@ -105,13 +106,13 @@ export function diceText() {
     d.band,
     '',
     'Три броска за раз:',
-    `• Крит-урон — от Силы. 0–${d.crit.fumble} — провал, ${d.crit.fumble + 1}–${d.crit.crit - 1} — обычная атака (просто урон), ${d.crit.crit}–20 — крит (урон ×2).`,
+    `• Крит-урон — от Силы. 0–${c.fumble} — промах, по тебе +5 до конца раунда; ${c.miss}–${c.half - 1} — промах; ${c.half}–${c.hit - 1} — половина урона; ${c.hit}–${c.crit - 1} — обычная атака (просто урон); ${c.crit}–20 — крит (урон ×2).`,
     `• Блок — от Силы. ${d.block.full}–20 полный (0 урона, нужен щит), ${d.block.partial}–${d.block.full - 1} частичный (урон пополам), 0–${d.block.partial - 1} — блок не удался (урон полный).`,
     `• Уклонение — от Реакции. ${d.dodge.success}–20 — успех, атака промахнулась (урон 0), 0–${d.dodge.success - 1} — не удалось (урон полный).`,
     '',
     'Всё это — крит, уклонение и блок — бросается одной твоей командой. Отдельно защиту кидать не нужно: уклонение и блок тоже твои.',
     '',
-    `Провал (${fumbleRange}) — по тебе +5 до конца раунда.`,
+    `Промах на крит-уроне (${fumbleRange}) — по тебе +5 до конца раунда.`,
     '',
     'Кубик кидает только игрок — за своего персонажа. Бот не бросает за врагов или НПС.',
     '',

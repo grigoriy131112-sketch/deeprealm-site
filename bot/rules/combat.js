@@ -29,7 +29,7 @@ export const COMBAT = {
   resolution: [
     'Атака объявляется в досягаемости и попадает автоматически — броска на попадание нет.',
     'Уклонение бросает сам игрок — тем же /roll. Успех (16–20) — промах, урон 0.',
-    'Крит-урон бросает сам игрок. 19–20 — урон ×2.',
+    'Крит-урон бросает сам игрок: 0–5 — промах, по тебе +5 до конца раунда; 6–9 — промах; 10–12 — половина урона; 13–18 — обычная атака; 19–20 — крит, урон ×2.',
     'Блок бросает сам игрок — тем же /roll. 18–20 — урон 0 (нужен щит), 16–17 — урон пополам.',
     'Если крит удался — тот, кто его нанёс, делает одну контр-атаку (один раз, без цепочки).'
   ],
@@ -37,10 +37,23 @@ export const COMBAT = {
   dice: {
     // 21 values, 0 through 20, so a 0 can come up.
     die: 21,
-    // The owner's bands: 0–15 is a fumble, 16–20 is a success. The crit roll
-    // splits the success band further: 16–18 an ordinary hit, 19–20 a crit.
+    // The general band for dodge and block: 0–15 is a failure, 16–20 a success.
+    // The crit roll splits this further (see `crit` below).
     band: 'Бросок — 0–20 плюс половина характеристики: 0–15 — провал, 16–20 — успех.',
-    crit: { crit: 19, fumble: 15, success: 16, multiplier: 2, ru: 'Крит-урон: 0–15 — провал, по тебе +5 до конца раунда; 16–18 — обычная атака, просто урон; 19–20 — крит, урон ×2.' },
+    // The owner's crit-damage bands, read on the total: 0–5 a fumble that costs
+    // you +5 for the round, 6–9 a plain miss, 10–12 half damage, 13–18 an ordinary
+    // hit, 19–20 a crit that doubles the damage. Each field is the lower bound of
+    // its band; `miss` and up are also the boundary the band above ends at.
+    crit: {
+      fumble: 5,
+      miss: 6,
+      half: 10,
+      hit: 13,
+      crit: 19,
+      success: 13,
+      multiplier: 2,
+      ru: 'Крит-урон: 0–5 — промах, по тебе +5 до конца раунда; 6–9 — промах; 10–12 — половина урона; 13–18 — обычная атака; 19–20 — крит, урон ×2.'
+    },
     dodge: { success: 16, ru: 'Уклонение: 16–20 — успех, атака промахнулась (урон 0); 0–15 — не удалось.' },
     block: {
       full: 18,

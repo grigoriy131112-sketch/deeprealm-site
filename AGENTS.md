@@ -811,11 +811,13 @@ permission is missing. Probe that way before starting any long operation.
   (`COMBAT.playerRolls`). `/rules` and the menu both say so.
 - An attack **always lands**; the dice decide only crit, block and dodge. The
   thresholds are read on the **total** (raw die plus half a characteristic), which is
-  the number the bot prints. The owner's bands are **0-15 = провал (fumble)** and
-  **16-20 = успех (success)**; on the crit roll the success band splits into
-  **16-18 ordinary hit** (just damage) and **19-20 crit** (damage x2). Block is
-  **18-20 full / 16-17 partial**, dodge succeeds on **16-20** (`COMBAT.dice`,
-  `bot/dice.js` `rollSet`). The die has 21 faces (0-20) so a **0** can come up. A post
+  the number the bot prints. Dodge and block keep the general band **0-15 = провал**
+  and **16-20 = успех**. The crit-damage roll has its own five bands:
+  **0-5 промах (+5 по тебе)**, **6-9 промах**, **10-12 половина урона**,
+  **13-18 обычная атака**, **19-20 крит (урон ×2)** (`COMBAT.dice.crit`, each field
+  the lower bound of its band; `bot/dice.js` `rollSet` sets `fumble`/`miss`/`half`/
+  `hit`/`crit`). Block is **18-20 full / 16-17 partial**, dodge succeeds on **16-20**.
+  The die has 21 faces (0-20) so a **0** can come up. A post
   may add `если выпал крит. Урон, использую ваше заклинание` - the player writes the
   generic `ваше заклинание` instead of naming the spell, and the bot echoes the plan only
   when the crit roll lands (`bot/parse.js` `extractConditional`, which also trims a
