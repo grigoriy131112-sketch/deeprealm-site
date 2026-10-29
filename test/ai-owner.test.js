@@ -703,7 +703,7 @@ test('a class is built for a race named from the blog without the word "раса
   for (const [ask, race] of [
     ['сделай класс для расы разумные растения', 'разумные растения'],
     ['хочу класс для расы разумные цветы', 'Разумные цветы'],
-    ['создай класс для синтетиков', 'Синтетики'],
+    ['создай класс для Полые', 'Полые'],
     ['сделай класс для эльфа', 'Эльф']
   ]) {
     const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
@@ -711,6 +711,27 @@ test('a class is built for a race named from the blog without the word "раса
     assert.match(reply, new RegExp(race), `the named race is honoured: ${ask}`);
     assert.doesNotMatch(reply, /назови расу/, `no question when the race is named: ${ask}`);
   }
+});
+
+test('a class is built for a race the blog has not listed yet', () => {
+  // A player names a race of their own that the blog does not carry yet ("сделай
+  // класс для Теней"). The phrase itself names the race, so the class is built for
+  // it; the Registrar used to fall through and invent a class of its own.
+  for (const [ask, race] of [
+    ['создай класс для Теней', 'Теней'],
+    ['сделай класс для синтетиков', 'синтетиков'],
+    ['хочу класс под ледяных', 'ледяных']
+  ]) {
+    const reply = localInterview({ messages: [{ role: 'user', content: ask }], lang: 'ru', application: {} });
+    assert.match(reply, /^Готово/m, `the class is authored: ${ask}`);
+    assert.match(reply, /Собрал класс под твою расу/, `the class is tied to the named race: ${ask}`);
+    assert.match(reply, new RegExp(race), `the named race is honoured: ${ask}`);
+    assert.doesNotMatch(reply, /Придумал тебе класс целиком/, `the class is not invented from scratch: ${ask}`);
+  }
+  // A topic word after "для" is not a race: a balance question must not be read as a
+  // class-for-race request and tied to a made-up race.
+  const balance = localInterview({ messages: [{ role: 'user', content: 'сделай класс для баланса' }], lang: 'ru', application: {} });
+  assert.doesNotMatch(balance, /под твою расу «баланса»/, 'a topic is not treated as a race');
 });
 
 test('a class built for a ready race follows that race\'s nature', () => {

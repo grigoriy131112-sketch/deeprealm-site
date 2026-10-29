@@ -1756,13 +1756,17 @@ function corpusNameIn(kind, text) {
 export function isClassForRace(text, corpusRace = null) {
   const s = String(text || '');
   const raceNamed = corpusRace !== null ? corpusRace : corpusNameIn('race', s);
+  // A race named by the phrase itself ("сделай класс для синтетиков") counts even
+  // when the blog has not listed it yet, so the class is built for the player's race
+  // instead of the Interviewer inventing one of its own.
+  const phraseRace = classForRaceNamePhrase(s);
   const hasRaceWord = /рас[а-яё]{0,3}/i.test(s);
   const hasClassWord = /класс[а-яё]{0,3}/i.test(s);
   const classLead = /класс[а-яё]{0,3}\s*(?:,?\s*(?:котор[а-яё]+|что)\s*)?(?:подход[а-яё]*|подходящ[а-яё]*|совместим[а-яё]*|соответств[а-яё]*|под\b|для\b|по\b|готов[а-яё]*)/i;
   // A race named from the corpus plus any mention of a class is a class-for-race
   // request even when the player never types "раса" ("сделай класс для разумные
   // растения").
-  if (raceNamed && (hasClassWord || classLead.test(s))) return true;
+  if ((raceNamed || phraseRace) && (hasClassWord || classLead.test(s))) return true;
   return classLead.test(s) && hasRaceWord
     || /класс[а-яё]{0,3}\s*(?:под|для|по)\s*(?:(?:готов[а-яё]*|мою|свою|эту|ту|моей|своей)\s+)?рас/i.test(s)
     || /рас[а-яё]{0,3}\s*(?:под|для)\s*класс/i.test(s)
@@ -1829,6 +1833,11 @@ export function raceNameFor(text, application = {}, history = []) {
   // "раса", so a class can be built for it with no extra question.
   const corpusNow = corpusNameIn('race', text);
   if (corpusNow) return corpusNow;
+  // A race named by the request itself ("сделай класс для синтетиков") that the blog
+  // has not listed yet. Without this the name was dropped and the Interviewer built a
+  // class of its own instead of one for the player's race.
+  const phraseClass = classForRaceNamePhrase(text);
+  if (phraseClass) return phraseClass;
   // A lower-case name the player typed after "расы" ("расы разумные растения") that
   // is not in the corpus yet: the stop-list keeps "расы игрока" from being a name.
   const phraseNow = raceNameFromPhrase(text);
@@ -1848,7 +1857,7 @@ export function raceNameFor(text, application = {}, history = []) {
 // ("класс для расы игрока", "под мою расу"). Without this the history fallback read
 // "игрока" as the race name, so "сделай класс для расы игрока" was taken as a
 // named race and the interviewer invented a class instead of asking which race.
-const NOT_A_RACE_NAME = /^(игрок|игрока|игроку|игроком|персонаж|персонажа|герой|героя|свою|мою|нашу|эту|ту|готовую|новую|любую|расу|расы|раса|расе|класс|класса|классу)$/i;
+const NOT_A_RACE_NAME = /^(игрок|игрока|игроку|игроком|игроке|персонаж|персонажа|персонажу|герой|героя|герою|свою|свой|своя|своё|свои|мою|мой|моя|моё|мои|нашу|наш|наша|наше|наши|эту|это|этот|эта|эти|ту|то|тот|та|те|готовую|готовый|готовая|готовое|готовые|новую|новый|новая|новое|новые|любую|любой|любая|любое|любые|расу|расы|раса|расе|класс|класса|классу|классе|неё|нее|него|нею|ним|ней|её|ее|его|их|ему|ей)$/i;
 
 function cleanRaceName(value) {
   const name = String(value || '').trim().split(/[.\n]/)[0].slice(0, 60).trim();
@@ -1871,6 +1880,34 @@ function raceNameFromPhrase(text) {
   let name = raw.replace(/^(?:и|а|но|или|в|во|на|с|со|для|под|по|о|об)\s+/i, '').trim();
   name = name.split(/\s+(?:и|а|но|или)\s+/i)[0].trim();
   if (!name || NOT_A_RACE_NAME.test(name)) return '';
+  return cleanRaceName(name);
+}
+
+// A race named by the phrase "класс для X" / "класс под X" with no literal "раса"
+// word ("сделай класс для синтетиков"). The corpus answers this when the race is
+// already listed, but a race the blog has not listed yet left the phrase with no
+// subject: the Interviewer fell through and invented a class of its own. Reading the
+// name straight out of the phrase keeps the player's race. Meta words that name a
+// topic rather than a race ("для баланса", "под стиль") are rejected, so a balance
+// question cannot turn into a class-for-race request.
+const META_NOT_RACE = /^(баланс|баланса|балансу|стиль|стиля|стилю|идея|идеи|идею|игр[аыуе]|игрою|чат|чата|чату|лор|лора|лору|мир|мира|миру|ролев[а-яё]*|рп|уровн[а-яё]+|умени[еяю]|способност[а-яё]+|правил[аоуы]?|систем[аыуе]|механик[аиуе]|концепт[а-яё]*|тематик[а-яё]+|сюжет[а-яё]*)$/i;
+
+const CLASS_FOR_RACE_DET = '(?:готов[а-яё]*|нов[а-яё]+|сво[юй]|сво[её]й|мо[юй]|мо[её]й|эту|ту|эт[уо]й?|любую|любой)';
+const CLASS_FOR_RACE_NAME = new RegExp(
+  `(?<![а-яё])класс[а-яё]{0,3}\\s*(?:,?\\s*(?:котор[а-яё]+|что)\\s*)?`
+  + `(?:подход[а-яё]*|подходящ[а-яё]*|совместим[а-яё]*|соответств[а-яё]*|под|для|по)\\s*`
+  + `(?:${CLASS_FOR_RACE_DET}\\s+)?(?:(?:рас[а-яё]{0,3}|race)\\s+)?(?:${CLASS_FOR_RACE_DET}\\s+)?`
+  + `[«"']?([а-яёA-ZА-ЯЁ][\\wа-яё\\- ]{1,40})`,
+  'i'
+);
+
+function classForRaceNamePhrase(text) {
+  const m = String(text || '').match(CLASS_FOR_RACE_NAME);
+  if (!m) return '';
+  let name = m[1].replace(/\s+/g, ' ').trim();
+  if (/[,;]/.test(name)) return '';
+  name = name.split(/\s+(?:и|а|но|или)\s+/i)[0].trim();
+  if (!name || NOT_A_RACE_NAME.test(name) || META_NOT_RACE.test(name)) return '';
   return cleanRaceName(name);
 }
 

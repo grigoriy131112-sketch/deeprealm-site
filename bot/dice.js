@@ -63,13 +63,23 @@ export function formatRoll(sheet, results) {
   const name = sheet && sheet.name ? sheet.name : 'Безымянный';
   const slot = sheet && sheet.slot ? ` #${sheet.slot}` : '';
   const lines = results.map((r) => {
+    // Every roll states its outcome, win or lose: the owner asked for both bands
+    // to be written ("0-15 провал, 16-20 успех"), and a dodge or block that only
+    // spoke up on success read as if nothing had happened.
     let tail = '';
-    if (r.crit) tail = `  💥 КРИТ ×${COMBAT.dice.crit.multiplier}`;
-    else if (r.key === 'crit' && r.fumble) tail = '  ⚠️ провал (+5 по тебе)';
-    else if (r.fumble) tail = '  ⚠️ провал';
-    else if (r.dodgeSuccess) tail = '  🛡️ уклонение удалось';
-    else if (r.blockSuccess) tail = '  🛡️ блок удался';
-    else if (r.key === 'crit') tail = '  ✅ обычная атака';
+    if (r.key === 'crit') {
+      if (r.crit) tail = `  💥 КРИТ ×${COMBAT.dice.crit.multiplier}`;
+      else if (r.fumble) tail = '  ⚠️ провал (+5 по тебе)';
+      else tail = '  ✅ обычная атака';
+    } else if (r.key === 'dodge') {
+      tail = r.dodgeSuccess
+        ? '  🛡️ уклонение удалось — атака промахнулась (урон 0)'
+        : '  ⚠️ уклонение не удалось — урон полный';
+    } else if (r.key === 'block') {
+      if (r.total >= COMBAT.dice.block.full) tail = '  🛡️ блок полный — урон 0';
+      else if (r.blockSuccess) tail = '  🛡️ блок частичный — урон пополам';
+      else tail = '  ⚠️ блок не удался — урон полный';
+    }
     return `${r.ru}:  d21 = ${r.raw} → ${r.raw} + ${r.plus} = ${r.total}${tail}`;
   });
   return ['🎲 ' + name + slot, ...lines].join('\n');

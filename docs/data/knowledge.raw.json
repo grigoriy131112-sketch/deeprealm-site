@@ -231,13 +231,23 @@
         "url": "https://deeprealm1.blogspot.com/2026/08/blog-post_30.html"
       },
       {
-        "name": "Синтетики",
-        "author": "@ghg23456",
-        "url": "https://deeprealm1.blogspot.com/2026/09/blog-post_460.html"
+        "name": "Нерги",
+        "author": "@Wdds0715",
+        "url": "https://deeprealm1.blogspot.com/2026/10/blog-post_01.html"
+      },
+      {
+        "name": "Драконы",
+        "author": "@Mors_vuhk",
+        "url": "https://deeprealm1.blogspot.com/2026/10/blog-post_11.html"
+      },
+      {
+        "name": "Полые",
+        "author": "@LokalError",
+        "url": "https://deeprealm1.blogspot.com/2026/10/blog-post_685.html"
       },
       {
         "name": "куклы",
-        "author": "@GrimoireSally",
+        "author": "@Rinochka3",
         "url": "https://deeprealm1.blogspot.com/2026/09/blog-post_11.html"
       }
     ],
@@ -925,24 +935,24 @@
     },
     "player_classes": [
       {
-        "name": "Магистр сфер",
-        "author": "@ghg23456",
-        "url": "https://deeprealm1.blogspot.com/2026/09/blog-post.html"
-      },
-      {
         "name": "Трикстер",
         "author": "@LokalError",
         "url": "https://deeprealm1.blogspot.com/2026/09/blog-post_09.html"
       },
       {
-        "name": "Секироносец",
-        "author": "@m_damned",
-        "url": "https://deeprealm1.blogspot.com/2026/09/blog-post_13.html"
+        "name": "шут",
+        "author": "@Wdds0715",
+        "url": "https://deeprealm1.blogspot.com/2026/10/blog-post.html"
       },
       {
-        "name": "Флагеллант",
-        "author": "@seamless_void",
-        "url": "https://deeprealm1.blogspot.com/2026/09/blog-post_525.html"
+        "name": "Рыцарь души",
+        "author": "@LokalError",
+        "url": "https://deeprealm1.blogspot.com/2026/10/blog-post_07.html"
+      },
+      {
+        "name": "Друид",
+        "author": "@Mors_vuhk",
+        "url": "https://deeprealm1.blogspot.com/2026/10/blog-post_667.html"
       }
     ],
     "class_system": "У каждого класса есть ресурс и механика истощения, 15 начальных уровней. Достигнув 16 уровня, игрок выбирает одну из трёх специализаций класса. Вехи — 20, 30, 40 и 50; между вехами лежат промежуточные уровни (16–19, 21–29, 31–39, 41–49), и на каждом таком уровне специализация даёт ровно одну способность. Способности 15 уровней после выбора специализации недоступны.",

@@ -897,3 +897,27 @@ The announcement picture lives at `public/bots.png` and has a standalone page at
 `public/bots.html` (served at `/bots.html`, copied to `docs/` by the pages build),
 so the owner can open the site and save the image. There is no channel token in the
 repository and posts are published by hand.
+
+## The Registrar and the player's own race (fixed 2026-10-04)
+
+- A player who names a race of their own and asks for a class for it ("сделай класс
+  для Теней") used to be met with a class the Registrar invented from scratch. The
+  race was only honoured when it was already in the blog corpus (`corpusNameIn`), so
+  a race the blog had not listed yet left the request with no subject and the engine
+  fell through to a free-floating class. `isClassForRace` and `raceNameFor` now read
+  the race straight out of the phrase (`classForRaceNamePhrase` in `ai-engine.js`),
+  corpus or not. A topic word after "для" ("для баланса", "под стиль") is rejected by
+  `META_NOT_RACE`, so a balance question is not turned into a class-for-race request.
+- A race asked for with a pronoun after one was pasted ("сделай класс для неё") is
+  also honoured: `NOT_A_RACE_NAME` now rejects the pronoun forms ("неё/его/её/их"),
+  so the walk reads the pasted race instead of treating the pronoun as a name.
+- **Player races/classes come from the blog and change without a code change.**
+  `data/knowledge.json`'s `races.player_races` / `classes.player_classes` are a
+  snapshot that `blog-sync.js` refreshes; the browser reads the live blog. A test that
+  asserts a specific blog race by name ("Синтетики") breaks the day the owner unlists
+  it - pin the *behaviour* (a class is built, the named race is honoured) against a
+  race the test itself names, not a name from the moving corpus.
+- The snapshot can drift from the live blog. To refresh it, run the real sync:
+  `syncPlayerContent('data/knowledge.json', defaultSources('data/knowledge.json'))`
+  from `blog-sync.js`, then `npm run build-pages` so `docs/data/*` matches. Commit the
+  refreshed snapshot with the fix, or the Pages site keeps serving the stale list.

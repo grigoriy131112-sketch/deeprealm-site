@@ -230,6 +230,25 @@ test('formatRoll shows the raw die, the bonus and the total', () => {
   assert.match(text, /Уклонение:  d21 = 20 → 20 \+ 3 = 23  🛡️ уклонение удалось/);
 });
 
+test('a dodge failure states its result instead of printing nothing', () => {
+  // The owner asked for both dodge bands to be written. A failed dodge used to
+  // print a bare total with no outcome, which read as "nothing happened".
+  const sheet = { name: 'Грин', stats: { strength: 6, reaction: 4 } };
+  const text = formatRoll(sheet, rollSet(sheet, [8, 7, 5]));
+  assert.match(text, /Уклонение:  d21 = 5 → 5 \+ 2 = 7  ⚠️ уклонение не удалось — урон полный/);
+  // And a success still says so.
+  const ok = formatRoll(sheet, rollSet(sheet, [8, 7, 15]));
+  assert.match(ok, /Уклонение:  d21 = 15 → 15 \+ 2 = 17  🛡️ уклонение удалось — атака промахнулась \(урон 0\)/);
+});
+
+test('every block band states its result', () => {
+  const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
+  // +4, so totals 13 / 17 / 21 read as fail / partial / full.
+  assert.match(formatRoll(sheet, rollSet(sheet, [17, 9, 20])), /Блок:  d21 = 9 → 9 \+ 4 = 13  ⚠️ блок не удался — урон полный/);
+  assert.match(formatRoll(sheet, rollSet(sheet, [17, 13, 20])), /Блок:  d21 = 13 → 13 \+ 4 = 17  🛡️ блок частичный — урон пополам/);
+  assert.match(formatRoll(sheet, rollSet(sheet, [17, 17, 20])), /Блок:  d21 = 17 → 17 \+ 4 = 21  🛡️ блок полный — урон 0/);
+});
+
 test('store keeps sheets per player id and survives a rewrite', async () => {
   const store = tempStore();
   await store.set(5, { name: 'Аттар', stats: { strength: 8 } });
