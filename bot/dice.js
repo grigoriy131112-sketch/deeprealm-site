@@ -5,21 +5,20 @@
 //   block -> Strength   (блок)
 //   dodge -> Reaction   (уклонение)
 //
-// The roll is a d20. Crit lands on a total of 19-20 (doubling the damage),
-// a total of 11-18 is an ordinary hit, and 1-10 is the fumble the combat rules
-// describe. The thresholds read the *total* (raw die plus half a characteristic),
-// which is the number the bot prints - a raw 8 on Strength 6 totals 11, so it is
-// an ordinary hit, not a fumble. `rollOnce` is exported so tests can inject a
-// fixed die.
+// The die is 0-20 (21 faces), so a 0 can come up. The owner's bands read the
+// *total* (raw die plus half a characteristic), the number the bot prints: 0-15 is
+// a fumble and 16-20 is a success. On the crit roll the success band splits once
+// more - 16-18 an ordinary hit, 19-20 a crit (doubling the damage). `rollOnce` is
+// exported so tests can inject a fixed die.
 
 import { ROLLS, STAT_BY_KEY, bonus } from './stats.js';
 import { COMBAT } from './rules/combat.js';
 
 export const DIE = COMBAT.dice.die;
 
-// A random integer in [1, sides].
+// A random integer in [0, sides - 1]: 21 faces give 0 through 20.
 export function rollOnce(sides = DIE, rng = Math.random) {
-  return Math.floor(rng() * sides) + 1;
+  return Math.floor(rng() * sides);
 }
 
 // The order the three rolls are shown in.
@@ -38,6 +37,9 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
     const total = raw + plus;
     const crit = key === 'crit' && total >= COMBAT.dice.crit.crit;
     const fumble = key === 'crit' && total <= COMBAT.dice.crit.fumble;
+    const success = total >= COMBAT.dice.crit.success;
+    const dodgeSuccess = key === 'dodge' && total >= COMBAT.dice.dodge.success;
+    const blockSuccess = key === 'block' && total >= COMBAT.dice.block.success;
     return {
       key,
       ru: def.ru,
@@ -48,7 +50,10 @@ export function rollSet(sheet, dice = null, rng = Math.random) {
       raw,
       total,
       crit,
-      fumble
+      fumble,
+      success,
+      dodgeSuccess,
+      blockSuccess
     };
   });
 }
@@ -60,9 +65,12 @@ export function formatRoll(sheet, results) {
   const lines = results.map((r) => {
     let tail = '';
     if (r.crit) tail = `  💥 КРИТ ×${COMBAT.dice.crit.multiplier}`;
-    else if (r.fumble) tail = '  ⚠️ провал (+5 по тебе)';
+    else if (r.key === 'crit' && r.fumble) tail = '  ⚠️ провал (+5 по тебе)';
+    else if (r.fumble) tail = '  ⚠️ провал';
+    else if (r.dodgeSuccess) tail = '  🛡️ уклонение удалось';
+    else if (r.blockSuccess) tail = '  🛡️ блок удался';
     else if (r.key === 'crit') tail = '  ✅ обычная атака';
-    return `${r.ru}:  d20 = ${r.raw} → ${r.raw} + ${r.plus} = ${r.total}${tail}`;
+    return `${r.ru}:  d21 = ${r.raw} → ${r.raw} + ${r.plus} = ${r.total}${tail}`;
   });
   return ['🎲 ' + name + slot, ...lines].join('\n');
 }

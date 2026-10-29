@@ -96,16 +96,18 @@ export function featsText(record) {
 
 export function diceText() {
   const d = COMBAT.dice;
-  const fumbleRange = d.crit.fumble >= d.crit.crit ? String(d.crit.fumble) : `1–${d.crit.fumble}`;
+  const fumbleRange = d.crit.fumble >= d.crit.crit ? String(d.crit.fumble) : `0–${d.crit.fumble}`;
   return [
     '🎲 Кубик и команды',
     '',
-    `Кубик: d${d.die}. Бросок = выпавшее число + половина характеристики (округление вниз).`,
+    `Кубик: d${d.die} — выпадает от 0 до 20. Бросок = выпавшее число + половина характеристики (округление вниз).`,
+    '',
+    d.band,
     '',
     'Три броска за раз:',
-    `• Крит-урон — от Силы. 1–${d.crit.fumble} — провал, ${d.crit.fumble + 1}–${d.crit.crit - 1} — обычная атака (просто урон), ${d.crit.crit}–20 — крит (урон ×2).`,
-    `• Блок — от Силы. ${d.block.full}+ полный (нужен щит), ${d.block.partial}–${d.block.full - 1} частичный (урон пополам).`,
-    '• Уклонение — от Реакции. Успех — атака промахнулась.',
+    `• Крит-урон — от Силы. 0–${d.crit.fumble} — провал, ${d.crit.fumble + 1}–${d.crit.crit - 1} — обычная атака (просто урон), ${d.crit.crit}–20 — крит (урон ×2).`,
+    `• Блок — от Силы. ${d.block.full}–20 полный (0 урона, нужен щит), ${d.block.partial}–${d.block.full - 1} частичный (урон пополам).`,
+    `• Уклонение — от Реакции. ${d.dodge.success}–20 — успех, атака промахнулась.`,
     '',
     'Всё это — крит, уклонение и блок — бросается одной твоей командой. Отдельно защиту кидать не нужно: уклонение и блок тоже твои.',
     '',

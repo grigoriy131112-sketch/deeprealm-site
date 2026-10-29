@@ -777,10 +777,10 @@ permission is missing. Probe that way before starting any long operation.
 - Flow: a player registers **in a private chat** with `/reg Имя [@юзер]` plus the
   fourteen ratings, and in the **game group** ends a post with `/roll1`, `/roll2`
   or `/rollall`. The bot
-  answers in the group with three d20 rolls - crit, block, dodge - each with
-  **half of the matching characteristic added, rounded down** (Strength 8 -> +4,
-  Reaction 5 -> +2). `bot/stats.js` `bonus()` is the only place that halving
-  happens.
+  answers in the group with three rolls - crit, block, dodge - each on a **0-20
+  die** (21 faces, so a 0 can come up) with **half of the matching characteristic
+  added, rounded down** (Strength 8 -> +4, Reaction 5 -> +2). `bot/stats.js`
+  `bonus()` is the only place that halving happens.
 - **Up to two characters per account** (owner's rule, `bot/characters.js`). A
   second `/reg` fills the next free slot; a third is refused, never overwritten.
   `/del 1`, `/del 2` or `/delall` (also `/del all`) removes one or both; a later character keeps
@@ -811,10 +811,11 @@ permission is missing. Probe that way before starting any long operation.
   (`COMBAT.playerRolls`). `/rules` and the menu both say so.
 - An attack **always lands**; the dice decide only crit, block and dodge. The
   thresholds are read on the **total** (raw die plus half a characteristic), which is
-  the number the bot prints: a crit total of **1-10** is the fumble, **11-18** is an
-  ordinary hit (just damage), **19-20** is the crit (damage x2). Reading the raw die
-  instead let a raw 8 on a +3 sheet total 11 yet still show a fumble - the owner's bug.
-  Block is **18+ full / 12-17 partial** (`COMBAT.dice`, `bot/dice.js` `rollSet`). A post
+  the number the bot prints. The owner's bands are **0-15 = провал (fumble)** and
+  **16-20 = успех (success)**; on the crit roll the success band splits into
+  **16-18 ordinary hit** (just damage) and **19-20 crit** (damage x2). Block is
+  **18-20 full / 16-17 partial**, dodge succeeds on **16-20** (`COMBAT.dice`,
+  `bot/dice.js` `rollSet`). The die has 21 faces (0-20) so a **0** can come up. A post
   may add `если выпал крит. Урон, использую ваше заклинание` - the player writes the
   generic `ваше заклинание` instead of naming the spell, and the bot echoes the plan only
   when the crit roll lands (`bot/parse.js` `extractConditional`, which also trims a

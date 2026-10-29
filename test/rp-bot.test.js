@@ -190,45 +190,44 @@ test('a crit total of 19 or 20 marks the crit', () => {
   assert.equal(rollSet(sheet, [20, 1, 1])[1].crit, false);
 });
 
-test('a crit total of 1-10 is the fumble, 11 is not', () => {
+test('a crit total of 0-15 is the fumble, 16 is not', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
-  // Strength 8 -> +4. The threshold is on the total, the number the bot prints:
-  // a raw 8 on a +3 sheet totals 11 and is an ordinary hit, not a fumble.
-  assert.equal(rollSet(sheet, [1, 1, 1])[0].fumble, true); // 5
-  assert.equal(rollSet(sheet, [6, 1, 1])[0].fumble, true); // 10
-  assert.equal(rollSet(sheet, [7, 1, 1])[0].fumble, false); // 11
+  // Strength 8 -> +4. The threshold is on the total, the number the bot prints.
+  assert.equal(rollSet(sheet, [0, 1, 1])[0].fumble, true); // 4 - a 0 can come up
+  assert.equal(rollSet(sheet, [11, 1, 1])[0].fumble, true); // 15
+  assert.equal(rollSet(sheet, [12, 1, 1])[0].fumble, false); // 16
   // Only the crit roll can fumble.
   assert.equal(rollSet(sheet, [1, 1, 1])[1].fumble, false);
 });
 
-test('the owner\'s 11-total roll is an ordinary attack, not a fumble', () => {
-  // Strength 6 -> +3. Raw 8 totals 11.
+test('the owner\'s 11-total roll now falls in the 0-15 fumble band', () => {
+  // Strength 6 -> +3. Raw 8 totals 11, which is a fumble under the new band.
   const sheet = { name: 'Грин', stats: { strength: 6, reaction: 4 } };
   const [crit] = rollSet(sheet, [8, 7, 8]);
   assert.equal(crit.total, 11);
-  assert.equal(crit.fumble, false);
+  assert.equal(crit.fumble, true);
   assert.equal(crit.crit, false);
 });
 
 test('formatRoll marks the fumble on a low crit total', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
   const text = formatRoll(sheet, rollSet(sheet, [5, 9, 20]));
-  assert.match(text, /Крит-урон:  d20 = 5 → 5 \+ 4 = 9  ⚠️ провал/);
+  assert.match(text, /Крит-урон:  d21 = 5 → 5 \+ 4 = 9  ⚠️ провал/);
 });
 
 test('formatRoll labels an ordinary hit between fumble and crit', () => {
   const sheet = { name: 'Грин', stats: { strength: 6, reaction: 4 } };
-  const text = formatRoll(sheet, rollSet(sheet, [8, 7, 8]));
-  assert.match(text, /Крит-урон:  d20 = 8 → 8 \+ 3 = 11  ✅ обычная атака/);
+  const text = formatRoll(sheet, rollSet(sheet, [13, 7, 8]));
+  assert.match(text, /Крит-урон:  d21 = 13 → 13 \+ 3 = 16  ✅ обычная атака/);
 });
 
 test('formatRoll shows the raw die, the bonus and the total', () => {
   const sheet = { name: 'Аттар', stats: { strength: 8, reaction: 6 } };
   const text = formatRoll(sheet, rollSet(sheet, [17, 9, 20]));
   assert.match(text, /🎲 Аттар/);
-  assert.match(text, /Крит-урон:  d20 = 17 → 17 \+ 4 = 21  💥 КРИТ/);
-  assert.match(text, /Блок:  d20 = 9 → 9 \+ 4 = 13/);
-  assert.match(text, /Уклонение:  d20 = 20 → 20 \+ 3 = 23/);
+  assert.match(text, /Крит-урон:  d21 = 17 → 17 \+ 4 = 21  💥 КРИТ/);
+  assert.match(text, /Блок:  d21 = 9 → 9 \+ 4 = 13/);
+  assert.match(text, /Уклонение:  d21 = 20 → 20 \+ 3 = 23  🛡️ уклонение удалось/);
 });
 
 test('store keeps sheets per player id and survives a rewrite', async () => {
@@ -295,7 +294,7 @@ test('an "if crit" plan is echoed only when the crit roll lands', async () => {
   // Strength 8 -> +4. Raw 20 is a crit; raw 5 is not.
   const orig = Math.random;
   try {
-    Math.random = () => 0.95; // 20 on a d20
+    Math.random = () => 0.99; // 20 on the 0-20 die (21 faces)
     await bot.handleUpdate(groupMsg(5, 100, 'атакую; если выпал крит. Урон, использую ваше заклинание /roll1'));
   } finally {
     Math.random = orig;
@@ -315,8 +314,8 @@ test('/rules prints the turn economy and the dice thresholds', async () => {
   assert.match(text, /атака и 2 неполных действия/);
   assert.match(text, /без атаки — 3 неполных действия/);
   assert.match(text, /19–20 — крит, урон ×2/);
-  assert.match(text, /1–10 — провал/);
-  assert.match(text, /11–18 — обычная атака/);
+  assert.match(text, /0–15 — провал/);
+  assert.match(text, /16–18 — обычная атака/);
   assert.match(text, /половина характеристики, округление вниз/);
   // The player rolls their own defence, in the same command - not a separate
   // defender.
