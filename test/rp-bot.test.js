@@ -8,6 +8,7 @@ import path from 'node:path';
 import { bonus, resolveStat, STAT_KEYS, distributionIssues, STAT_BLOCKS, DISTRIBUTION_RULE } from '../bot/stats.js';
 import { featFor } from '../bot/rules/feats.js';
 import { rollSet, formatRoll, ROLL_ORDER } from '../bot/dice.js';
+import { diceText } from '../bot/menu.js';
 import { parseSheet, extractConditional, wantsRoll, commandOf, rollCommand, commandArgs } from '../bot/parse.js';
 import { createStore } from '../bot/store.js';
 import { createBot } from '../bot/bot.js';
@@ -247,6 +248,14 @@ test('every block band states its result', () => {
   assert.match(formatRoll(sheet, rollSet(sheet, [17, 9, 20])), /Блок:  d21 = 9 → 9 \+ 4 = 13  ⚠️ блок не удался — урон полный/);
   assert.match(formatRoll(sheet, rollSet(sheet, [17, 13, 20])), /Блок:  d21 = 13 → 13 \+ 4 = 17  🛡️ блок частичный — урон пополам/);
   assert.match(formatRoll(sheet, rollSet(sheet, [17, 17, 20])), /Блок:  d21 = 17 → 17 \+ 4 = 21  🛡️ блок полный — урон 0/);
+});
+
+test('the /menu dice help names the failure band for block and dodge', () => {
+  const text = diceText();
+  assert.match(text, /Блок — от Силы\. 18–20 полный/);
+  assert.match(text, /0–15 — блок не удался/);
+  assert.match(text, /Уклонение — от Реакции\. 16–20 — успех/);
+  assert.match(text, /0–15 — не удалось/);
 });
 
 test('store keeps sheets per player id and survives a rewrite', async () => {
