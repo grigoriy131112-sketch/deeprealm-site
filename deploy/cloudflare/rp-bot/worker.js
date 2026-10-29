@@ -80,7 +80,7 @@ export default {
       // A quick liveness probe that does not touch Telegram. The rev is a deploy
       // marker: bump it on every behaviour change so the owner can confirm a
       // redeploy actually reached the live worker.
-      return json({ ok: true, rev: 14, service: 'deeprealm-rp-bot' });
+      return json({ ok: true, rev: 15, service: 'deeprealm-rp-bot' });
     }
 
     if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
