@@ -40,7 +40,7 @@ export async function startBot({ token, storeFile = defaultStoreFile(), log = co
       ...(threadId ? { message_thread_id: threadId } : {}),
       ...(keyboard ? { reply_markup: keyboard } : {}),
       disable_web_page_preview: true
-    });
+    }).then((r) => ({ ok: !!(r && r.ok), messageId: r && r.result && r.result.message_id }));
   }
 
   function editMessage(chatId, messageId, text, keyboard) {

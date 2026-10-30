@@ -879,10 +879,16 @@ permission is missing. Probe that way before starting any long operation.
   `/feats` posted two messages. `split` breaks a long reply at a newline into
   parts of at most `MAX_MSG` (3800); the keyboard rides on the **first** part only
   (a message with no keyboard is still clickable, so a copy on the tail would just
-  double the buttons). A button press for a one-part section still edits in place;
-  for a multi-part one it deletes the old menu message and sends the parts
-  (`deleteMessage`), so the chat still holds one menu. The owners' `/feats` tail
-  (Доброта/Харизма/Эмпатия) that a player pasted was simply message 2 of 2.
+  double the buttons).
+- **The menu is one message, so the tail of a long section must be cleared when
+  the menu moves on.** The bot remembers the ids it posted per chat
+  (`store.setMenuMsg`; KV key `menu:<chatId>`, so the ids survive Cloudflare's
+  fresh isolate per request). On a button press it deletes the remembered tail
+  (every id but the one the button sat on), then - if the new section fits - edits
+  that head in place; if it is again too long, it deletes the head too and posts
+  the section fresh. Without this, tapping a button on the feats head left the
+  second feats message hanging under the new section. A player's `/feats` tail
+  (Доброта/Харизма/Эмпатия) that got pasted was simply message 2 of 2.
 - Run it with `npm run bot`. The token goes in `TELEGRAM_RP_BOT_TOKEN` (repo `.env`,
   gitignored) - never in code. Sheets are stored at `bot/data/players.json`
   (gitignored), keyed by Telegram id.

@@ -79,6 +79,35 @@ function characterList(record) {
 }
 
 export function createBot({ store, send, editMessage, answerCallback, deleteMessage }) {
+  // The menu is one message - except for the feats, which are too long and go
+  // out as several. So the bot remembers the ids it posted per chat and clears
+  // the whole set when the next section replaces them, or the tail of a long
+  // section would hang around under the new menu.
+  const menuMsgs = new Map();
+
+  async function getMenuMsg(chatId) {
+    if (menuMsgs.has(chatId)) return menuMsgs.get(chatId);
+    if (typeof store.getMenuMsg === 'function') {
+      const rec = await store.getMenuMsg(chatId);
+      if (rec) {
+        menuMsgs.set(chatId, rec);
+        return rec;
+      }
+    }
+    return null;
+  }
+
+  async function setMenuMsg(chatId, messageIds) {
+    const rec = { id: String(chatId), messageIds };
+    menuMsgs.set(chatId, rec);
+    if (typeof store.setMenuMsg === 'function') await store.setMenuMsg(chatId, rec);
+  }
+
+  async function clearMenuMsg(chatId) {
+    menuMsgs.delete(chatId);
+    if (typeof store.clearMenuMsg === 'function') await store.clearMenuMsg(chatId);
+  }
+
   // Must be awaited: a Worker that returns before sendMessage settles has its
   // in-flight request cancelled, so the player never sees the reply. threadId is
   // the forum topic the post came from, so the reply lands in that topic. The
@@ -87,10 +116,15 @@ export function createBot({ store, send, editMessage, answerCallback, deleteMess
   // A long section (the feats) does not fit in one Telegram message, so it is
   // split. The keyboard rides on the first part only: a message with no keyboard
   // is still clickable, so a copy on the tail would just double the buttons.
+  // Every posted id is remembered, so the whole set can be cleared later.
   async function replyParts(chatId, parts, replyTo, threadId, keyboard) {
+    const ids = [];
     for (let i = 0; i < parts.length; i++) {
-      await send(chatId, parts[i], replyTo, threadId, i === 0 ? keyboard : undefined);
+      const r = await send(chatId, parts[i], replyTo, threadId, i === 0 ? keyboard : undefined);
+      if (r && r.messageId) ids.push(r.messageId);
     }
+    if (keyboard && ids.length) await setMenuMsg(chatId, ids);
+    return ids;
   }
 
   async function reply(chatId, text, replyTo, threadId, keyboard) {
@@ -227,7 +261,7 @@ export function createBot({ store, send, editMessage, answerCallback, deleteMess
     const key = data.startsWith('menu:') ? data.slice(5) : 'home';
     const active = isMenuSection(key) ? key : null;
     const chatId = query.message && query.message.chat && query.message.chat.id;
-    const messageId = query.message && query.message.message_id;
+    const headId = query.message && query.message.message_id;
     const userId = query.from && query.from.id;
     const threadId = query.message && query.message.message_thread_id;
     const record = await store.get(userId);
@@ -235,16 +269,25 @@ export function createBot({ store, send, editMessage, answerCallback, deleteMess
 
     if (answerCallback) await answerCallback(query.id);
 
+    // A section too long for one message (the feats) is posted as several. When
+    // the menu moves on, clear every part of the old one - including the tail the
+    // button did not sit on - or it would hang under the new section.
+    const prev = await getMenuMsg(chatId);
+    const prevIds = prev && Array.isArray(prev.messageIds) ? prev.messageIds : [];
+    const tail = prevIds.filter((id) => id !== headId);
+    if (deleteMessage) for (const id of tail) await deleteMessage(chatId, id);
+
     const parts = split(sectionText(key, character));
-    // A section that fits is rewritten in place, so one menu never becomes a
-    // stack. A section too long for Telegram (the feats) cannot be edited in
-    // place: fall back to sending it, replacing the old message so the chat
-    // still holds one menu.
-    if (editMessage && chatId && messageId && parts.length === 1) {
-      await editMessage(chatId, messageId, parts[0], menuKeyboard(active));
+    if (parts.length === 1 && editMessage && headId) {
+      // One message: rewrite it in place, so the menu never becomes a stack.
+      await editMessage(chatId, headId, parts[0], menuKeyboard(active));
+      await setMenuMsg(chatId, [headId]);
       return undefined;
     }
-    if (deleteMessage && chatId && messageId) await deleteMessage(chatId, messageId);
+    // More than one message: edit cannot split, so drop the head too and post
+    // the section fresh, remembering every id for the next switch.
+    if (deleteMessage && headId) await deleteMessage(chatId, headId);
+    await clearMenuMsg(chatId);
     await replyParts(chatId, parts, undefined, threadId, menuKeyboard(active));
     return undefined;
   }

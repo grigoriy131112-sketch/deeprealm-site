@@ -24,12 +24,17 @@ function collector() {
   const edited = [];
   const answered = [];
   const deleted = [];
+  let seq = 100;
   return {
     sent,
     edited,
     answered,
     deleted,
-    send: (chatId, text, replyTo, threadId, keyboard) => sent.push({ chatId, text, replyTo, threadId, keyboard }),
+    send: (chatId, text, replyTo, threadId, keyboard) => {
+      const messageId = ++seq;
+      sent.push({ chatId, text, replyTo, threadId, keyboard, messageId });
+      return { ok: true, messageId };
+    },
     editMessage: (chatId, messageId, text, keyboard) => edited.push({ chatId, messageId, text, keyboard }),
     answerCallback: (id) => answered.push(id),
     deleteMessage: (chatId, messageId) => deleted.push({ chatId, messageId })
@@ -503,10 +508,10 @@ test('/feats opens nothing at 8 or 9', async () => {
   assert.match(text, /пока нет — нужна характеристика 10/);
 });
 
-test('a menu button edits the message in place and answers the callback', async () => {
+test('a menu button edits a short section in place and answers the callback', async () => {
   const store = tempStore();
   const c = collector();
-  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback });
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback, deleteMessage: c.deleteMessage });
   await bot.handleUpdate({
     callback_query: {
       id: 'cb-1',
@@ -520,6 +525,7 @@ test('a menu button edits the message in place and answers the callback', async 
   assert.equal(c.edited[0].messageId, 42);
   assert.match(c.edited[0].text, /Кубик/);
   assert.match(c.edited[0].text, /\/roll/);
+  assert.equal(c.deleted.length, 0, 'a one-message section needs no cleanup');
   // The keyboard shows the open section and offers a way back.
   const datas = c.edited[0].keyboard.inline_keyboard.flat().map((b) => b.callback_data);
   assert.ok(datas.includes('menu:home'));
@@ -551,9 +557,32 @@ test('a menu button for a section too long to edit sends it and removes the old 
   });
   assert.deepEqual(c.answered, ['cb-feats']);
   assert.equal(c.edited.length, 0, 'the feats cannot be edited in place - Telegram rejects >4096');
-  assert.deepEqual(c.deleted, [{ chatId: 5, messageId: 42 }], 'the old menu message is removed');
+  assert.ok(c.deleted.some((d) => d.messageId === 42), 'the old menu message is removed');
   assert.ok(c.sent.length >= 2, 'the section is sent in parts');
   assert.ok(c.sent[0].keyboard && c.sent[0].keyboard.inline_keyboard, 'first part carries the menu');
+});
+
+test('switching away from the feats clears the tail, not just the head', async () => {
+  const store = tempStore();
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback, deleteMessage: c.deleteMessage });
+  // Open the feats: two messages, the keyboard on the first.
+  await bot.handleUpdate({
+    callback_query: { id: 'cb-1', from: { id: 5 }, data: 'menu:feats', message: { message_id: 42, chat: { id: 5, type: 'private' } } }
+  });
+  const ids = c.sent.map((m) => m.messageId);
+  assert.ok(ids.length >= 2, 'the feats went out in parts');
+  const tail = ids.slice(1);
+  c.deleted.length = 0;
+  // Press a button on the first part to switch to another section.
+  await bot.handleUpdate({
+    callback_query: { id: 'cb-2', from: { id: 5 }, data: 'menu:dice', message: { message_id: ids[0], chat: { id: 5, type: 'private' } } }
+  });
+  for (const id of tail) {
+    assert.ok(c.deleted.some((d) => d.messageId === id), `tail message ${id} must be deleted, not left behind`);
+  }
+  assert.equal(c.edited.length, 1, 'the short section replaces the head in place');
+  assert.equal(c.edited[0].messageId, ids[0]);
 });
 
 test('the back button returns to the home screen', async () => {

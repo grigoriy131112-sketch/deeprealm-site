@@ -38,7 +38,8 @@ async function send(token, chatId, text, replyTo, threadId, keyboard) {
     console.error('sendMessage failed:', why);
     return { ok: false, error: why };
   }
-  return { ok: true };
+  // The id lets the bot clear a long section's tail when the menu moves on.
+  return { ok: true, messageId: body.result && body.result.message_id };
 }
 
 // Rewriting the menu message in place: one menu, not a stack of copies.
@@ -96,7 +97,7 @@ export default {
       // A quick liveness probe that does not touch Telegram. The rev is a deploy
       // marker: bump it on every behaviour change so the owner can confirm a
       // redeploy actually reached the live worker.
-      return json({ ok: true, rev: 19, service: 'deeprealm-rp-bot' });
+      return json({ ok: true, rev: 20, service: 'deeprealm-rp-bot' });
     }
 
     if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });

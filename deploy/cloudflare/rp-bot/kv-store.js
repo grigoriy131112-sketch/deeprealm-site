@@ -18,6 +18,18 @@ export function kvStore(kv) {
     async remove(id) {
       await kv.delete(key(id));
     },
+    // The menu message ids per chat, so a long section's tail can be cleared.
+    async getMenuMsg(chatId) {
+      const raw = await kv.get('menu:' + String(chatId));
+      return raw ? JSON.parse(raw) : null;
+    },
+    async setMenuMsg(chatId, record) {
+      await kv.put('menu:' + String(chatId), JSON.stringify(record));
+      return record;
+    },
+    async clearMenuMsg(chatId) {
+      await kv.delete('menu:' + String(chatId));
+    },
     async all() {
       const out = {};
       let cursor;
