@@ -482,7 +482,11 @@ test('/feats lists every characteristic and the player\'s own', async () => {
   assert.match(text, /Нарратив: Выбивание дверей/);
   assert.match(text, /Математика: \+2 к урону в ближнем бою/);
   assert.match(text, /Математика: Максимальное ХП = Здоровье × 10/);
+  // Characteristics with no numbers still say so, so the block never goes blank.
+  assert.match(text, /Математика: нет\./);
+  assert.match(text, /Нарратив: Ложь, манипуляции/);
   assert.match(text, /Стальной захват» \(мин\. 6\)/);
+  assert.match(text, /Кошачий баланс» \(мин\. 6\)/);
   assert.match(text, /Отражение» \(мин\. 6\)/);
 });
 
