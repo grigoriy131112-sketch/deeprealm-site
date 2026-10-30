@@ -817,6 +817,9 @@ permission is missing. Probe that way before starting any long operation.
   **13-18 обычная атака**, **19-20 крит (урон ×2)** (`COMBAT.dice.crit`, each field
   the lower bound of its band; `bot/dice.js` `rollSet` sets `fumble`/`miss`/`half`/
   `hit`/`crit`). Block is **18-20 full / 16-17 partial**, dodge succeeds on **16-20**.
+  A full block is only 0 damage **with a shield**; without one it is half - the roll
+  line says so (`... — урон 0 (если есть щит; без щита — урон пополам)`), because the
+  bot cannot see a shield (a sheet is only a name plus the fourteen ratings).
   The die has 21 faces (0-20) so a **0** can come up. A post
   may add `если выпал крит. Урон, использую ваше заклинание` - the player writes the
   generic `ваше заклинание` instead of naming the spell, and the bot echoes the plan only
@@ -825,8 +828,16 @@ permission is missing. Probe that way before starting any long operation.
   example, duplicated for `/roll1` and `/roll2`.
 - **The player rolls their own defence.** Dodge and block are not rolled by a
   separate defender: the same `/roll1`, `/roll2` or `/rollall` that declares the
-  attack also throws crit, dodge and block. `COMBAT.resolution` and `COMBAT.playerRolls`
+  attack also throws crit and the defence. `COMBAT.resolution` and `COMBAT.playerRolls`
   say so, and the dice menu repeats it, so nobody waits for the defender to roll.
+- **Defence is a chain, not two independent rolls** (2026-10-04). The higher bonus
+  leads - `defenseOrder` in `bot/dice.js` compares `bonus(Сила)` and `bonus(Реакция)`,
+  Strength wins a tie - and the second defence is rolled **only when the first one
+  fails**. A block that holds (16-20) or a dodge that lands (16-20) ends the defence;
+  otherwise the other one gets its chance. So a strong sheet blocks then dodges, a
+  nimble one dodges then blocks, and the message never shows "block 0" next to "dodge
+  full damage". The returned array still keeps `ROLL_ORDER` (`[crit, block, dodge]`),
+  so a defence can be **missing** - read it by key, not by index.
 - The rules and the stat feats live **inside the bot** as data: `bot/rules/combat.js`
   and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
   spoken rules and the rolled rules cannot drift. A feat opens **only at a rating

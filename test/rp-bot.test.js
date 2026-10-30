@@ -273,7 +273,39 @@ test('every block band states its result', () => {
   // +4, so totals 13 / 17 / 21 read as fail / partial / full.
   assert.match(formatRoll(sheet, rollSet(sheet, [17, 9, 20])), /Блок:  d21 = 9 → 9 \+ 4 = 13  ⚠️ блок не удался — урон полный/);
   assert.match(formatRoll(sheet, rollSet(sheet, [17, 13, 20])), /Блок:  d21 = 13 → 13 \+ 4 = 17  🛡️ блок частичный — урон пополам/);
-  assert.match(formatRoll(sheet, rollSet(sheet, [17, 17, 20])), /Блок:  d21 = 17 → 17 \+ 4 = 21  🛡️ блок полный — урон 0/);
+  assert.match(formatRoll(sheet, rollSet(sheet, [17, 17, 20])), /Блок:  d21 = 17 → 17 \+ 4 = 21  🛡️ блок полный — урон 0 \(если есть щит; без щита — урон пополам\)/);
+});
+
+test('a strong sheet blocks first and skips the dodge when the block holds', () => {
+  const sheet = { name: 'Грин', stats: { strength: 8, reaction: 4 } }; // +4 vs +2
+  // Block total 17 is a partial success, so the dodge is not rolled.
+  const held = formatRoll(sheet, rollSet(sheet, [4, 13, 15]));
+  assert.match(held, /Блок:  d21 = 13 → 13 \+ 4 = 17  🛡️ блок частичный/);
+  assert.doesNotMatch(held, /Уклонение/);
+  // A full block skips it too.
+  const full = formatRoll(sheet, rollSet(sheet, [4, 17, 15]));
+  assert.match(full, /Блок:  d21 = 17 → 17 \+ 4 = 21  🛡️ блок полный/);
+  assert.doesNotMatch(full, /Уклонение/);
+});
+
+test('a nimble sheet dodges first and skips the block when the dodge holds', () => {
+  const sheet = { name: 'Лиса', stats: { strength: 4, reaction: 8 } }; // +2 vs +4
+  const held = formatRoll(sheet, rollSet(sheet, [4, 15, 10]));
+  assert.match(held, /Уклонение:  d21 = 15 → 15 \+ 4 = 19  🛡️ уклонение удалось/);
+  assert.doesNotMatch(held, /Блок/);
+});
+
+test('the second defence appears only when the first one fails', () => {
+  // Strong sheet: block fails, so the dodge is rolled as the second chance.
+  const strong = { name: 'Грин', stats: { strength: 8, reaction: 4 } };
+  const s = formatRoll(strong, rollSet(strong, [4, 5, 15]));
+  assert.match(s, /Блок:  d21 = 5 → 5 \+ 4 = 9  ⚠️ блок не удался/);
+  assert.match(s, /Уклонение:  d21 = 15 → 15 \+ 2 = 17  🛡️ уклонение удалось — атака промахнулась \(урон 0\)/);
+  // Nimble sheet: dodge fails, so the block is rolled as the second chance.
+  const nimble = { name: 'Лиса', stats: { strength: 4, reaction: 8 } };
+  const n = formatRoll(nimble, rollSet(nimble, [4, 5, 17]));
+  assert.match(n, /Уклонение:  d21 = 5 → 5 \+ 4 = 9  ⚠️ уклонение не удалось — урон полный/);
+  assert.match(n, /Блок:  d21 = 17 → 17 \+ 2 = 19  🛡️ блок полный/);
 });
 
 test('the /menu dice help names every crit band and the block/dodge failure band', () => {
@@ -377,10 +409,12 @@ test('/rules prints the turn economy and the dice thresholds', async () => {
   assert.match(text, /10–12 — половина урона/);
   assert.match(text, /13–18 — обычная атака/);
   assert.match(text, /половина характеристики, округление вниз/);
+  // Defence is a chain: the higher bonus goes first, the second only on a fail.
+  assert.match(text, /Защита — цепочка/);
+  assert.match(text, /сначала та, у которой выше бонус/);
+  assert.match(text, /Вторая защита бросается только если первая не удалась/);
   // The player rolls their own defence, in the same command - not a separate
   // defender.
-  assert.match(text, /Уклонение бросает сам игрок/);
-  assert.match(text, /Блок бросает сам игрок/);
   assert.doesNotMatch(text, /Защитник бросает/);
 });
 
