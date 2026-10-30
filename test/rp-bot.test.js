@@ -477,6 +477,13 @@ test('/feats lists every characteristic and the player\'s own', async () => {
   assert.match(text, /Мгновенный рывок/);
   assert.match(text, /Твои открытые/);
   assert.match(text, /только на характеристику 10/);
+  // Every feat now carries the owner's narration, its numbers, and the rating
+  // the narration needs where there is one.
+  assert.match(text, /Нарратив: Выбивание дверей/);
+  assert.match(text, /Математика: \+2 к урону в ближнем бою/);
+  assert.match(text, /Математика: Максимальное ХП = Здоровье × 10/);
+  assert.match(text, /Стальной захват» \(мин\. 6\)/);
+  assert.match(text, /Отражение» \(мин\. 6\)/);
 });
 
 test('/feats opens nothing at 8 or 9', async () => {

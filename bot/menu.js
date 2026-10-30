@@ -89,7 +89,11 @@ export function featsText(record) {
   for (const s of STATS) {
     const f = FEATS[s.key];
     if (!f) continue;
-    lines.push('', `• ${s.ru} — «${f.name}»`, f.text);
+    const min = f.min ? ` (мин. ${f.min})` : '';
+    lines.push('', `• ${s.ru} — «${f.name}»${min}`);
+    if (f.nar) lines.push(`  Нарратив: ${f.nar}`);
+    if (f.math) lines.push(`  Математика: ${f.math}`);
+    lines.push(`  Фишка 10: ${f.text}`);
   }
   return lines.join('\n');
 }

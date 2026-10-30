@@ -841,8 +841,17 @@ permission is missing. Probe that way before starting any long operation.
 - The rules and the stat feats live **inside the bot** as data: `bot/rules/combat.js`
   and `bot/rules/feats.js`. `/rules` prints the same object the dice read, so the
   spoken rules and the rolled rules cannot drift. A feat opens **only at a rating
-  of 10** (owner's rule) - 8 and 9 unlock nothing (`featFor` returns null below 10,
-  and the data carries a single `name`/`text` per characteristic). Turn economy is a **choice**:
+  of 10** (owner's rule) - 8 and 9 unlock nothing (`featFor` returns null below 10),
+  and the data carries a single `name`/`text` per characteristic.
+- **Each feat also shows its characteristic's narration and numbers** (2026-10-04):
+  `nar` (what the stat is for - doors, heavy weapons, tracking...), `math` (its
+  numeric effect, `нет.` when there is none), and `min` (the rating the narration
+  needs, where the owner asked for one - Strength and Reaction; absent elsewhere).
+  `/feats` prints `Нарратив:` / `Математика:` / `Фишка 10:` under every entry. The
+  narration stays **out of the dice output** (owner's rule): the roll shows only the
+  crit/block/dodge numbers. The health formula in the data is `Здоровье × 10`, which
+  matches the owner's "8 = 80 ХП" example; the owner's prose said "+10", a slip.
+- Turn economy is a **choice**:
   either an attack plus 2 partial actions, or no attack and 3 partial actions -
   never a full action and three partial ones (`COMBAT.turn.attack` /
   `COMBAT.turn.noAttack`). Movement is up to 2 cells per partial action. Mana is a
