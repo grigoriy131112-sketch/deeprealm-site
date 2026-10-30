@@ -365,8 +365,9 @@ test('/roll in the group answers with three rolls', async () => {
   assert.equal(out.chatId, 100);
   assert.match(out.text, /🎲 Аттар/);
   assert.match(out.text, /Крит-урон:/);
-  assert.match(out.text, /Блок:/);
-  assert.match(out.text, /Уклонение:/);
+  // Defence is a chain: the higher bonus leads (here Strength, so block), and the
+  // dodge appears only when the block fails. At least one defence is always rolled.
+  assert.match(out.text, /Блок:|Уклонение:/);
 });
 
 test('/roll from an unregistered player asks them to register', async () => {

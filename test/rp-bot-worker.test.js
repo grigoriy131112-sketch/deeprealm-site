@@ -85,8 +85,10 @@ test('the worker rolls and replies for a registered player', async () => {
   assert.match(rolled.url, /sendMessage/);
   assert.equal(rolled.body.chat_id, 100);
   assert.match(rolled.body.text, /Крит-урон:/);
-  assert.match(rolled.body.text, /Блок:/);
-  assert.match(rolled.body.text, /Уклонение:/);
+  // Defence is a chain (the higher bonus first, the second only on a fail), so
+  // this random roll shows block and/or dodge - at least one of them, never
+  // neither.
+  assert.match(rolled.body.text, /Блок:|Уклонение:/);
 });
 
 test('a malformed body is a 400, not a crash', async () => {
