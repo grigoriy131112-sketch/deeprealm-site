@@ -78,13 +78,23 @@ function characterList(record) {
   return chars.map((c) => `• ${c.slot}. ${c.name}${c.user ? ` (@${c.user})` : ''}`).join('\n');
 }
 
-export function createBot({ store, send, editMessage, answerCallback }) {
+export function createBot({ store, send, editMessage, answerCallback, deleteMessage }) {
   // Must be awaited: a Worker that returns before sendMessage settles has its
   // in-flight request cancelled, so the player never sees the reply. threadId is
   // the forum topic the post came from, so the reply lands in that topic. The
   // keyboard, when present, is the menu.
+  //
+  // A long section (the feats) does not fit in one Telegram message, so it is
+  // split. The keyboard rides on the first part only: a message with no keyboard
+  // is still clickable, so a copy on the tail would just double the buttons.
+  async function replyParts(chatId, parts, replyTo, threadId, keyboard) {
+    for (let i = 0; i < parts.length; i++) {
+      await send(chatId, parts[i], replyTo, threadId, i === 0 ? keyboard : undefined);
+    }
+  }
+
   async function reply(chatId, text, replyTo, threadId, keyboard) {
-    for (const part of split(text)) await send(chatId, part, replyTo, threadId, keyboard);
+    return replyParts(chatId, split(text), replyTo, threadId, keyboard);
   }
 
   async function handleReg(msg) {
@@ -219,14 +229,23 @@ export function createBot({ store, send, editMessage, answerCallback }) {
     const chatId = query.message && query.message.chat && query.message.chat.id;
     const messageId = query.message && query.message.message_id;
     const userId = query.from && query.from.id;
+    const threadId = query.message && query.message.message_thread_id;
     const record = await store.get(userId);
     const character = characterAt(record, 1) || charactersOf(record)[0] || null;
 
     if (answerCallback) await answerCallback(query.id);
 
-    if (editMessage && chatId && messageId) {
-      await editMessage(chatId, messageId, sectionText(key, character), menuKeyboard(active));
+    const parts = split(sectionText(key, character));
+    // A section that fits is rewritten in place, so one menu never becomes a
+    // stack. A section too long for Telegram (the feats) cannot be edited in
+    // place: fall back to sending it, replacing the old message so the chat
+    // still holds one menu.
+    if (editMessage && chatId && messageId && parts.length === 1) {
+      await editMessage(chatId, messageId, parts[0], menuKeyboard(active));
+      return undefined;
     }
+    if (deleteMessage && chatId && messageId) await deleteMessage(chatId, messageId);
+    await replyParts(chatId, parts, undefined, threadId, menuKeyboard(active));
     return undefined;
   }
 

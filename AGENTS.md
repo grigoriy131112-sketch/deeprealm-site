@@ -873,6 +873,16 @@ permission is missing. Probe that way before starting any long operation.
   it); a callback also needs `answerCallbackQuery` or the button spins forever.
   `worker.js` reports `edits`/`editResults` the same way it reports
   `replies`/`results`, so a webhook test can tell an edit landed.
+- **A section too long for one message** (the feats are ~4600 characters) cannot
+  be edited in place: `editMessageText` rejects anything over 4096, and the bot
+  silently lost the overflow - tapping "✨ Фишки статистик" showed nothing while
+  `/feats` posted two messages. `split` breaks a long reply at a newline into
+  parts of at most `MAX_MSG` (3800); the keyboard rides on the **first** part only
+  (a message with no keyboard is still clickable, so a copy on the tail would just
+  double the buttons). A button press for a one-part section still edits in place;
+  for a multi-part one it deletes the old menu message and sends the parts
+  (`deleteMessage`), so the chat still holds one menu. The owners' `/feats` tail
+  (Доброта/Харизма/Эмпатия) that a player pasted was simply message 2 of 2.
 - Run it with `npm run bot`. The token goes in `TELEGRAM_RP_BOT_TOKEN` (repo `.env`,
   gitignored) - never in code. Sheets are stored at `bot/data/players.json`
   (gitignored), keyed by Telegram id.

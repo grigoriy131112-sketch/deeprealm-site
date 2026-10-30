@@ -23,13 +23,16 @@ function collector() {
   const sent = [];
   const edited = [];
   const answered = [];
+  const deleted = [];
   return {
     sent,
     edited,
     answered,
+    deleted,
     send: (chatId, text, replyTo, threadId, keyboard) => sent.push({ chatId, text, replyTo, threadId, keyboard }),
     editMessage: (chatId, messageId, text, keyboard) => edited.push({ chatId, messageId, text, keyboard }),
-    answerCallback: (id) => answered.push(id)
+    answerCallback: (id) => answered.push(id),
+    deleteMessage: (chatId, messageId) => deleted.push({ chatId, messageId })
   };
 }
 
@@ -520,6 +523,37 @@ test('a menu button edits the message in place and answers the callback', async 
   // The keyboard shows the open section and offers a way back.
   const datas = c.edited[0].keyboard.inline_keyboard.flat().map((b) => b.callback_data);
   assert.ok(datas.includes('menu:home'));
+});
+
+test('/feats is longer than one message, so it is split, first part keeps the menu', async () => {
+  const store = tempStore();
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback, deleteMessage: c.deleteMessage });
+  await bot.handleUpdate({ message: { message_id: 1, chat: { id: 5, type: 'private' }, from: { id: 5 }, text: '/feats' } });
+  assert.ok(c.sent.length >= 2, 'the feats do not fit in one Telegram message');
+  for (const part of c.sent) assert.ok(part.text.length <= 3800, 'every part must fit Telegram');
+  // The keyboard rides on the first part only, or the tail would double the buttons.
+  assert.ok(c.sent[0].keyboard && c.sent[0].keyboard.inline_keyboard, 'first part carries the menu');
+  assert.ok(c.sent.slice(1).every((p) => !p.keyboard), 'later parts carry no keyboard');
+  // Every characteristic is present across the parts.
+  const all = c.sent.map((p) => p.text).join('\n');
+  for (const ru of ['Сила', 'Скорость', 'Ловкость', 'Выносливость', 'Здоровье', 'Реакция', 'Хитрость', 'Интеллект', 'Сообразительность', 'Изворотливость', 'Агрессивность', 'Доброта', 'Харизма', 'Эмпатия']) {
+    assert.match(all, new RegExp(`• ${ru} —`));
+  }
+});
+
+test('a menu button for a section too long to edit sends it and removes the old message', async () => {
+  const store = tempStore();
+  const c = collector();
+  const bot = createBot({ store, send: c.send, editMessage: c.editMessage, answerCallback: c.answerCallback, deleteMessage: c.deleteMessage });
+  await bot.handleUpdate({
+    callback_query: { id: 'cb-feats', from: { id: 5 }, data: 'menu:feats', message: { message_id: 42, chat: { id: 5, type: 'private' } } }
+  });
+  assert.deepEqual(c.answered, ['cb-feats']);
+  assert.equal(c.edited.length, 0, 'the feats cannot be edited in place - Telegram rejects >4096');
+  assert.deepEqual(c.deleted, [{ chatId: 5, messageId: 42 }], 'the old menu message is removed');
+  assert.ok(c.sent.length >= 2, 'the section is sent in parts');
+  assert.ok(c.sent[0].keyboard && c.sent[0].keyboard.inline_keyboard, 'first part carries the menu');
 });
 
 test('the back button returns to the home screen', async () => {

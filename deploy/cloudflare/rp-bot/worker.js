@@ -72,6 +72,22 @@ async function answerCallback(token, callbackQueryId) {
   });
 }
 
+// Removing the old menu message when a section is too long to edit in place.
+async function deleteMessage(token, chatId, messageId) {
+  const res = await fetch(`${API}/bot${token}/deleteMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body || body.ok !== true) {
+    const why = (body && body.description) || `http ${res.status}`;
+    console.error('deleteMessage failed:', why);
+    return { ok: false, error: why };
+  }
+  return { ok: true };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -80,7 +96,7 @@ export default {
       // A quick liveness probe that does not touch Telegram. The rev is a deploy
       // marker: bump it on every behaviour change so the owner can confirm a
       // redeploy actually reached the live worker.
-      return json({ ok: true, rev: 18, service: 'deeprealm-rp-bot' });
+      return json({ ok: true, rev: 19, service: 'deeprealm-rp-bot' });
     }
 
     if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
@@ -117,7 +133,8 @@ export default {
         edits.push(r.ok ? 'ok' : r.error);
         return r;
       },
-      answerCallback: (callbackQueryId) => answerCallback(token, callbackQueryId)
+      answerCallback: (callbackQueryId) => answerCallback(token, callbackQueryId),
+      deleteMessage: (chatId, messageId) => deleteMessage(token, chatId, messageId)
     });
 
     try {

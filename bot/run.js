@@ -57,7 +57,11 @@ export async function startBot({ token, storeFile = defaultStoreFile(), log = co
     return call('answerCallbackQuery', { callback_query_id: callbackQueryId });
   }
 
-  const bot = createBot({ store, send, editMessage, answerCallback });
+  function deleteMessage(chatId, messageId) {
+    return call('deleteMessage', { chat_id: chatId, message_id: messageId });
+  }
+
+  const bot = createBot({ store, send, editMessage, answerCallback, deleteMessage });
 
   const me = await call('getMe', {});
   if (!me.ok) throw new Error('Telegram отклонил токен: ' + (me.description || ''));
